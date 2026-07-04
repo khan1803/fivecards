@@ -510,7 +510,7 @@ const isAtkSet=cards=>cards.length>0&&(cards.every(c=>c.r==='2')||cards.every(c=
 let G=null,myIdx=0;
 
 function newMatch(defs,limit,mode){
-  return {mode,limit:+limit||240,round:0,starter:-1,starterDir:1,starterStep:0,
+  return {mode,limit:+limit||240,round:0,starter:-1,starterDir:1,starterStep:0,directionChanged:false,
     players:defs.map((d,i)=>({id:d.id||'p'+i,name:d.name,isBot:!!d.isBot,diff:d.diff||null,score:0,elim:false,hand:[],wins:0,roundPts:[]})),
     deck:[],open:[],heap:[],pending:[],turn:0,attack:0,phase:'discard',
     turnCount:0,result:null,winner:null,log:[],logSeq:0,lastDrawn:null,openShow:null,v:0};
@@ -531,9 +531,13 @@ function deal(g,openShowBy){
      once, then reverses — so over time everyone gets to start right
      after each of their neighbours on both sides, not just one. */
   const startAct=activeIdxs(g);
-  if(g.starterStep>=startAct.length){g.starterDir*=-1;g.starterStep=0;}
+  g.directionChanged=false;
+  if(g.starterStep>=startAct.length){
+    g.starterDir*=-1;g.starterStep=0;g.directionChanged=true;
+  }
   do{g.starter=(g.starter+g.starterDir+g.players.length)%g.players.length;}while(g.players[g.starter].elim);
   g.starterStep++;
+  if(g.directionChanged)glog(g,`🔄 Direction reversed — now going ${g.starterDir===1?'clockwise':'anticlockwise'}`);
   g.deck=shuffle(buildDeck());
   g.players.forEach(p=>p.hand=[]);
   const act=activeIdxs(g);
@@ -834,6 +838,7 @@ function sndFahh(){
   ac.decodeAudioData(b64ToBuf(FAHH_B64),buf=>{fahhBuffer=buf;fahhLoading=false;sndFahh();},()=>{fahhLoading=false;});
 }
 const sndBadShow=()=>{sndBad();sndFahh();};   // a wrong Show (+60) also gets the fahh
+const sndDirectionChange=()=>{tone(500,0,.12,'triangle',.15);tone(650,.13,.12,'triangle',.15);tone(500,.26,.16,'triangle',.15);};
 function playSoundForLog(line){
   /* every Show's own result line (and any match-win it triggers) is
      silenced here — render() plays it later, timed to whichever delayed
@@ -849,7 +854,10 @@ function playSoundForLog(line){
     if(m&&+m[1]>=6)sndFahh();          // 3+ stacked 2s/Jokers landed on someone
     return sndPickup();
   }
-  if(line.startsWith('— Round')){pendingDealAnim=true;return line.includes('OPEN SHOW')?sndOpenShowRound():sndDealRound();}
+  /* the deal sound is always triggered explicitly from render() now (not
+     here), since a direction reversal needs its own alert shown — and
+     its sound played — before the deal sound/animation are allowed to run */
+  if(line.startsWith('— Round')){pendingDealAnim=true;return;}
   if(line.includes('reshuffled'))return sndShuffle();
   if(line.includes('⚡'))return sndAttack();
   if(line.includes('plays'))return sndDiscard();
@@ -941,7 +949,7 @@ function closeModalIf(k){if(modalKind===k)closeModal();}
 function sortHand(h){
   return h.slice().sort((a,b)=>{
     if(isJoker(a)&&isJoker(b))return 0;
-    if(isJoker(a))return 1;if(isJoker(b))return -1;
+    if(isJoker(a))return -1;if(isJoker(b))return 1;
     if(val(a)!==val(b))return val(a)-val(b);   // point value, not rank — 8 is worth 0, so it sorts left of A
     return SUITS.indexOf(a.s)-SUITS.indexOf(b.s);
   });
@@ -1080,14 +1088,25 @@ function render(){
 
   if(pendingDealAnim){
     pendingDealAnim=false;
-    const dur=playDealAnimation();
-    if(willAnimateOpenShow){
-      setTimeout(()=>{
-        openShowRevealPending=false;
-        if(!G)return;
-        if(G.phase==='roundEnd'){(G.result&&G.result.ok?sndGood:sndBadShow)();showRoundModal();}
-        else if(G.phase==='matchEnd'){sndFanfare();showMatchModal();}
-      },dur);
+    const doDeal=()=>{
+      if(!G)return;
+      (G.openShow!=null?sndOpenShowRound:sndDealRound)();
+      const dur=playDealAnimation();
+      if(willAnimateOpenShow){
+        setTimeout(()=>{
+          openShowRevealPending=false;
+          if(!G)return;
+          if(G.phase==='roundEnd'){(G.result&&G.result.ok?sndGood:sndBadShow)();showRoundModal();}
+          else if(G.phase==='matchEnd'){sndFanfare();showMatchModal();}
+        },dur);
+      }
+    };
+    if(G.directionChanged){
+      G.directionChanged=false;
+      showDirectionAlert(G.starterDir);
+      setTimeout(()=>{closeModalIf('announce');doDeal();},1600);
+    }else{
+      doDeal();
     }
   }
 }
@@ -1119,6 +1138,11 @@ function resultTable(rows,showerIdx){
 function showAnnounceBanner(name){
   sndAnnounce();
   openModal('announce',`<div class="announce-banner">🃏 ${esc(name)} calls for a Show!!!</div>`);
+}
+function showDirectionAlert(dir){
+  sndDirectionChange();
+  openModal('announce',`<div class="announce-banner">🔄 Direction Changed!<br>
+    <span style="font-size:16px">Now going ${dir===1?'clockwise':'anticlockwise'}</span></div>`);
 }
 function showRoundModal(){
   if(!G.result)return;
