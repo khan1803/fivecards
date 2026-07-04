@@ -85,7 +85,7 @@ input:focus{border-color:var(--gold)}
 #topbar{width:100%;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;gap:8px}
 #topbar>div{display:flex;gap:8px;align-items:center}
 #round-info{font-size:11px;color:rgba(201,168,76,.55);font-weight:700;letter-spacing:2.5px;font-family:'DM Mono',monospace}
-#opponents{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;align-items:flex-start;padding:34px 10px 18px;width:100%;max-height:15dvh;overflow-y:auto}
+#opponents{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;align-items:flex-start;padding:34px 10px 18px;width:100%}
 .opp{position:relative;display:flex;gap:11px;align-items:center;background:rgba(201,168,76,.03);
   border:1.5px solid rgba(201,168,76,.1);border-radius:16px;padding:8px 16px 8px 9px;transition:border-color .2s,box-shadow .2s,transform .2s,margin-top .2s}
 .rank-badge{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
@@ -248,6 +248,27 @@ input:focus{border-color:var(--gold)}
 @media (max-height:640px){
   #piles{padding:14px 22px;border-radius:44px;gap:18px}
   #my-hand{padding-top:12px}
+}
+/* compact circular seating for phones — every opponent stays in one row,
+   shrinking evenly (flex:1) so the whole table is visible without
+   scrolling or wrapping, however many players are seated */
+@media (max-width:480px){
+  #opponents{flex-wrap:nowrap;gap:4px;padding:18px 6px 2px}
+  .opp{flex:1 1 0;min-width:0;flex-direction:column;align-items:center;gap:2px;padding:6px 4px 5px;border-radius:12px;background:rgba(201,168,76,.04)}
+  .opp:first-child:nth-last-child(2),.opp:first-child:nth-last-child(2)~.opp:last-child,
+  .opp:first-child:nth-last-child(3),.opp:first-child:nth-last-child(3)~.opp:nth-child(2),.opp:first-child:nth-last-child(3)~.opp:last-child,
+  .opp:first-child:nth-last-child(4),.opp:first-child:nth-last-child(4)~.opp:nth-child(2),.opp:first-child:nth-last-child(4)~.opp:nth-child(3),.opp:first-child:nth-last-child(4)~.opp:last-child,
+  .opp:first-child:nth-last-child(5),.opp:first-child:nth-last-child(5)~.opp:nth-child(2),.opp:first-child:nth-last-child(5)~.opp:nth-child(3),.opp:first-child:nth-last-child(5)~.opp:nth-child(4),.opp:first-child:nth-last-child(5)~.opp:last-child{margin-top:0}
+  .avatar{width:30px;height:30px;font-size:12px;border-width:1.5px}
+  .opp-name{flex-direction:column;gap:1px;width:100%}
+  .opp-name-text{font-size:10px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .opp-sub{font-size:7.5px}
+  .rank-badge{font-size:7px;padding:1.5px 4px;border-radius:4px}
+  .tagchip,.minis{display:none}
+  #open-starter-badge{top:-38px;padding:4px 14px 5px;border-radius:12px}
+  .open-starter-label{font-size:8px;letter-spacing:2px}
+  .open-starter-name{font-size:20px}
+  #opponents{padding-bottom:10px}
 }
 </style>
 </head>
@@ -982,7 +1003,7 @@ function render(){
     const d=document.createElement('div');
     d.className='opp'+(i===G.turn&&!isEnd()&&!p.elim?' turn':'')+(p.elim?' elim':'');
     d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}</div>
-      <div><div class="opp-name">${esc(p.name)}<span class="rank-badge">#${rankOf(i)}</span>${p.isBot?`<span class="tagchip">${esc(p.diff)}</span>`:''}</div>
+      <div><div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span><span class="rank-badge">#${rankOf(i)}</span>${p.isBot?`<span class="tagchip">${esc(p.diff)}</span>`:''}</div>
       <div class="opp-sub">${p.elim?'OUT · ':''}score ${p.score}</div>
       <div class="minis">${p.elim?'':p.hand.map(()=>'<span class="mini"></span>').join('')}</div></div>`;
     opp.appendChild(d);
