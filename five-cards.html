@@ -245,6 +245,21 @@ input:focus{border-color:var(--gold)}
 #chat-input-row input{flex:1}
 #chat-badge{position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:800;
   border-radius:999px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px;line-height:1}
+
+/* ---------- floating chat bubbles (appear near the sender's own
+   name/avatar and auto-dismiss — independent of whether the full
+   chat panel is open or closed) ---------- */
+.chat-bubble{position:fixed;max-width:150px;background:linear-gradient(180deg,#152238,#0A0E1A);
+  border:1px solid rgba(201,168,76,.35);border-radius:14px;padding:7px 10px 8px;z-index:68;
+  box-shadow:0 8px 22px rgba(0,0,0,.5);pointer-events:none;opacity:0;transform:translate(-50%,6px) scale(.92);
+  transition:opacity .25s ease,transform .25s ease}
+.chat-bubble.show{opacity:1;transform:translate(-50%,0) scale(1)}
+.chat-bubble.hide{opacity:0;transform:translate(-50%,-6px) scale(.95)}
+.chat-bubble .who{font-size:9px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;font-family:'DM Mono',monospace}
+.chat-bubble .txt{font-size:12.5px;color:#EDE8D8;line-height:1.3;word-break:break-word;font-family:'Playfair Display',serif}
+.chat-bubble::after{content:'';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);
+  border:7px solid transparent;border-top-color:#0A0E1A}
+.chat-bubble.below::after{bottom:auto;top:-7px;border-top-color:transparent;border-bottom-color:#0A0E1A}
 @media (max-height:640px){
   #piles{padding:14px 22px;border-radius:44px;gap:18px}
   #my-hand{padding-top:12px}
@@ -464,7 +479,7 @@ input:focus{border-color:var(--gold)}
 const SUITS=['S','H','C','D'];
 const SUIT_CH={S:'♠',H:'♥',C:'♣',D:'♦'};
 const RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
-const VAL={A:1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':0,'9':9,'10':10,J:11,Q:12,K:13,X:0};
+const VAL={A:1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':0,'9':9,'10':10,J:10,Q:10,K:10,X:0};
 const rIdx=r=>RANKS.indexOf(r);
 const val=c=>VAL[c.r];
 const isJoker=c=>c.r==='X';
@@ -784,6 +799,16 @@ function ensureAudio(){
   if(actx.state==='suspended')actx.resume();
   return actx;
 }
+/* Mobile browsers auto-suspend the AudioContext, and resume() is async —
+   a sound scheduled right as the context wakes up can be silently dropped.
+   Most game sounds fire from setTimeout chains (deal animation, deferred
+   Show reveals) rather than directly inside a click handler, so they can
+   land outside the "user gesture" window that's normally required to
+   keep audio alive. Proactively resuming on every single tap keeps the
+   context continuously running so those deferred sounds don't go silent. */
+document.addEventListener('pointerdown',()=>{
+  if(soundOn&&actx&&actx.state==='suspended')actx.resume();
+},{passive:true});
 function tone(freq,start,dur,type,vol){
   const ac=ensureAudio();if(!ac)return;
   const o=ac.createOscillator(),g=ac.createGain();
@@ -1002,6 +1027,7 @@ function render(){
     const i=(myIdx+k)%G.players.length,p=G.players[i];
     const d=document.createElement('div');
     d.className='opp'+(i===G.turn&&!isEnd()&&!p.elim?' turn':'')+(p.elim?' elim':'');
+    d.dataset.uid=p.id;
     d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}</div>
       <div><div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span><span class="rank-badge">#${rankOf(i)}</span>${p.isBot?`<span class="tagchip">${esc(p.diff)}</span>`:''}</div>
       <div class="opp-sub">${p.elim?'OUT · ':''}score ${p.score}</div>
@@ -1356,11 +1382,16 @@ function attachRoom(code){
   localStorage.fcRoom=code;
   mp.chatLog=[];mp.chatUnread=0;updateChatBadge();
   mp.chatRef=mp.ref.child('chat');
+  const attachTs=Date.now();
   mp.chatRef.limitToLast(150).on('child_added',s=>{
     const m=s.val();if(!m)return;
     mp.chatLog.push(m);
     if(mp.chatLog.length>150)mp.chatLog.shift();
     if(mp.chatOpen)renderChatLog();else{mp.chatUnread++;updateChatBadge();}
+    /* only pop a live bubble for messages sent after we joined — the
+       initial child_added burst replays the whole history and would
+       otherwise flood the screen with bubbles on every reconnect */
+    if(m.ts&&m.ts>=attachTs-3000)showChatBubble(m.uid,m.name,m.text);
   });
   mp.ref.on('value',s=>{
     const r=s.val();
@@ -1437,6 +1468,37 @@ function openChat(){
   $('#chat-input').focus();
 }
 function closeChat(){mp.chatOpen=false;$('#chat-back').classList.add('hidden');}
+
+/* live speech-bubble that pops up right next to the sender's own name/
+   card — shows on the game screen regardless of whether the full chat
+   panel is open or closed, and disappears on its own after 5s */
+function showChatBubble(uid,name,text){
+  const scr=$('#scr-game');if(!scr||!scr.classList.contains('on'))return;
+  let anchor=null;
+  if(uid===myUid){anchor=$('#my-area');}
+  else{
+    for(const el of document.querySelectorAll('#opponents .opp')){
+      if(el.dataset.uid===uid){anchor=el;break;}
+    }
+  }
+  if(!anchor)return;
+  const r=anchor.getBoundingClientRect();
+  if(!r.width&&!r.height)return;
+  const b=document.createElement('div');
+  b.className='chat-bubble';
+  b.innerHTML=`<div class="who">${esc(name)}</div><div class="txt">${esc(text.slice(0,80))}</div>`;
+  document.body.appendChild(b);
+  const bw=b.getBoundingClientRect().width,bh=b.getBoundingClientRect().height;
+  let left=r.left+r.width/2;
+  left=Math.max(bw/2+6,Math.min(window.innerWidth-bw/2-6,left));
+  let top=r.top-bh-16;
+  const topbarEl=$('#topbar'),minTop=(topbarEl?topbarEl.getBoundingClientRect().bottom:0)+6;
+  if(top<minTop){top=r.bottom+12;b.classList.add('below');}
+  b.style.left=left+'px';b.style.top=top+'px';
+  requestAnimationFrame(()=>b.classList.add('show'));
+  setTimeout(()=>b.classList.add('hide'),4400);
+  setTimeout(()=>b.remove(),5000);
+}
 
 function leaveRoom(remote){
   clearTimeout(botTimer);
