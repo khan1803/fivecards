@@ -285,6 +285,167 @@ input:focus{border-color:var(--gold)}
   .open-starter-name{font-size:20px}
   #opponents{padding-bottom:10px}
 }
+
+/* ======================================================
+   TOKYO NEON THEME — applied when data-theme="neon"
+   ====================================================== */
+[data-theme="neon"]{
+  --gold:#F0543C;--gold2:#A83020;--goldlt:#FF7A5C;--golddk:#7A2018;
+  --felt:#0C3838;--felt-d:#041414;
+  --bg1:#0C0A14;--bg2:#07060E;--panel:#110D1E;--line:rgba(240,84,60,.18);
+  --red:#F0543C;--ink:#F0EBF8;--dim:rgba(240,84,60,.5);
+  --inkdark:#1A0808;--cardink:#14121E;
+}
+[data-theme="neon"] body{background:linear-gradient(160deg,#08060E 0%,#0C0A14 100%)}
+[data-theme="neon"] .bg-deco span{color:#F0543C;opacity:.028}
+[data-theme="neon"] .bg-deco span:nth-child(2){color:#00D4FF;opacity:.022}
+[data-theme="neon"] .bg-deco span:nth-child(3){color:#00D4FF;opacity:.018}
+[data-theme="neon"] .hero-badge .ring1{border-color:rgba(240,84,60,.22)}
+[data-theme="neon"] .hero-badge .ring2{border-color:rgba(240,84,60,.11)}
+[data-theme="neon"] .hero-badge .suit{color:rgba(240,84,60,.42)}
+[data-theme="neon"] .hero-badge .suit.heart,
+[data-theme="neon"] .hero-badge .suit.diamond{color:rgba(0,212,255,.38)}
+[data-theme="neon"] .hero-badge .five{
+  background:linear-gradient(180deg,#FFB5A0 0%,#F0543C 50%,#7A2018 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  animation:neonShimmer 2.4s ease-in-out infinite!important
+}
+[data-theme="neon"] .hero-wordmark{color:#F0EBF8}
+[data-theme="neon"] .hero-divider{background:linear-gradient(90deg,transparent,rgba(240,84,60,.65),transparent)}
+[data-theme="neon"] .tag{color:var(--gold)}
+[data-theme="neon"] .home-suits span:nth-child(odd){color:rgba(240,84,60,.3)}
+[data-theme="neon"] .home-suits span:nth-child(even){color:rgba(0,212,255,.32)}
+[data-theme="neon"] .btn.primary{
+  background:linear-gradient(180deg,var(--goldlt) 0%,var(--gold2) 55%,var(--golddk) 100%);
+  box-shadow:0 6px 22px rgba(240,84,60,.32),inset 0 1px 0 rgba(255,255,255,.14)
+}
+[data-theme="neon"] .icon-btn{border-color:rgba(240,84,60,.22);color:var(--gold)}
+[data-theme="neon"] .panel{border-color:rgba(240,84,60,.15);box-shadow:0 30px 80px rgba(0,0,0,.65)}
+[data-theme="neon"] input{border-color:rgba(240,84,60,.26)}
+[data-theme="neon"] input:focus{border-color:var(--gold)}
+[data-theme="neon"] .seg{background:rgba(240,84,60,.06);border-color:rgba(240,84,60,.11)}
+[data-theme="neon"] .seg button.sel{background:linear-gradient(180deg,var(--goldlt),var(--gold2))}
+[data-theme="neon"] .mp-box{border-color:rgba(240,84,60,.13)}
+[data-theme="neon"] .lp{border-color:rgba(240,84,60,.13)}
+[data-theme="neon"] #piles{
+  background:radial-gradient(ellipse at 50% 32%,#0C3838 0%,#082828 60%,#041414 100%);
+  border-color:#041414;
+  box-shadow:inset 0 0 0 2.5px rgba(240,84,60,.22),inset 0 0 55px rgba(0,0,0,.6),0 20px 55px rgba(0,0,0,.6),0 0 80px rgba(240,84,60,.05)
+}
+[data-theme="neon"] .pile-spark{color:rgba(240,84,60,.65)}
+[data-theme="neon"] .card.back{background:linear-gradient(135deg,#1A1030,#0E0820);border-color:var(--gold)}
+[data-theme="neon"] .card.back::before{background:repeating-linear-gradient(45deg,rgba(240,84,60,.08) 0,rgba(240,84,60,.08) 1.5px,transparent 1.5px,transparent 8px)}
+[data-theme="neon"] .card.back::after{color:rgba(240,84,60,.22)}
+[data-theme="neon"] .card.sel{outline-color:var(--gold)}
+[data-theme="neon"] .card.pickable{outline-color:var(--gold)}
+[data-theme="neon"] .mini{background:linear-gradient(135deg,#1A1030,#0E0820);border-color:rgba(240,84,60,.36)}
+[data-theme="neon"] .rank-badge{background:linear-gradient(135deg,var(--gold),var(--gold2))}
+[data-theme="neon"] .opp{border-color:rgba(240,84,60,.12)}
+[data-theme="neon"] .opp.turn{background:rgba(240,84,60,.07);border-color:rgba(240,84,60,.55);box-shadow:0 0 22px rgba(240,84,60,.18);animation:neonOppPulse 2s ease-in-out infinite}
+[data-theme="neon"] #round-info{color:rgba(240,84,60,.55)}
+[data-theme="neon"] #attack-badge{background:linear-gradient(180deg,#FF7A5C,#A83020);box-shadow:0 4px 18px rgba(240,84,60,.5)}
+[data-theme="neon"] #open-starter-badge{background:linear-gradient(135deg,var(--goldlt),var(--gold2))}
+[data-theme="neon"] #my-area{background:rgba(240,84,60,.012)}
+[data-theme="neon"] #my-area.turn{border-top-color:var(--gold);animation:neonTurnGlow 2.2s ease-in-out infinite}
+[data-theme="neon"] #modal{background:linear-gradient(180deg,#14102A,#0C0820);border-color:rgba(240,84,60,.2)}
+[data-theme="neon"] #modal h2{color:var(--gold)}
+[data-theme="neon"] .lb-matrix td:first-child,
+[data-theme="neon"] .lb-matrix th:first-child{background:#110D1E}
+[data-theme="neon"] .deal-fly{border-color:var(--gold)}
+[data-theme="neon"] #lobby-code{color:var(--gold);text-shadow:0 0 30px rgba(240,84,60,.4)}
+[data-theme="neon"] #status-bar{color:#F0EBF8}
+[data-theme="neon"] #log-line{color:rgba(240,84,60,.45)}
+[data-theme="neon"] #toast{background:#14102A;border-color:rgba(240,84,60,.28);color:#F0EBF8}
+[data-theme="neon"] .chat-msg.mine{background:linear-gradient(180deg,var(--goldlt),var(--gold2))}
+[data-theme="neon"] .chat-bubble{border-color:rgba(240,84,60,.38);background:linear-gradient(180deg,#1C1430,#110D1E)}
+[data-theme="neon"] .chat-bubble::after{border-top-color:#110D1E}
+[data-theme="neon"] .chat-bubble.below::after{border-top-color:transparent;border-bottom-color:#110D1E}
+[data-theme="neon"] #chat-panel{background:#0E0C1C;border-color:rgba(240,84,60,.18)}
+[data-theme="neon"] #chat-header{border-color:rgba(240,84,60,.14)}
+[data-theme="neon"] #chat-header h2{color:var(--gold)}
+[data-theme="neon"] #chat-emojis{border-color:rgba(240,84,60,.12)}
+[data-theme="neon"] .chat-msg.theirs{border-color:rgba(240,84,60,.15)}
+[data-theme="neon"] .logbox{color:rgba(240,84,60,.5)}
+[data-theme="neon"] .headline.good{color:var(--gold)}
+[data-theme="neon"] .headline.bad{color:var(--red)}
+[data-theme="neon"] .announce-banner{color:var(--gold)}
+[data-theme="neon"] .help-list b{color:var(--gold)}
+
+/* ======================================================
+   ANIMATIONS
+   ====================================================== */
+@keyframes noirShimmer{0%,100%{filter:drop-shadow(0 0 16px rgba(201,168,76,.35))}50%{filter:drop-shadow(0 0 36px rgba(201,168,76,.75))}}
+@keyframes neonShimmer{0%,100%{filter:drop-shadow(0 0 16px rgba(240,84,60,.4))}50%{filter:drop-shadow(0 0 36px rgba(240,84,60,.9))}}
+.hero-badge .five{animation:noirShimmer 2.8s ease-in-out infinite}
+
+@keyframes scrIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes scrOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-10px)}}
+.screen.on{animation:scrIn .24s cubic-bezier(.22,.68,.32,1)}
+.screen.leaving{animation:scrOut .16s ease-in forwards;pointer-events:none}
+
+@keyframes cardPop{0%{transform:translateY(-16px) scale(.97)}55%{transform:translateY(-21px) scale(1.04)}100%{transform:translateY(-16px) scale(1)}}
+.card.sel{animation:cardPop .22s cubic-bezier(.34,1.56,.64,1)!important}
+
+@keyframes newTagPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+.card .newtag{animation:newTagPulse .7s ease-in-out 2}
+
+@keyframes turnGlow{0%,100%{box-shadow:0 -6px 30px rgba(201,168,76,.14)}50%{box-shadow:0 -6px 48px rgba(201,168,76,.36)}}
+@keyframes neonTurnGlow{0%,100%{box-shadow:0 -6px 30px rgba(240,84,60,.16)}50%{box-shadow:0 -6px 48px rgba(240,84,60,.4)}}
+#my-area.turn{animation:turnGlow 2.2s ease-in-out infinite}
+
+@keyframes neonOppPulse{0%,100%{box-shadow:0 0 14px rgba(240,84,60,.15)}50%{box-shadow:0 0 26px rgba(240,84,60,.42)}}
+
+@keyframes fxParticle{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--px),var(--py)) scale(0);opacity:0}}
+.fx-particle{position:fixed;border-radius:50%;pointer-events:none;z-index:999;animation:fxParticle .7s ease-out forwards}
+
+@keyframes headlinePop{from{transform:scale(.75);opacity:0}to{transform:scale(1);opacity:1}}
+.headline{animation:headlinePop .28s cubic-bezier(.34,1.56,.64,1)}
+
+.announce-banner{animation:announcePop .35s ease-out,noirShimmer 2s ease-in-out infinite .36s}
+[data-theme="neon"] .announce-banner{animation:announcePop .35s ease-out,neonShimmer 2s ease-in-out infinite .36s}
+
+@keyframes cardFlipReveal{0%{transform:rotateY(90deg)}100%{transform:rotateY(0deg)}}
+.deal-fly.face{animation:cardFlipReveal .22s ease-out .55s both}
+
+/* Theme toggle button */
+#theme-btn,#theme-btn-home{transition:color .2s,border-color .2s,background .2s}
+#theme-btn{font-size:14px}
+#theme-btn-home{position:fixed;top:14px;right:14px;z-index:10;background:rgba(201,168,76,.07);
+  border:1px solid rgba(201,168,76,.22);border-radius:20px;padding:7px 14px;color:rgba(201,168,76,.55);
+  font-size:11px;letter-spacing:2px;cursor:pointer;font-family:inherit;font-style:italic;backdrop-filter:blur(6px)}
+[data-theme="neon"] #theme-btn-home{background:rgba(240,84,60,.07);border-color:rgba(240,84,60,.22);color:rgba(240,84,60,.55)}
+
+/* ======================================================
+   MOBILE — cleaner layout
+   ====================================================== */
+@media(max-width:390px){
+  :root{--cw:clamp(42px,10.5vw,58px)}
+  #my-hand .card:not(:first-child){margin-left:calc(var(--cw)*-.38)}
+}
+@media(max-width:480px){
+  #piles{padding:18px 14px;border-radius:28px;gap:14px}
+  #actions{gap:8px;width:100%;padding:0 8px}
+  #actions .btn{flex:1;padding:13px 8px;font-size:12px;min-height:44px;letter-spacing:1px}
+  #status-bar{font-size:13px}
+  #log-line{font-size:9px}
+  #my-area{gap:7px;padding:12px 6px calc(10px + env(safe-area-inset-bottom))}
+  #my-meta{font-size:10px}
+  #topbar{padding:8px 10px}
+  .icon-btn{width:34px;height:34px;font-size:14px;border-radius:8px}
+  #round-info{font-size:10px;letter-spacing:1.5px}
+  #open-starter-badge{top:-38px;padding:4px 14px 5px;border-radius:12px}
+  .open-starter-label{font-size:8px;letter-spacing:2px}
+  .open-starter-name{font-size:18px}
+}
+@media(max-height:700px) and (max-width:480px){
+  #opponents{padding:10px 6px 2px}
+  #table{gap:8px;padding:4px 8px}
+  #piles{padding:12px 12px;border-radius:22px}
+  #my-area{gap:5px;padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
+  #my-hand{padding-top:8px}
+  #actions .btn{padding:11px 8px;font-size:12px;min-height:42px}
+  #status-bar{font-size:12px;min-height:16px}
+}
 </style>
 </head>
 <body>
@@ -298,6 +459,7 @@ input:focus{border-color:var(--gold)}
 
 <!-- ============ HOME ============ -->
 <section class="screen on" id="scr-home">
+  <button id="theme-btn-home">🌃 Tokyo Neon</button>
   <div class="home-box">
     <div class="hero-badge">
       <div class="ring1"></div>
@@ -393,6 +555,7 @@ input:focus{border-color:var(--gold)}
     <div id="round-info"></div>
     <div>
       <button class="icon-btn" id="btn-sound">🔊</button>
+      <button class="icon-btn" id="theme-btn" title="Switch theme">🌃</button>
       <button class="icon-btn hidden" id="btn-chat" style="position:relative">💬<span id="chat-badge" class="hidden"></span></button>
       <button class="icon-btn" id="btn-log">📜</button>
       <button class="icon-btn" id="btn-score">🏆</button>
@@ -1620,6 +1783,79 @@ window.addEventListener('load',()=>{
     else localStorage.removeItem('fcRoom');
   }).catch(()=>{});
 });
+
+/* ======================================================
+   THEME TOGGLE
+   ====================================================== */
+let _currentTheme=localStorage.fcTheme||'noir';
+function applyTheme(t){
+  _currentTheme=t;
+  const isNeon=t==='neon';
+  document.documentElement.setAttribute('data-theme',isNeon?'neon':'');
+  $('#theme-btn').textContent=isNeon?'🎨':'🌃';
+  $('#theme-btn-home').textContent=isNeon?'🎨 Monte Carlo':'🌃 Tokyo Neon';
+  localStorage.fcTheme=t;
+}
+function toggleTheme(){applyTheme(_currentTheme==='neon'?'noir':'neon');}
+$('#theme-btn').onclick=toggleTheme;
+$('#theme-btn-home').onclick=toggleTheme;
+applyTheme(_currentTheme);
+
+/* ======================================================
+   SCREEN TRANSITIONS
+   ====================================================== */
+const _goScrOriginal=goScr;
+goScr=function(id){
+  const cur=document.querySelector('.screen.on');
+  if(cur&&cur.id!==id){
+    cur.classList.add('leaving');
+    setTimeout(()=>{cur.classList.remove('leaving');_goScrOriginal(id);},160);
+  }else{
+    _goScrOriginal(id);
+  }
+};
+
+/* ======================================================
+   WIN PARTICLE BURST
+   ====================================================== */
+function spawnParticle(x,y,color){
+  const p=document.createElement('div');
+  p.className='fx-particle';
+  const angle=Math.random()*Math.PI*2,dist=48+Math.random()*72;
+  p.style.setProperty('--px',(Math.cos(angle)*dist)+'px');
+  p.style.setProperty('--py',(Math.sin(angle)*dist-28)+'px');
+  p.style.left=(x-4)+'px';p.style.top=(y-4)+'px';
+  p.style.background=color;
+  const size=(5+Math.random()*6)+'px';
+  p.style.width=size;p.style.height=size;
+  p.style.borderRadius=Math.random()>0.4?'50%':'3px';
+  p.style.animationDuration=(0.45+Math.random()*0.38)+'s';
+  document.body.appendChild(p);
+  setTimeout(()=>p.remove(),900);
+}
+function burstWin(){
+  const piles=$('#piles');if(!piles)return;
+  const r=piles.getBoundingClientRect();
+  const cx=r.left+r.width/2,cy=r.top+r.height/2;
+  const noirCols=['#C9A84C','#DDBA4A','#EDD9A3','#FFFFFF','#8B6530','#F5DEB3'];
+  const neonCols=['#F0543C','#FF7A5C','#00D4FF','#FFD700','#FF9999','#FFB347'];
+  const cols=_currentTheme==='neon'?neonCols:noirCols;
+  for(let i=0;i<24;i++)setTimeout(()=>spawnParticle(cx+(Math.random()-0.5)*60,cy+(Math.random()-0.5)*30,cols[i%cols.length]),i*18);
+  setTimeout(()=>{
+    for(let j=0;j<12;j++)setTimeout(()=>spawnParticle(cx+(Math.random()-0.5)*80,cy-20+(Math.random()-0.5)*40,cols[j%cols.length]),j*22);
+  },280);
+}
+const _showRoundOrig=showRoundModal;
+showRoundModal=function(){
+  _showRoundOrig();
+  if(G&&G.result&&G.result.ok)setTimeout(burstWin,250);
+};
+const _showMatchOrig=showMatchModal;
+showMatchModal=function(){
+  _showMatchOrig();
+  setTimeout(burstWin,200);
+  setTimeout(burstWin,600);
+};
 
 /* ================= HEADLESS TEST HARNESS ================= */
 window.__test={
