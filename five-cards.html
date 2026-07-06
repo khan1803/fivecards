@@ -110,7 +110,7 @@ input:focus{border-color:var(--gold)}
 .opp:first-child:nth-last-child(5)~.opp:nth-child(3){margin-top:0}
 .opp:first-child:nth-last-child(5)~.opp:nth-child(4){margin-top:10px}
 .opp:first-child:nth-last-child(5)~.opp:last-child{margin-top:28px}
-.avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#4A3A80,#2A2460);
+.avatar{position:relative;width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#4A3A80,#2A2460);
   display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;flex:0 0 auto;color:#E8D5A3;
   border:2px solid rgba(201,168,76,.38);box-shadow:0 2px 8px rgba(0,0,0,.35);font-family:'Playfair Display',serif}
 .opp:nth-of-type(4n+2) .avatar{background:linear-gradient(135deg,#2A5A38,#163020)}
@@ -446,6 +446,18 @@ input:focus{border-color:var(--gold)}
   #actions .btn{padding:11px 8px;font-size:12px;min-height:42px}
   #status-bar{font-size:12px;min-height:16px}
 }
+
+/* ---------- voice chat ---------- */
+#btn-voice.voice-live{background:rgba(201,168,76,.22);border-color:var(--gold);color:var(--gold)}
+#btn-voice.voice-muted{background:rgba(184,50,50,.15);border-color:rgba(184,50,50,.5);color:var(--red)}
+[data-theme="neon"] #btn-voice.voice-live{background:rgba(240,84,60,.22);border-color:var(--gold)}
+.voice-mic{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;
+  background:var(--panel);border:1.5px solid rgba(201,168,76,.3);display:flex;align-items:center;justify-content:center;
+  font-size:9px;line-height:1;z-index:2;transition:box-shadow .15s,border-color .15s}
+.voice-mic.muted{opacity:.55}
+.opp.speaking .avatar{box-shadow:0 0 0 3px var(--gold),0 2px 8px rgba(0,0,0,.35)}
+.opp.speaking .voice-mic{border-color:var(--gold);box-shadow:0 0 10px rgba(201,168,76,.6)}
+#my-area.speaking{box-shadow:0 -6px 30px rgba(201,168,76,.35)}
 </style>
 </head>
 <body>
@@ -556,6 +568,7 @@ input:focus{border-color:var(--gold)}
     <div>
       <button class="icon-btn" id="btn-sound">🔊</button>
       <button class="icon-btn" id="theme-btn" title="Switch theme">🌃</button>
+      <button class="icon-btn hidden" id="btn-voice" title="Voice chat">🎤</button>
       <button class="icon-btn hidden" id="btn-chat" style="position:relative">💬<span id="chat-badge" class="hidden"></span></button>
       <button class="icon-btn" id="btn-log">📜</button>
       <button class="icon-btn" id="btn-score">🏆</button>
@@ -1173,6 +1186,7 @@ function render(){
   const myTurn=me&&!me.elim&&G.turn===myIdx&&!isEnd();
   $('#round-info').textContent=`ROUND ${G.round} · LIMIT ${G.limit}`;
   $('#btn-chat').classList.toggle('hidden',G.mode!=='mp');
+  $('#btn-voice').classList.toggle('hidden',G.mode!=='mp');
   /* announce whose open card it is, big and on the table itself — but
      only until that player actually discards; after that it's old news */
   const starterP=G.players[G.starter];
@@ -1191,7 +1205,8 @@ function render(){
     const d=document.createElement('div');
     d.className='opp'+(i===G.turn&&!isEnd()&&!p.elim?' turn':'')+(p.elim?' elim':'');
     d.dataset.uid=p.id;
-    d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}</div>
+    const inVoice=voicePresent.has(p.id);
+    d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}${inVoice?'<span class="voice-mic">🎙️</span>':''}</div>
       <div><div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span><span class="rank-badge">#${rankOf(i)}</span>${p.isBot?`<span class="tagchip">${esc(p.diff)}</span>`:''}</div>
       <div class="opp-sub">${p.elim?'OUT · ':''}score ${p.score}</div>
       <div class="minis">${p.elim?'':p.hand.map(()=>'<span class="mini"></span>').join('')}</div></div>`;
@@ -1663,10 +1678,167 @@ function showChatBubble(uid,name,text){
   setTimeout(()=>b.remove(),5000);
 }
 
+/* ================= VOICE CHAT (WebRTC mesh, signaled via Firebase) =================
+   No dedicated media server — every pair of players in the room opens a direct
+   RTCPeerConnection. Firebase just carries the one-time offer/answer/ICE-candidate
+   handshake (fivecards/rooms/{CODE}/rtc/{toUid}), then gets out of the way; audio
+   flows peer-to-peer after that. Only a public STUN server is configured (no TURN),
+   so a pair stuck behind strict/symmetric NATs may fail to connect to each other —
+   a real limitation of not running a relay server, not a bug. */
+const RTC_CONFIG={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
+let voice={joined:false,muted:false,localStream:null,peers:{},presenceRef:null,sigRef:null,speakTimer:null};
+let voicePresent=new Set();  // uids currently in the voice channel, per Firebase presence — drives the mic badge in render()
+
+function updateVoiceUI(){
+  const b=$('#btn-voice');if(!b)return;
+  b.classList.remove('voice-live','voice-muted');
+  if(!voice.joined){b.textContent='🎤';b.title='Join voice chat';}
+  else if(voice.muted){b.textContent='🔇';b.title='Unmute';b.classList.add('voice-muted');}
+  else{b.textContent='🎙️';b.title='Mute';b.classList.add('voice-live');}
+}
+function voiceBtnClick(){
+  if(!voice.joined)joinVoice();
+  else toggleMute();
+}
+async function joinVoice(){
+  if(!mp.ref||voice.joined)return;
+  let stream;
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
+  catch(e){toast('Microphone access denied');return;}
+  voice.localStream=stream;voice.joined=true;voice.muted=false;
+  updateVoiceUI();
+  const vRef=mp.ref.child('voice/'+myUid);
+  vRef.set(true);vRef.onDisconnect().remove();
+  voicePresent.add(myUid);
+  voice.presenceRef=mp.ref.child('voice');
+  voice.presenceRef.on('child_added',s=>{
+    const uid=s.key;
+    voicePresent.add(uid);render();
+    if(uid===myUid||voice.peers[uid])return;
+    if(myUid<uid)callPeer(uid);        // deterministic tie-break so only one side offers
+  });
+  voice.presenceRef.on('child_removed',s=>{voicePresent.delete(s.key);teardownPeer(s.key);render();});
+  voice.sigRef=mp.ref.child('rtc/'+myUid);
+  voice.sigRef.on('child_added',s=>{
+    const msg=s.val();if(msg)handleSignal(msg.from,msg);
+    s.ref.remove();
+  });
+  startSpeakingLoop();
+}
+function toggleMute(){
+  if(!voice.joined||!voice.localStream)return;
+  voice.muted=!voice.muted;
+  voice.localStream.getAudioTracks().forEach(t=>t.enabled=!voice.muted);
+  updateVoiceUI();
+}
+function leaveVoice(){
+  if(!voice.joined)return;
+  if(mp.ref)mp.ref.child('voice/'+myUid).remove();
+  if(voice.presenceRef)voice.presenceRef.off();
+  if(voice.sigRef)voice.sigRef.off();
+  Object.keys(voice.peers).forEach(teardownPeer);
+  if(voice.localStream)voice.localStream.getTracks().forEach(t=>t.stop());
+  clearInterval(voice.speakTimer);
+  voice={joined:false,muted:false,localStream:null,peers:{},presenceRef:null,sigRef:null,speakTimer:null};
+  voicePresent.clear();
+  updateVoiceUI();
+  document.querySelectorAll('.opp.speaking').forEach(el=>el.classList.remove('speaking'));
+  $('#my-area').classList.remove('speaking');
+}
+function sendSignal(toUid,msg){mp.ref.child('rtc/'+toUid).push({from:myUid,...msg});}
+function createPeerConnection(uid){
+  const pc=new RTCPeerConnection(RTC_CONFIG);
+  voice.localStream.getTracks().forEach(t=>pc.addTrack(t,voice.localStream));
+  pc.onicecandidate=e=>{if(e.candidate)sendSignal(uid,{type:'ice',candidate:e.candidate.toJSON()});};
+  pc.ontrack=e=>attachRemoteAudio(uid,e.streams[0]);
+  return {pc,pending:[]};
+}
+function callPeer(uid){
+  const entry=createPeerConnection(uid);voice.peers[uid]=entry;
+  entry.pc.createOffer().then(offer=>{
+    entry.pc.setLocalDescription(offer);
+    sendSignal(uid,{type:'offer',sdp:offer.sdp});
+  });
+}
+async function handleSignal(fromUid,msg){
+  if(!fromUid)return;
+  let entry=voice.peers[fromUid];
+  if(msg.type==='offer'){
+    if(!entry)entry=voice.peers[fromUid]=createPeerConnection(fromUid);
+    await entry.pc.setRemoteDescription({type:'offer',sdp:msg.sdp});
+    for(const c of entry.pending)await entry.pc.addIceCandidate(c).catch(()=>{});
+    entry.pending=[];
+    const answer=await entry.pc.createAnswer();
+    await entry.pc.setLocalDescription(answer);
+    sendSignal(fromUid,{type:'answer',sdp:answer.sdp});
+  }else if(msg.type==='answer'){
+    if(entry){
+      await entry.pc.setRemoteDescription({type:'answer',sdp:msg.sdp});
+      for(const c of entry.pending)await entry.pc.addIceCandidate(c).catch(()=>{});
+      entry.pending=[];
+    }
+  }else if(msg.type==='ice'){
+    if(entry){
+      if(entry.pc.remoteDescription)await entry.pc.addIceCandidate(msg.candidate).catch(()=>{});
+      else entry.pending.push(msg.candidate);
+    }
+  }
+}
+function attachRemoteAudio(uid,stream){
+  let el=document.getElementById('voice-audio-'+uid);
+  if(!el){el=document.createElement('audio');el.id='voice-audio-'+uid;el.autoplay=true;document.body.appendChild(el);}
+  el.srcObject=stream;
+  const entry=voice.peers[uid];if(entry)entry.stream=stream;
+}
+function teardownPeer(uid){
+  const entry=voice.peers[uid];
+  if(entry){if(entry.pc)entry.pc.close();if(entry.analyser)entry.analyserCtx&&entry.analyserCtx.close();delete voice.peers[uid];}
+  const el=document.getElementById('voice-audio-'+uid);if(el)el.remove();
+  const opp=[...document.querySelectorAll('#opponents .opp')].find(o=>o.dataset.uid===uid);
+  if(opp)opp.classList.remove('speaking');
+}
+/* lightweight volume-based "who's talking" indicator — polled rather than
+   driven off requestAnimationFrame since a rough ~8x/sec read is plenty for
+   a speaking glow, and it's independent of render() (which fully rebuilds
+   the opponent panels on every game move, so classList state can't just
+   live there) */
+function startSpeakingLoop(){
+  clearInterval(voice.speakTimer);
+  voice.speakTimer=setInterval(()=>{
+    if(voice.localStream){
+      const level=streamLevel(voice.localStream,'_self');
+      $('#my-area').classList.toggle('speaking',!voice.muted&&level>0.06);
+    }
+    for(const uid in voice.peers){
+      const entry=voice.peers[uid];if(!entry.stream)continue;
+      const level=streamLevel(entry.stream,uid);
+      const opp=[...document.querySelectorAll('#opponents .opp')].find(o=>o.dataset.uid===uid);
+      if(opp)opp.classList.toggle('speaking',level>0.06);
+    }
+  },130);
+}
+const _levelCtxs={};
+function streamLevel(stream,key){
+  let e=_levelCtxs[key];
+  if(!e){
+    try{
+      const ctx=new (window.AudioContext||window.webkitAudioContext)();
+      const src=ctx.createMediaStreamSource(stream);
+      const an=ctx.createAnalyser();an.fftSize=512;
+      src.connect(an);
+      e=_levelCtxs[key]={ctx,an,data:new Uint8Array(an.frequencyBinCount)};
+    }catch(err){return 0;}
+  }
+  e.an.getByteTimeDomainData(e.data);
+  let sum=0;for(let i=0;i<e.data.length;i++){const v=(e.data[i]-128)/128;sum+=v*v;}
+  return Math.sqrt(sum/e.data.length);
+}
+
 function leaveRoom(remote){
   clearTimeout(botTimer);
   if(mp.chatRef)mp.chatRef.off();
   closeChat();
+  leaveVoice();
   if(mp.ref){
     mp.ref.off();
     if(!remote){
@@ -1729,6 +1901,7 @@ $('#btn-log').onclick=showLogModal;
 $('#log-line').onclick=showLogModal;
 $('#btn-chat').onclick=openChat;
 $('#btn-chat-lobby').onclick=openChat;
+$('#btn-voice').onclick=voiceBtnClick;
 $('#btn-chat-close').onclick=closeChat;
 $('#btn-chat-send').onclick=()=>{sendChat($('#chat-input').value);$('#chat-input').value='';};
 $('#chat-input').addEventListener('keydown',e=>{
