@@ -120,8 +120,17 @@ input:focus{border-color:var(--gold)}
 .opp-name{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:6px;color:#E8D5A3;font-family:'Playfair Display',serif}
 .tagchip{font-size:8.5px;background:rgba(201,168,76,.15);color:var(--gold);border-radius:5px;padding:2px 7px;text-transform:uppercase;letter-spacing:.5px;font-family:'DM Mono',monospace}
 .opp-sub{font-size:10px;color:rgba(201,168,76,.42);font-family:'DM Mono',monospace}
-.minis{display:flex;gap:3px;margin-top:4px}
+.minis{display:flex;gap:3px;margin-top:4px;flex-wrap:wrap}
 .mini{width:11px;height:16px;border-radius:2.5px;background:linear-gradient(135deg,#1A2744,#0F1830);border:1px solid rgba(201,168,76,.35)}
+/* Open Show reveal: actual face-up cards landing one at a time, plus the
+   running point total beneath them — replaces the blank .mini chips only
+   for the duration of that reveal. */
+.minis.reveal{gap:2px}
+.mini-face{display:flex;align-items:center;justify-content:center;min-width:18px;height:20px;padding:0 3px;
+  border-radius:3px;background:#FAFAF8;color:var(--cardink);font-size:9px;font-weight:800;
+  font-family:'Playfair Display',serif;box-shadow:0 2px 5px rgba(0,0,0,.4);animation:newTagPulse .3s ease-out}
+.mini-face.red{color:var(--red)}
+.opp-reveal-sum{font-size:11px;font-weight:800;color:var(--gold);font-family:'DM Mono',monospace;margin-top:3px}
 
 #table{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;width:100%;position:relative;min-height:0;padding:6px 12px}
 #piles{position:relative;width:100%;max-width:480px;display:flex;gap:clamp(20px,6vw,40px);align-items:flex-start;justify-content:center;flex-wrap:wrap;
@@ -458,6 +467,17 @@ input:focus{border-color:var(--gold)}
 .opp.speaking .avatar{box-shadow:0 0 0 3px var(--gold),0 2px 8px rgba(0,0,0,.35)}
 .opp.speaking .voice-mic{border-color:var(--gold);box-shadow:0 0 10px rgba(201,168,76,.6)}
 #my-area.speaking{box-shadow:0 -6px 30px rgba(201,168,76,.35)}
+
+/* ---------- turn timer (multiplayer only) ---------- */
+#turn-timer{font-family:'DM Mono',monospace;font-size:13px;font-weight:800;color:var(--gold);
+  text-align:center;letter-spacing:1.5px;padding:0 14px}
+#turn-timer.urgent{color:var(--red);animation:pulse .9s infinite}
+
+/* ---------- bigger table + cards on desktop/web ---------- */
+@media(min-width:900px){
+  :root{--cw:clamp(70px,7vw,100px)}
+  #piles{max-width:640px;gap:clamp(28px,4vw,52px);padding:clamp(36px,5vw,58px) clamp(26px,4vw,44px)}
+}
 </style>
 </head>
 <body>
@@ -601,6 +621,7 @@ input:focus{border-color:var(--gold)}
       </div>
     </div>
     <div id="status-bar"></div>
+    <div id="turn-timer" class="hidden"></div>
     <div id="log-line"></div>
   </div>
   <footer id="my-area">
@@ -727,10 +748,13 @@ function deal(g,openShowBy){
   g.round++;g.result=null;g.openShow=openShowBy!=null?openShowBy:null;
   /* starter rotates one direction until every active player has gone
      once, then reverses — so over time everyone gets to start right
-     after each of their neighbours on both sides, not just one. */
+     after each of their neighbours on both sides, not just one. With
+     only 2 players left, "the other side" doesn't exist — reversing
+     would just alternate between the same two people either way, so
+     skip it entirely (no flip, no alert). */
   const startAct=activeIdxs(g);
   g.directionChanged=false;
-  if(g.starterStep>=startAct.length){
+  if(startAct.length>2&&g.starterStep>=startAct.length){
     g.starterDir*=-1;g.starterStep=0;g.directionChanged=true;
   }
   do{g.starter=(g.starter+g.starterDir+g.players.length)%g.players.length;}while(g.players[g.starter].elim);
@@ -969,6 +993,11 @@ let sel=new Set(),modalKind=null,toastTimer=null;
 
 /* ---- sound (WebAudio synth — no external assets/network needed) ---- */
 let soundOn=localStorage.fcSound!=='off',actx=null,lastSeenSeq=-1,pendingDealAnim=false,openShowRevealPending=false,showAnnouncePending=false,announcedRound=-1;
+/* tracks how many of each player's cards have visibly landed during an
+   Open Show's live 1-card-at-a-time deal — {byPlayerIdx:{playerIndex:count}}
+   while a reveal is in progress, else null. Drives the running per-player
+   point total shown as cards land (see playDealAnimation + render). */
+let openShowReveal=null;
 function ensureAudio(){
   if(!soundOn)return null;
   if(!actx){try{actx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){soundOn=false;return null;}}
@@ -1066,7 +1095,7 @@ function playSoundForLog(line){
      here), since a direction reversal needs its own alert shown — and
      its sound played — before the deal sound/animation are allowed to run */
   if(line.startsWith('— Round')){pendingDealAnim=true;return;}
-  if(line.includes('reshuffled'))return sndShuffle();
+  if(line.includes('reshuffled')){showReshuffleAlert();return sndShuffle();}
   if(line.includes('⚡'))return sndAttack();
   if(line.includes('plays'))return sndDiscard();
   if(line.includes('draws from deck')||line.includes('takes'))return sndDraw();
@@ -1122,23 +1151,38 @@ function playDealAnimation(){
   if(!targets.length||!G)return 0;
   const rects=targets.map(t=>t.getBoundingClientRect());
   const isOpen=G.openShow!=null;
-  let handsSorted=null;
+  let handsSorted=null,playerOrder=null;
   if(isOpen){
-    const playerOrder=[];
+    playerOrder=[];
     for(let k=1;k<G.players.length;k++)playerOrder.push((myIdx+k)%G.players.length);
     playerOrder.push(myIdx);
     handsSorted=playerOrder.map(pi=>sortHand((G.players[pi]&&G.players[pi].hand)||[]));
+    openShowReveal={byPlayerIdx:{}};
+    playerOrder.forEach(pi=>{openShowReveal.byPlayerIdx[pi]=0;});
+  }else{
+    openShowReveal=null;
   }
   /* Open Show deals at a deliberate 1 card/sec — slow enough that
      players can actually track and mentally add up what's landing
-     where, which is the whole point of the suspense. */
+     where, which is the whole point of the suspense. Every player's
+     running point total updates the instant their card actually lands
+     (not the whole hand at once), so everyone watches each other's
+     totals climb card by card. */
   const perCard=isOpen?1000:95;
   let i=0;
   for(let round=0;round<5;round++){
     rects.forEach((r,ti)=>{
       const tx=r.left+r.width/2,ty=r.top+r.height/2;
       const card=isOpen?(handsSorted[ti]&&handsSorted[ti][round]):null;
+      const pi=isOpen?playerOrder[ti]:null;
       setTimeout(()=>{flyCard(x0,y0,tx,ty,card);if(isOpen)sndCardTick();},i*perCard);
+      if(isOpen&&card){
+        setTimeout(()=>{
+          if(!openShowReveal)return;             // a newer deal may have superseded this one
+          openShowReveal.byPlayerIdx[pi]=(openShowReveal.byPlayerIdx[pi]||0)+1;
+          render();
+        },i*perCard+900);
+      }
       i++;
     });
   }
@@ -1181,12 +1225,13 @@ const isEnd=()=>G&&(G.phase==='roundEnd'||G.phase==='matchEnd');
 
 function render(){
   syncLogAudio();
-  if(!G)return;
+  if(!G){updateTurnTimer();return;}
   const me=G.players[myIdx];
   const myTurn=me&&!me.elim&&G.turn===myIdx&&!isEnd();
   $('#round-info').textContent=`ROUND ${G.round} · LIMIT ${G.limit}`;
   $('#btn-chat').classList.toggle('hidden',G.mode!=='mp');
   $('#btn-voice').classList.toggle('hidden',G.mode!=='mp');
+  updateTurnTimer();
   /* announce whose open card it is, big and on the table itself — but
      only until that player actually discards; after that it's old news */
   const starterP=G.players[G.starter];
@@ -1206,10 +1251,20 @@ function render(){
     d.className='opp'+(i===G.turn&&!isEnd()&&!p.elim?' turn':'')+(p.elim?' elim':'');
     d.dataset.uid=p.id;
     const inVoice=voicePresent.has(p.id);
+    /* Open Show reveal in progress: show the actual cards that have
+       landed so far (face up) plus a running point total, instead of
+       the usual face-down mini chips — this is the whole point of an
+       Open Show, so it only ever applies during one. */
+    const revealCnt=(G.openShow!=null&&openShowReveal)?(openShowReveal.byPlayerIdx[i]||0):null;
+    const revealedHand=revealCnt!=null?sortHand(p.hand).slice(0,revealCnt):null;
+    const handHtml=p.elim?'':(revealedHand
+      ?`<div class="minis reveal">${revealedHand.map(c=>`<span class="mini-face${(!isJoker(c)&&(c.s==='H'||c.s==='D'))?' red':''}">${lbl(c)}</span>`).join('')}</div>
+        <div class="opp-reveal-sum">${handSum(revealedHand)} pts</div>`
+      :`<div class="minis">${p.hand.map(()=>'<span class="mini"></span>').join('')}</div>`);
     d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}${inVoice?'<span class="voice-mic">🎙️</span>':''}</div>
       <div><div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span><span class="rank-badge">#${rankOf(i)}</span>${p.isBot?`<span class="tagchip">${esc(p.diff)}</span>`:''}</div>
       <div class="opp-sub">${p.elim?'OUT · ':''}score ${p.score}</div>
-      <div class="minis">${p.elim?'':p.hand.map(()=>'<span class="mini"></span>').join('')}</div></div>`;
+      ${handHtml}</div>`;
     opp.appendChild(d);
   }
 
@@ -1235,8 +1290,13 @@ function render(){
   /* my hand */
   $('#my-area').classList.toggle('turn',myTurn);
   const mh=$('#my-hand');mh.innerHTML='';
+  /* during an Open Show reveal, my own hand lands card by card same as
+     everyone else's — no peeking at the total early just because it's mine */
+  const myRevealCnt=(G.openShow!=null&&openShowReveal)?(openShowReveal.byPlayerIdx[myIdx]||0):null;
   if(me&&!me.elim){
-    for(const c of sortHand(me.hand)){
+    const myHandSorted=sortHand(me.hand);
+    const myHandShown=myRevealCnt!=null?myHandSorted.slice(0,myRevealCnt):myHandSorted;
+    for(const c of myHandShown){
       const isNew=!!(G.lastDrawn&&G.lastDrawn.playerId===me.id&&G.lastDrawn.cardIds.includes(c.id));
       const el=cardEl(c,{sel:sel.has(c.id),isNew});
       el.onclick=()=>onCardClick(c);
@@ -1268,8 +1328,9 @@ function render(){
   $('#log-line').textContent=G.log.length?G.log[G.log.length-1]:'';
   if(me){
     $('#my-rank-badge').textContent='#'+rankOf(myIdx);
+    const myShownSum=myRevealCnt!=null?handSum(sortHand(me.hand).slice(0,myRevealCnt)):handSum(me.hand);
     $('#my-meta').textContent=me.elim?`${me.name} · OUT · score ${me.score}`
-      :`${me.name} · hand ${handSum(me.hand)} pts · score ${me.score}`;
+      :`${me.name} · hand ${myShownSum} pts · score ${me.score}`;
   }
 
   /* end-of-round modals — never dump the full result the instant it
@@ -1354,6 +1415,10 @@ function showDirectionAlert(dir){
   openModal('announce',`<div class="announce-banner">🔄 Direction Changed!<br>
     <span style="font-size:16px">Now going ${dir===1?'clockwise':'anticlockwise'}</span></div>`);
 }
+function showReshuffleAlert(){
+  openModal('announce',`<div class="announce-banner">♻️ Deck Reshuffled!</div>`);
+  setTimeout(()=>closeModalIf('announce'),1400);
+}
 function showRoundModal(){
   if(!G.result)return;
   const r=G.result;
@@ -1425,6 +1490,68 @@ function showHelpModal(){
 let botTimer=null;
 const setup={diff:'medium',nbots:2,limit:240,mplimit:240};
 
+/* ---- multiplayer turn timer: 30s to act, else auto-play on your behalf ----
+   Only the client whose own turn it is ever runs this (each browser only
+   ever auto-plays for itself), so there's no risk of two clients racing to
+   act for the same AFK player. The countdown key includes G.v so it resets
+   the instant *anything* happens on your turn (a pickup answering an
+   attack, say), not just on a full turn change. */
+let turnTimerInterval=null,turnTimerDeadline=null,turnTimerKey=null;
+const TURN_TIMEOUT_MS=30000;
+function updateTurnTimer(){
+  const active=G&&G.mode==='mp'&&!isEnd()&&G.turn===myIdx&&G.players[myIdx]&&!G.players[myIdx].elim;
+  if(!active){
+    clearInterval(turnTimerInterval);turnTimerInterval=null;turnTimerDeadline=null;turnTimerKey=null;
+    const el=$('#turn-timer');if(el)el.classList.add('hidden');
+    return;
+  }
+  const key=G.turn+'|'+G.phase+'|'+G.v;
+  if(key!==turnTimerKey){
+    turnTimerKey=key;
+    turnTimerDeadline=Date.now()+TURN_TIMEOUT_MS;
+    clearInterval(turnTimerInterval);
+    turnTimerInterval=setInterval(tickTurnTimer,250);
+  }
+  tickTurnTimer();
+}
+function tickTurnTimer(){
+  if(!turnTimerDeadline)return;
+  const el=$('#turn-timer');if(!el)return;
+  const remain=Math.max(0,Math.ceil((turnTimerDeadline-Date.now())/1000));
+  el.classList.remove('hidden');
+  el.textContent=`⏱ ${remain}s to act`;
+  el.classList.toggle('urgent',remain<=10);
+  if(remain<=0){
+    clearInterval(turnTimerInterval);turnTimerInterval=null;
+    autoPlayTurn();
+  }
+}
+/* Timed out: pick up if under attack, otherwise discard your single
+   highest card (always a legal solo discard) and draw from the deck —
+   cascades through a pickup-then-discard-then-draw sequence in one go
+   so an AFK player's turn actually completes instead of stalling the
+   whole table. */
+function autoPlayTurn(){
+  if(!G||G.mode!=='mp'||isEnd()||G.turn!==myIdx)return;
+  const me=G.players[myIdx];
+  if(!me||me.elim)return;
+  toast('Time’s up — auto-playing your turn');
+  let guard=0;
+  while(G&&G.turn===myIdx&&!isEnd()&&guard<5){
+    guard++;
+    if(G.phase==='discard'){
+      if(G.attack>0)applyMove({t:'pickup'});
+      else if(!me.hand.length)applyMove({t:'show'});
+      else{
+        const highest=me.hand.slice().sort((a,b)=>val(b)-val(a))[0];
+        applyMove({t:'discard',ids:[highest.id]});
+      }
+    }else if(G.phase==='draw'){
+      applyMove({t:'draw',src:'deck'});
+    }else break;
+  }
+}
+
 function applyMove(m){
   if(!G)return;
   const err=rawApply(G,m);
@@ -1464,11 +1591,9 @@ function startBotGame(){
 function uiNextRound(){
   if(!G||G.phase!=='roundEnd')return;
   closeModal();
-  /* Open Show is a player's choice, not an auto-pilot move — an eligible
-     bot only gambles on it about half the time, same as a human might. */
-  const eligibleBots=activeIdxs(G).filter(i=>G.players[i].isBot&&G.players[i].score>=G.limit*0.9);
-  const eligibleBot=eligibleBots.find(()=>Math.random()<0.5);
-  deal(G,eligibleBot);
+  /* Open Show is a human player's call to make, never a bot's — bots
+     always deal a normal round. */
+  deal(G);
   afterChange();
 }
 function uiNextRoundOpen(){
