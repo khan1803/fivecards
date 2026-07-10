@@ -792,7 +792,20 @@ function deal(g,openShowBy){
   g.deck=shuffle(buildDeck(g.numDecks));
   g.players.forEach(p=>p.hand=[]);
   const act=activeIdxs(g);
-  for(let k=0;k<5;k++)for(const i of act)g.players[i].hand.push(g.deck.pop());
+  /* cards are dealt starting from this round's starter, stepping the
+     same direction as play (g.starterDir) — so the deal itself visibly
+     mirrors whichever way the table is currently going, same as the
+     turn order does. Without this the deal always went in flat array
+     order (A,B,C,D) regardless of who started or which way the round
+     was rotating, out of sync with the turn order it's supposed to
+     match. */
+  const dealOrder=[g.starter];
+  let dcur=g.starter;
+  for(let k=1;k<act.length;k++){
+    do{dcur=(dcur+g.starterDir+g.players.length)%g.players.length;}while(g.players[dcur].elim);
+    dealOrder.push(dcur);
+  }
+  for(let k=0;k<5;k++)for(const i of dealOrder)g.players[i].hand.push(g.deck.pop());
   g.open=[g.deck.pop()];g.heap=[];g.pending=[];g.lastDrawn=null;
   g.turn=g.starter;g.attack=0;g.phase='discard';g.turnCount=0;g.v++;
   if(g.openShow!=null){
