@@ -132,7 +132,18 @@ input:focus{border-color:var(--gold)}
 .mini-face.red{color:var(--red)}
 .opp-reveal-sum{font-size:11px;font-weight:800;color:var(--gold);font-family:'DM Mono',monospace;margin-top:3px}
 
-#table{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;width:100%;position:relative;min-height:0;padding:6px 12px}
+/* #table stays top-aligned (flex-start) so it can never push content
+   above its own box into #opponents — but #table-inner uses
+   margin:auto 0 to center *itself* within #table when there's room,
+   and gracefully collapses to 0 (i.e. top-aligned, like its parent)
+   when the content is taller than the available space instead of
+   overflowing both ways. This is the classic "safe centering" trick:
+   auto margins can't go negative, so unlike justify-content:center
+   they never let content escape upward past the container's top edge
+   even when #opponents wraps to 2 rows at high player counts and eats
+   most of the vertical room. */
+#table{flex:1;display:flex;flex-direction:column;align-items:center;width:100%;position:relative;min-height:0;padding:6px 12px;overflow-y:auto}
+#table-inner{display:flex;flex-direction:column;align-items:center;gap:16px;width:100%;margin:auto 0}
 #piles{position:relative;width:100%;max-width:480px;display:flex;gap:clamp(20px,6vw,40px);align-items:flex-start;justify-content:center;flex-wrap:wrap;
   background:radial-gradient(ellipse at 50% 32%,var(--felt) 0%,#0E3222 60%,var(--felt-d) 100%);
   border:5px solid #081E12;border-radius:clamp(36px,12vw,64px);
@@ -147,13 +158,19 @@ input:focus{border-color:var(--gold)}
 .pile-cap{font-size:9px;letter-spacing:2.5px;color:rgba(255,255,255,.6);font-weight:700;font-family:'DM Mono',monospace;text-transform:uppercase}
 #open-cards,#pending-cards{display:flex;gap:6px;min-height:var(--ch)}
 #pending-cards .card{opacity:.88}
-#attack-badge{position:absolute;top:-60px;left:50%;transform:translateX(-50%);z-index:5;
+/* Both badges are normal flex children of #table, placed before its
+   #piles sibling — not absolutely positioned off #piles (that let them
+   ride up over #opponents at high player counts once opponents wrapped
+   onto a second row) and deliberately NOT pulled toward #piles with a
+   negative margin either: a negative margin on a centered flex child
+   still lets it escape above its container's own box (confirmed via
+   measurement — #table's box had a clean 0px gap to #opponents, but the
+   badge inside it still poked ~24px above #table's own top edge). Zero
+   margin is the only construction that's actually guaranteed safe. */
+#attack-badge{position:relative;z-index:5;align-self:center;
   background:linear-gradient(180deg,#E2635C,#A32620);color:#fff;font-weight:800;font-size:14px;letter-spacing:.5px;
   border-radius:999px;padding:7px 18px;box-shadow:0 4px 18px rgba(163,38,32,.5);animation:pulse 1s infinite;font-family:'DM Mono',monospace}
-/* whose open card it is — a pill sitting ABOVE the felt (like the
-   attack badge), not on the green surface; shown only until that
-   player discards */
-#open-starter-badge{position:absolute;top:-66px;left:50%;transform:translateX(-50%);z-index:4;
+#open-starter-badge{position:relative;z-index:4;align-self:center;
   text-align:center;pointer-events:none;max-width:88%;
   background:linear-gradient(135deg,var(--goldlt),var(--gold2));color:var(--inkdark);
   border-radius:16px;padding:6px 20px 8px;box-shadow:0 4px 20px rgba(184,132,46,.42)}
@@ -289,7 +306,7 @@ input:focus{border-color:var(--gold)}
   .opp-sub{font-size:7.5px}
   .rank-badge{font-size:7px;padding:1.5px 4px;border-radius:4px}
   .tagchip,.minis{display:none}
-  #open-starter-badge{top:-38px;padding:4px 14px 5px;border-radius:12px}
+  #open-starter-badge{padding:4px 14px 5px;border-radius:12px}
   .open-starter-label{font-size:8px;letter-spacing:2px}
   .open-starter-name{font-size:20px}
   #opponents{padding-bottom:10px}
@@ -442,7 +459,7 @@ input:focus{border-color:var(--gold)}
   #topbar{padding:8px 10px}
   .icon-btn{width:34px;height:34px;font-size:14px;border-radius:8px}
   #round-info{font-size:10px;letter-spacing:1.5px}
-  #open-starter-badge{top:-38px;padding:4px 14px 5px;border-radius:12px}
+  #open-starter-badge{padding:4px 14px 5px;border-radius:12px}
   .open-starter-label{font-size:8px;letter-spacing:2px}
   .open-starter-name{font-size:18px}
 }
@@ -528,7 +545,11 @@ input:focus{border-color:var(--gold)}
     </div>
     <span class="lbl">Number of bots</span>
     <div class="seg" id="seg-nbots">
-      <button data-v="1">1</button><button data-v="2" class="sel">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button>
+      <button data-v="1">1</button><button data-v="2" class="sel">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button><button data-v="7">7</button>
+    </div>
+    <span class="lbl">Number of decks</span>
+    <div class="seg" id="seg-decks">
+      <button data-v="1" class="sel">1 deck</button><button data-v="2">2 decks</button>
     </div>
     <span class="lbl">Elimination at</span>
     <div class="seg" id="seg-limit">
@@ -552,6 +573,10 @@ input:focus{border-color:var(--gold)}
         <div class="seg" id="seg-mplimit">
           <button data-v="240" class="sel">240</button><button data-v="360">360</button>
         </div>
+        <span class="lbl">Decks</span>
+        <div class="seg" id="seg-mpdecks">
+          <button data-v="1" class="sel">1</button><button data-v="2">2</button>
+        </div>
         <button class="btn primary" id="btn-create">Create</button>
       </div>
       <div class="mp-box">
@@ -561,7 +586,7 @@ input:focus{border-color:var(--gold)}
         <button class="btn primary" id="btn-join">Join</button>
       </div>
     </div>
-    <p class="tag">2–6 players · share the room code with friends</p>
+    <p class="tag">2–8 players · share the room code with friends</p>
     <button class="btn ghost" data-back>← Back</button>
   </div>
 </section>
@@ -571,7 +596,7 @@ input:focus{border-color:var(--gold)}
   <div class="panel" style="text-align:center;align-items:center">
     <h2>Room&ensp;<span id="lobby-code"></span></h2>
     <button class="btn ghost small" id="btn-copy">📋 Copy code</button>
-    <p class="tag">Elimination at <span id="lobby-limit"></span> points</p>
+    <p class="tag">Elimination at <span id="lobby-limit"></span> points · <span id="lobby-decks"></span></p>
     <div id="lobby-players" style="width:100%"></div>
     <button class="btn primary big" id="btn-start-mp">Start Game</button>
     <p class="tag hidden" id="lobby-wait">Waiting for host to start…</p>
@@ -597,32 +622,34 @@ input:focus{border-color:var(--gold)}
   </header>
   <div id="opponents"></div>
   <div id="table">
-    <div id="piles">
+    <div id="table-inner">
       <div id="attack-badge" class="hidden">⚡ PICK +<span id="attack-n"></span></div>
       <div id="open-starter-badge" class="hidden">
         <div class="open-starter-label">OPEN CARD</div>
         <div class="open-starter-name" id="open-starter-name"></div>
       </div>
-      <span class="pile-spark tl">✦</span>
-      <span class="pile-spark tr">✦</span>
-      <span class="pile-spark bl">✦</span>
-      <span class="pile-spark br">✦</span>
-      <div class="pile" id="deck-pile">
-        <div class="card back deckcard" id="deck-top"></div>
-        <div class="pile-cap">DECK · <span id="deck-count">0</span></div>
+      <div id="piles">
+        <span class="pile-spark tl">✦</span>
+        <span class="pile-spark tr">✦</span>
+        <span class="pile-spark bl">✦</span>
+        <span class="pile-spark br">✦</span>
+        <div class="pile" id="deck-pile">
+          <div class="card back deckcard" id="deck-top"></div>
+          <div class="pile-cap">DECK · <span id="deck-count">0</span></div>
+        </div>
+        <div class="pile" id="open-pile">
+          <div id="open-cards"></div>
+          <div class="pile-cap" id="open-pile-cap">OPEN</div>
+        </div>
+        <div class="pile hidden" id="pending-pile">
+          <div id="pending-cards"></div>
+          <div class="pile-cap">PLAYED</div>
+        </div>
       </div>
-      <div class="pile" id="open-pile">
-        <div id="open-cards"></div>
-        <div class="pile-cap" id="open-pile-cap">OPEN</div>
-      </div>
-      <div class="pile hidden" id="pending-pile">
-        <div id="pending-cards"></div>
-        <div class="pile-cap">PLAYED</div>
-      </div>
+      <div id="status-bar"></div>
+      <div id="turn-timer" class="hidden"></div>
+      <div id="log-line"></div>
     </div>
-    <div id="status-bar"></div>
-    <div id="turn-timer" class="hidden"></div>
-    <div id="log-line"></div>
   </div>
   <footer id="my-area">
     <div id="my-hand"></div>
@@ -685,11 +712,13 @@ const handSum=h=>h.reduce((t,c)=>t+val(c),0);
 const lbl=c=>isJoker(c)?'🃏':c.r+SUIT_CH[c.s];
 const setLbl=cards=>cards.map(lbl).join(' ');
 
-function buildDeck(){
+function buildDeck(numDecks){
   const d=[];let i=0;
-  for(const s of SUITS)for(const r of RANKS)d.push({r,s,id:'c'+(i++)});
-  d.push({r:'X',s:null,id:'c'+(i++)});
-  d.push({r:'X',s:null,id:'c'+(i++)});
+  for(let k=0;k<(numDecks||1);k++){
+    for(const s of SUITS)for(const r of RANKS)d.push({r,s,id:'c'+(i++)});
+    d.push({r:'X',s:null,id:'c'+(i++)});
+    d.push({r:'X',s:null,id:'c'+(i++)});
+  }
   return d;
 }
 function shuffle(a){
@@ -728,8 +757,8 @@ const isAtkSet=cards=>cards.length>0&&(cards.every(c=>c.r==='2')||cards.every(c=
    multiplayer and the headless test harness. */
 let G=null,myIdx=0;
 
-function newMatch(defs,limit,mode){
-  return {mode,limit:+limit||240,round:0,starter:-1,starterDir:1,starterStep:0,directionChanged:false,
+function newMatch(defs,limit,mode,numDecks){
+  return {mode,limit:+limit||240,numDecks:numDecks||1,round:0,starter:-1,starterDir:1,starterStep:0,directionChanged:false,
     players:defs.map((d,i)=>({id:d.id||'p'+i,name:d.name,isBot:!!d.isBot,diff:d.diff||null,score:0,elim:false,hand:[],wins:0,roundPts:[]})),
     deck:[],open:[],heap:[],pending:[],turn:0,attack:0,phase:'discard',
     turnCount:0,result:null,winner:null,log:[],logSeq:0,lastDrawn:null,openShow:null,v:0};
@@ -760,7 +789,7 @@ function deal(g,openShowBy){
   do{g.starter=(g.starter+g.starterDir+g.players.length)%g.players.length;}while(g.players[g.starter].elim);
   g.starterStep++;
   if(g.directionChanged)glog(g,`🔄 Direction reversed — now going ${g.starterDir===1?'clockwise':'anticlockwise'}`);
-  g.deck=shuffle(buildDeck());
+  g.deck=shuffle(buildDeck(g.numDecks));
   g.players.forEach(p=>p.hand=[]);
   const act=activeIdxs(g);
   for(let k=0;k<5;k++)for(const i of act)g.players[i].hand.push(g.deck.pop());
@@ -874,14 +903,24 @@ function resolveShow(g,pi,openShow){
   }else g.phase='roundEnd';
   g.v++;
 }
+/* Right after a fresh deal, before the starter has discarded even once,
+   every active player may snap-show off their raw dealt hand — not just
+   whoever's turn it is. The instant the starter actually discards
+   (attack or normal), g.turnCount/g.turn/g.phase move off this exact
+   combination and the window is gone for the rest of the round. */
+function canSnapShow(g,pi){
+  return g.openShow==null&&g.turnCount===0&&g.turn===g.starter&&g.phase==='discard'
+    &&g.attack<=0&&pi>=0&&pi<g.players.length&&!g.players[pi].elim;
+}
 function mvShow(g,pi){
-  if(g.phase!=='discard'||g.turn!==pi)return 'not your turn';
+  if(g.phase!=='discard')return 'not your turn';
+  if(g.turn!==pi&&!canSnapShow(g,pi))return 'not your turn';
   if(g.attack>0)return 'answer the attack first';
   resolveShow(g,pi,false);
   return null;
 }
 function rawApply(g,m){
-  const pi=g.turn;
+  const pi=(m.t==='show'&&typeof m.pi==='number')?m.pi:g.turn;
   if(m.t==='discard')return mvDiscard(g,pi,m.ids);
   if(m.t==='draw')return mvDraw(g,pi,m.src,m.id);
   if(m.t==='pickup')return mvPickup(g,pi);
@@ -1145,17 +1184,22 @@ function playDealAnimation(){
   const dr=deckEl.getBoundingClientRect();
   if(!dr.width)return 0;
   const x0=dr.left+dr.width/2,y0=dr.top+dr.height/2;
+  const isSpectating=myIdx<0;
   const oppEls=[...document.querySelectorAll('#opponents .opp')];
   const mh=$('#my-hand');
-  const targets=[...oppEls,...(mh?[mh]:[])];
+  const targets=isSpectating?oppEls:[...oppEls,...(mh?[mh]:[])];
   if(!targets.length||!G)return 0;
   const rects=targets.map(t=>t.getBoundingClientRect());
   const isOpen=G.openShow!=null;
   let handsSorted=null,playerOrder=null;
   if(isOpen){
-    playerOrder=[];
-    for(let k=1;k<G.players.length;k++)playerOrder.push((myIdx+k)%G.players.length);
-    playerOrder.push(myIdx);
+    if(isSpectating){
+      playerOrder=G.players.map((_,i)=>i);       // no seat of our own — just table order
+    }else{
+      playerOrder=[];
+      for(let k=1;k<G.players.length;k++)playerOrder.push((myIdx+k)%G.players.length);
+      playerOrder.push(myIdx);
+    }
     handsSorted=playerOrder.map(pi=>sortHand((G.players[pi]&&G.players[pi].hand)||[]));
     openShowReveal={byPlayerIdx:{}};
     playerOrder.forEach(pi=>{openShowReveal.byPlayerIdx[pi]=0;});
@@ -1243,10 +1287,15 @@ function render(){
   const ranked=rankRows(G.players.map((p,i)=>({i,total:p.score})),'total');
   const rankOf=i=>{const r=ranked.find(x=>x.i===i);return r?r.rank:1;};
 
-  /* opponents */
+  /* opponents — a real player sees everyone but themself, seated relative
+     to their own seat; a spectator (myIdx<0) isn't seated anywhere, so
+     they see every player, in table order */
   const opp=$('#opponents');opp.innerHTML='';
-  for(let k=1;k<G.players.length;k++){
-    const i=(myIdx+k)%G.players.length,p=G.players[i];
+  const oppIdxs=myIdx>=0
+    ?Array.from({length:G.players.length-1},(_,k)=>(myIdx+k+1)%G.players.length)
+    :G.players.map((_,i)=>i);
+  for(const i of oppIdxs){
+    const p=G.players[i];
     const d=document.createElement('div');
     d.className='opp'+(i===G.turn&&!isEnd()&&!p.elim?' turn':'')+(p.elim?' elim':'');
     d.dataset.uid=p.id;
@@ -1308,8 +1357,12 @@ function render(){
   const selCards=me?me.hand.filter(c=>sel.has(c.id)):[];
   const selOk=selCards.length>0&&!!validSet(selCards)&&(G.attack<=0||isAtkSet(selCards));
   const bShow=$('#btn-show'),bDisc=$('#btn-discard'),bPick=$('#btn-pickup');
-  bShow.classList.toggle('hidden',!(myTurn&&G.phase==='discard'&&G.attack<=0));
-  if(me)bShow.textContent=`SHOW (${handSum(me.hand)})`;
+  /* snap-show window: right after the deal, before the starter has
+     discarded even once, every active player (not just whoever's turn
+     it is) can show off their raw dealt hand */
+  const iCanSnapShow=!!(me&&!me.elim&&!myTurn&&canSnapShow(G,myIdx));
+  bShow.classList.toggle('hidden',!((myTurn&&G.phase==='discard'&&G.attack<=0)||iCanSnapShow));
+  if(me)bShow.textContent=iCanSnapShow?`⚡ SHOW (${handSum(me.hand)})`:`SHOW (${handSum(me.hand)})`;
   bDisc.classList.toggle('hidden',!(myTurn&&G.phase==='discard'));
   bDisc.disabled=!selOk;
   bDisc.textContent=selCards.length&&isAtkSet(selCards)?`Play +${2*selCards.length} ⚡`
@@ -1319,7 +1372,9 @@ function render(){
 
   /* status + meta + log */
   let st='';
-  if(isEnd())st='Round over';
+  if(mp.isSpectator)st=isEnd()?'Round over':`👁 Spectating — ${G.players[G.turn].name} is playing…`;
+  else if(isEnd())st='Round over';
+  else if(iCanSnapShow)st=`⚡ Fresh deal — you may Show now, before ${G.players[G.turn].name} plays`;
   else if(!me||me.elim)st=`${G.players[G.turn].name} is playing…`;
   else if(myTurn&&G.phase==='discard')st=G.attack>0?`⚡ +${G.attack} attack! Play a 2/Joker or pick up`:'Your turn — select card(s) to discard';
   else if(myTurn&&G.phase==='draw')st='Take a card: tap the deck or an open card';
@@ -1331,6 +1386,9 @@ function render(){
     const myShownSum=myRevealCnt!=null?handSum(sortHand(me.hand).slice(0,myRevealCnt)):handSum(me.hand);
     $('#my-meta').textContent=me.elim?`${me.name} · OUT · score ${me.score}`
       :`${me.name} · hand ${myShownSum} pts · score ${me.score}`;
+  }else if(mp.isSpectator){
+    $('#my-rank-badge').textContent='';
+    $('#my-meta').textContent='👁 Spectating';
   }
 
   /* end-of-round modals — never dump the full result the instant it
@@ -1488,7 +1546,7 @@ function showHelpModal(){
 
 /* ================= 5. GAME FLOW (local + shared) ================= */
 let botTimer=null;
-const setup={diff:'medium',nbots:2,limit:240,mplimit:240};
+const setup={diff:'medium',nbots:2,limit:240,mplimit:240,numDecks:1,mpNumDecks:1};
 
 /* ---- multiplayer turn timer: 30s to act, else auto-play on your behalf ----
    Only the client whose own turn it is ever runs this (each browser only
@@ -1580,10 +1638,10 @@ function pump(){
 }
 function startBotGame(){
   const myName=getName('#inp-name-bot');if(!myName)return;
-  const names=shuffle(['Ace','Ruby','Jax','Queenie','Kingsley','Maverick']);
+  const names=shuffle(['Ace','Ruby','Jax','Queenie','Kingsley','Maverick','Diesel','Scout']);
   const defs=[{name:myName,isBot:false}];
   for(let i=0;i<setup.nbots;i++)defs.push({name:names[i],isBot:true,diff:setup.diff});
-  G=newMatch(defs,setup.limit,'bot');
+  G=newMatch(defs,setup.limit,'bot',setup.numDecks);
   announcedRound=-1;
   myIdx=0;sel.clear();deal(G);
   goScr('scr-game');closeModal();pump();
@@ -1605,7 +1663,8 @@ function uiNextRoundOpen(){
 function uiPlayAgain(){
   if(!G)return;
   const defs=G.players.map(p=>({name:p.name,isBot:p.isBot,diff:p.diff}));
-  G=newMatch(defs,G.limit,'bot');
+  const numDecks=G.numDecks;
+  G=newMatch(defs,G.limit,'bot',numDecks);
   announcedRound=-1;
   myIdx=0;sel.clear();deal(G);closeModal();pump();
 }
@@ -1630,7 +1689,7 @@ const FIREBASE_CONFIG={
 const ROOMS='fivecards/rooms/';
 const myUid=localStorage.fcUid||(localStorage.fcUid='u'+Math.random().toString(36).slice(2,10));
 let db=null;
-let mp={code:null,ref:null,isHost:false,room:null,lastV:-1,odArmed:false,chatRef:null,chatLog:[],chatUnread:0,chatOpen:false};
+let mp={code:null,ref:null,isHost:false,isSpectator:false,room:null,lastV:-1,odArmed:false,chatRef:null,chatLog:[],chatUnread:0,chatOpen:false,specRef:null};
 
 function fbInit(){
   if(db)return true;
@@ -1657,7 +1716,7 @@ function createRoom(){
   const code=roomCode(),ref=db.ref(ROOMS+code);
   ref.get().then(s=>{
     if(s.exists())return createRoom();          // rare collision → retry
-    ref.set({host:myUid,status:'lobby',limit:setup.mplimit,
+    ref.set({host:myUid,status:'lobby',limit:setup.mplimit,numDecks:setup.mpNumDecks,
       created:firebase.database.ServerValue.TIMESTAMP,
       players:{[myUid]:{name,order:Date.now()}}},
       err=>{if(err)toast('Could not create room');else attachRoom(code);});
@@ -1673,8 +1732,19 @@ function joinRoom(){
     const r=s.val();
     if(!r)return toast('Room not found');
     const already=r.players&&r.players[myUid];
-    if(r.status!=='lobby'&&!already)return toast('Game already started');
-    if(!already&&Object.keys(r.players||{}).length>=6)return toast('Room is full (max 6)');
+    if(r.status!=='lobby'&&!already){
+      /* match already in progress and we were never a player here —
+         join as a spectator instead of being turned away: can watch
+         the table, leaderboard, chat and voice chat, but never sees
+         anyone's hand */
+      const alreadySpec=r.spectators&&r.spectators[myUid];
+      toast('Game in progress — joining as a spectator');
+      ref.child('spectators/'+myUid)
+        .set({name,order:alreadySpec?r.spectators[myUid].order:Date.now()})
+        .then(()=>attachRoom(code));
+      return;
+    }
+    if(!already&&Object.keys(r.players||{}).length>=8)return toast('Room is full (max 8)');
     ref.child('players/'+myUid)
       .set({name,order:already?r.players[myUid].order:Date.now()})
       .then(()=>attachRoom(code));
@@ -1696,23 +1766,34 @@ function attachRoom(code){
        otherwise flood the screen with bubbles on every reconnect */
     if(m.ts&&m.ts>=attachTs-3000)showChatBubble(m.uid,m.name,m.text);
   });
+  /* let everyone at the table know when a spectator joins to watch —
+     gated the same way as chat bubbles above, so reconnecting doesn't
+     replay a toast for every spectator who was already there */
+  mp.specRef=mp.ref.child('spectators');
+  mp.specRef.on('child_added',s=>{
+    const sp=s.val();if(!sp||s.key===myUid)return;
+    if(sp.order&&sp.order>=attachTs-3000)toast(`👁 ${sp.name} joined to watch`);
+  });
   mp.ref.on('value',s=>{
     const r=s.val();
     if(!r){leaveRoom(true);toast('Room was closed');return;}
     mp.room=r;mp.isHost=effHost(r)===myUid;
-    const meIn=r.players&&r.players[myUid];
-    if(!meIn){leaveRoom(true);return;}
+    const meInPlayers=r.players&&r.players[myUid];
+    const meInSpectators=r.spectators&&r.spectators[myUid];
+    if(!meInPlayers&&!meInSpectators){leaveRoom(true);return;}
+    mp.isSpectator=!meInPlayers&&!!meInSpectators;
+    if(mp.isSpectator&&!mp.odArmed){mp.ref.child('spectators/'+myUid).onDisconnect().remove();mp.odArmed=true;}
     if(r.status==='lobby'){
-      if(!mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().remove();mp.odArmed=true;}
+      if(!mp.isSpectator&&!mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().remove();mp.odArmed=true;}
       G=null;renderLobby();goScr('scr-lobby');closeModal();
     }else if(r.status==='playing'&&r.state){
-      if(mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().cancel();mp.odArmed=false;}
+      if(!mp.isSpectator&&mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().cancel();mp.odArmed=false;}
       let g;try{g=JSON.parse(r.state);}catch(e){return;}
       if(typeof g.v==='number'&&g.v<mp.lastV)return;   // stale echo
       mp.lastV=g.v||0;
       if(G===null)announcedRound=-1;   // fresh entry from the lobby — this match's round 1 hasn't been announced yet
       G=g;G.mode='mp';
-      myIdx=G.players.findIndex(p=>p.id===myUid);
+      myIdx=mp.isSpectator?-1:G.players.findIndex(p=>p.id===myUid);
       const me=G.players[myIdx];
       sel=new Set(me?[...sel].filter(id=>me.hand.some(c=>c.id===id)):[]);
       goScr('scr-game');render();
@@ -1723,6 +1804,7 @@ function renderLobby(){
   const r=mp.room;if(!r)return;
   $('#lobby-code').textContent=mp.code;
   $('#lobby-limit').textContent=r.limit||240;
+  $('#lobby-decks').textContent=(r.numDecks||1)===2?'2 decks':'1 deck';
   const ps=Object.entries(r.players||{}).map(([u,p])=>({u,...p})).sort((a,b)=>a.order-b.order);
   const host=effHost(r);
   $('#lobby-players').innerHTML=ps.map(p=>
@@ -1736,13 +1818,23 @@ function mpStart(){
   const ps=Object.entries(r.players||{}).map(([uid,p])=>({id:uid,name:p.name,isBot:false,order:p.order}));
   if(ps.length<2)return toast('Need at least 2 players');
   ps.sort((a,b)=>a.order-b.order);
-  G=newMatch(ps,r.limit||240,'mp');
+  G=newMatch(ps,r.limit||240,'mp',r.numDecks||1);
   announcedRound=-1;
   deal(G);
   mp.ref.update({status:'playing',state:JSON.stringify(G)});
 }
 function mpWrite(){if(mp.ref)mp.ref.child('state').set(JSON.stringify(G));}
-function mpBackToLobby(){if(mp.ref)mp.ref.update({status:'lobby'});}
+function mpBackToLobby(){
+  if(!mp.ref)return;
+  /* promote anyone who was spectating into a real player for the next
+     match, then clear the spectator list */
+  mp.ref.child('spectators').get().then(s=>{
+    const specs=s.val()||{};
+    const updates={status:'lobby',spectators:null};
+    Object.entries(specs).forEach(([uid,sp])=>{updates['players/'+uid]={name:sp.name,order:sp.order};});
+    mp.ref.update(updates);
+  });
+}
 
 /* ---- chat ---- */
 function sendChat(text){
@@ -1962,12 +2054,15 @@ function streamLevel(stream,key){
 function leaveRoom(remote){
   clearTimeout(botTimer);
   if(mp.chatRef)mp.chatRef.off();
+  if(mp.specRef)mp.specRef.off();
   closeChat();
   leaveVoice();
   if(mp.ref){
     mp.ref.off();
     if(!remote){
-      if(mp.room&&mp.room.status==='lobby'){
+      if(mp.isSpectator){
+        mp.ref.child('spectators/'+myUid).remove();
+      }else if(mp.room&&mp.room.status==='lobby'){
         const others=Object.keys(mp.room.players||{}).filter(u=>u!==myUid);
         if(!others.length)mp.ref.remove();
         else{
@@ -1988,7 +2083,7 @@ function leaveRoom(remote){
     }
   }
   localStorage.removeItem('fcRoom');
-  mp={code:null,ref:null,isHost:false,room:null,lastV:-1,odArmed:false,chatRef:null,chatLog:[],chatUnread:0,chatOpen:false};
+  mp={code:null,ref:null,isHost:false,isSpectator:false,room:null,lastV:-1,odArmed:false,chatRef:null,chatLog:[],chatUnread:0,chatOpen:false,specRef:null};
   G=null;sel.clear();closeModal();goScr('scr-home');
 }
 
@@ -2003,8 +2098,10 @@ function segInit(id,cb){
 }
 segInit('seg-diff',v=>setup.diff=v);
 segInit('seg-nbots',v=>setup.nbots=+v);
+segInit('seg-decks',v=>setup.numDecks=+v);
 segInit('seg-limit',v=>setup.limit=+v);
 segInit('seg-mplimit',v=>setup.mplimit=+v);
+segInit('seg-mpdecks',v=>setup.mpNumDecks=+v);
 
 $('#btn-gobot').onclick=()=>goScr('scr-bot');
 $('#btn-gomp').onclick=()=>goScr('scr-mp');
@@ -2046,21 +2143,26 @@ $('#btn-discard').onclick=()=>{
 $('#btn-pickup').onclick=()=>applyMove({t:'pickup'});
 $('#btn-show').onclick=()=>{
   if(!G)return;
-  const me=G.players[myIdx];if(!me||G.turn!==myIdx||G.phase!=='discard')return;
+  const me=G.players[myIdx];
+  if(!me||me.elim||G.phase!=='discard')return;
+  if(G.turn!==myIdx&&!canSnapShow(G,myIdx))return;
   const sum=handSum(me.hand);
   openModal('confirm',`<h2>Show your cards?</h2>
     <p>Your hand is worth <b style="color:var(--gold)">${sum}</b> points.
     If anyone has ${sum} or less, you take a <b style="color:var(--red)">+60 penalty</b>.</p>
-    <div class="mbtns"><button class="btn primary" onclick="closeModal();applyMove({t:'show'})">👁 Show!</button>
+    <div class="mbtns"><button class="btn primary" onclick="confirmShow()">👁 Show!</button>
     <button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);
 };
+function confirmShow(){closeModal();applyMove({t:'show',pi:myIdx});}
 $('#deck-pile').onclick=()=>{
   if(!G)return;
   const me=G.players[myIdx];
   if(me&&!me.elim&&G.turn===myIdx&&G.phase==='draw')applyMove({t:'draw',src:'deck'});
 };
 $('#btn-exit').onclick=()=>{
-  openModal('confirm',`<h2>Leave game?</h2><p>Your current game will be abandoned.</p>
+  const title=mp.isSpectator?'Stop watching?':'Leave game?';
+  const msg=mp.isSpectator?'You’ll stop watching this match.':'Your current game will be abandoned.';
+  openModal('confirm',`<h2>${title}</h2><p>${msg}</p>
     <div class="mbtns"><button class="btn danger" onclick="closeModal();uiLeave()">Leave</button>
     <button class="btn ghost" onclick="closeModal()">Stay</button></div>`);
 };
@@ -2157,14 +2259,14 @@ showMatchModal=function(){
 
 /* ================= HEADLESS TEST HARNESS ================= */
 window.__test={
-  sim(n=30){
+  sim(n=30,playerCount=4,numDecks=1){
     const issues=[];
+    const total=54*numDecks;
+    const diffs=['hard','medium','easy','hard','medium','easy','hard','medium'];
     for(let k=0;k<n;k++){
-      const g=newMatch([
-        {name:'A',isBot:true,diff:'hard'},
-        {name:'B',isBot:true,diff:'medium'},
-        {name:'C',isBot:true,diff:'easy'},
-        {name:'D',isBot:true,diff:'hard'}],240,'sim');
+      const defs=[];
+      for(let i=0;i<playerCount;i++)defs.push({name:'P'+i,isBot:true,diff:diffs[i%diffs.length]});
+      const g=newMatch(defs,240,'sim',numDecks);
       deal(g);
       let steps=0;
       while(g.phase!=='matchEnd'&&steps<30000){
@@ -2174,7 +2276,7 @@ window.__test={
         if(err){issues.push(`game${k} step${steps} phase=${g.phase} err=${err}`);break;}
         const tot=g.deck.length+g.heap.length+g.open.length+g.pending.length+
           g.players.reduce((t,p)=>t+p.hand.length,0);
-        if(tot!==54){issues.push(`game${k} step${steps}: card count ${tot}≠54`);break;}
+        if(tot!==total){issues.push(`game${k} step${steps}: card count ${tot}≠${total}`);break;}
         if(g.attack<0)issues.push(`game${k}: negative attack`);
       }
       if(g.phase!=='matchEnd'&&steps>=30000)issues.push(`game${k}: did not terminate`);
