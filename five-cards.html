@@ -768,7 +768,12 @@ function newMatch(defs,limit,mode,numDecks){
     turnCount:0,result:null,winner:null,log:[],logSeq:0,lastDrawn:null,openShow:null,v:0};
 }
 const activeIdxs=g=>g.players.map((p,i)=>p.elim?-1:i).filter(i=>i>=0);
-function nextActive(g,i){let j=i;do{j=(j+1)%g.players.length;}while(g.players[j].elim);return j;}
+/* Steps by g.starterDir, not a hardcoded +1 — the actual turn-by-turn
+   play sequence within a round has to follow the same direction as
+   that round's starter rotation and dealing order, or a "reversed"
+   round only reverses who *starts* while everyone's actual turns still
+   silently march forward underneath. */
+function nextActive(g,i){let j=i;do{j=(j+g.starterDir+g.players.length)%g.players.length;}while(g.players[j].elim);return j;}
 function glog(g,s){g.log.push(s);g.logSeq++;if(g.log.length>80)g.log.shift();}
 
 /* A player at 90%+ of the elimination limit may call an Open Show instead
