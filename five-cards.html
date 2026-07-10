@@ -122,6 +122,9 @@ input:focus{border-color:var(--gold)}
 .opp-sub{font-size:10px;color:rgba(201,168,76,.42);font-family:'DM Mono',monospace}
 .minis{display:flex;gap:3px;margin-top:4px;flex-wrap:wrap}
 .mini{width:11px;height:16px;border-radius:2.5px;background:linear-gradient(135deg,#1A2744,#0F1830);border:1px solid rgba(201,168,76,.35)}
+/* compact text fallback for hand size — see the mobile media query,
+   where the .mini chips get hidden for space and this takes over */
+.card-count{display:none;font-size:9px;color:rgba(201,168,76,.42);font-family:'DM Mono',monospace;margin-top:3px}
 /* Open Show reveal: actual face-up cards landing one at a time, plus the
    running point total beneath them — replaces the blank .mini chips only
    for the duration of that reveal. */
@@ -305,7 +308,8 @@ input:focus{border-color:var(--gold)}
   .opp-name-text{font-size:10px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .opp-sub{font-size:7.5px}
   .rank-badge{font-size:7px;padding:1.5px 4px;border-radius:4px}
-  .tagchip,.minis{display:none}
+  .tagchip,.minis:not(.reveal){display:none}
+  .card-count{display:block}
   #open-starter-badge{padding:4px 14px 5px;border-radius:12px}
   .open-starter-label{font-size:8px;letter-spacing:2px}
   .open-starter-name{font-size:20px}
@@ -1319,10 +1323,18 @@ function render(){
        Open Show, so it only ever applies during one. */
     const revealCnt=(G.openShow!=null&&openShowReveal)?(openShowReveal.byPlayerIdx[i]||0):null;
     const revealedHand=revealCnt!=null?sortHand(p.hand).slice(0,revealCnt):null;
+    /* .card-count is a compact text fallback for the same info the
+       .minis chips show visually — the chips get hidden on narrow
+       mobile layouts (no room to render one chip per card once
+       opponents compact into a single row), so without this, mobile
+       players had no way to see how many cards anyone was holding at
+       all. Hidden by default (desktop already shows it via the chips);
+       the mobile media query flips which one is visible. */
     const handHtml=p.elim?'':(revealedHand
       ?`<div class="minis reveal">${revealedHand.map(c=>`<span class="mini-face${(!isJoker(c)&&(c.s==='H'||c.s==='D'))?' red':''}">${lbl(c)}</span>`).join('')}</div>
         <div class="opp-reveal-sum">${handSum(revealedHand)} pts</div>`
-      :`<div class="minis">${p.hand.map(()=>'<span class="mini"></span>').join('')}</div>`);
+      :`<div class="minis">${p.hand.map(()=>'<span class="mini"></span>').join('')}</div>
+        <div class="card-count">${p.hand.length} card${p.hand.length===1?'':'s'}</div>`);
     d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}${inVoice?'<span class="voice-mic">🎙️</span>':''}</div>
       <div><div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span><span class="rank-badge">#${rankOf(i)}</span>${p.isBot?`<span class="tagchip">${esc(p.diff)}</span>`:''}</div>
       <div class="opp-sub">${p.elim?'OUT · ':''}score ${p.score}</div>
