@@ -85,72 +85,100 @@ input:focus{border-color:var(--gold)}
 #topbar{width:100%;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;gap:8px}
 #topbar>div{display:flex;gap:8px;align-items:center}
 #round-info{font-size:11px;color:rgba(201,168,76,.55);font-weight:700;letter-spacing:2.5px;font-family:'DM Mono',monospace}
-#opponents{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;align-items:flex-start;padding:34px 10px 18px;width:100%}
-.opp{position:relative;display:flex;gap:11px;align-items:center;background:rgba(201,168,76,.03);
-  border:1.5px solid rgba(201,168,76,.1);border-radius:16px;padding:8px 16px 8px 9px;transition:border-color .2s,box-shadow .2s,transform .2s,margin-top .2s}
-.rank-badge{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
-  background:linear-gradient(135deg,var(--gold),var(--gold2));color:var(--inkdark);
-  font-size:10px;font-weight:800;line-height:1;padding:3px 7px;border-radius:6px;font-family:'DM Mono',monospace}
-.opp.turn{background:rgba(201,168,76,.08);border-color:rgba(201,168,76,.5);box-shadow:0 0 22px rgba(201,168,76,.16);transform:translateY(-2px)}
+/* ---------- circular seating ----------
+   #arena stacks #opponents (an absolute overlay) on top of #table. Each
+   .opp is placed at a left/top % computed in JS (layoutOpponentSeats)
+   from an ellipse whose radius is derived from #piles' own measured
+   size at render time — so seats are *guaranteed* to clear the felt by
+   construction, however big the felt happens to render at any given
+   viewport/player-count, rather than relying on hand-tuned constants
+   that could drift out of sync. #opponents itself has pointer-events:
+   none (nothing under it is clickable) so it never blocks the table. */
+#arena{position:relative;flex:1;display:flex;flex-direction:column;min-height:0;width:100%}
+#opponents{position:absolute;inset:0;pointer-events:none;z-index:3}
+.opp{position:absolute;left:50%;top:50%;--lift:0px;
+  transform:translate(-50%,-50%) translateY(var(--lift));
+  display:flex;flex-direction:column;align-items:center;width:76px;text-align:center;
+  transition:transform .2s,opacity .2s}
 .opp.elim{opacity:.4}
-/* seat opponents in a shallow arc around the table — middle seats ride
-   higher (closer to the felt), outer seats sit lower, like players
-   curved around the rim. Pure CSS "quantity query" per seat count. */
-.opp:first-child:nth-last-child(2),
-.opp:first-child:nth-last-child(2)~.opp:last-child{margin-top:10px}
-.opp:first-child:nth-last-child(3){margin-top:24px}
-.opp:first-child:nth-last-child(3)~.opp:nth-child(2){margin-top:0}
-.opp:first-child:nth-last-child(3)~.opp:last-child{margin-top:24px}
-.opp:first-child:nth-last-child(4){margin-top:26px}
-.opp:first-child:nth-last-child(4)~.opp:nth-child(2){margin-top:6px}
-.opp:first-child:nth-last-child(4)~.opp:nth-child(3){margin-top:6px}
-.opp:first-child:nth-last-child(4)~.opp:last-child{margin-top:26px}
-.opp:first-child:nth-last-child(5){margin-top:28px}
-.opp:first-child:nth-last-child(5)~.opp:nth-child(2){margin-top:10px}
-.opp:first-child:nth-last-child(5)~.opp:nth-child(3){margin-top:0}
-.opp:first-child:nth-last-child(5)~.opp:nth-child(4){margin-top:10px}
-.opp:first-child:nth-last-child(5)~.opp:last-child{margin-top:28px}
-.avatar{position:relative;width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#4A3A80,#2A2460);
-  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;flex:0 0 auto;color:#E8D5A3;
-  border:2px solid rgba(201,168,76,.38);box-shadow:0 2px 8px rgba(0,0,0,.35);font-family:'Playfair Display',serif}
+.avatar{position:relative;z-index:1;width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#4A3A80,#2A2460);
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex:0 0 auto;color:#E8D5A3;
+  border:2px solid rgba(201,168,76,.38);box-shadow:0 2px 8px rgba(0,0,0,.4);font-family:'Playfair Display',serif}
 .opp:nth-of-type(4n+2) .avatar{background:linear-gradient(135deg,#2A5A38,#163020)}
 .opp:nth-of-type(4n+3) .avatar{background:linear-gradient(135deg,#7A5520,#4A3410)}
 .opp:nth-of-type(4n+4) .avatar{background:linear-gradient(135deg,#5A2A38,#301620)}
 .opp.elim .avatar{background:rgba(50,40,30,.5)!important;color:rgba(237,232,216,.4);border-color:rgba(201,168,76,.12)}
-.opp-name{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:6px;color:#E8D5A3;font-family:'Playfair Display',serif}
-.tagchip{font-size:8.5px;background:rgba(201,168,76,.15);color:var(--gold);border-radius:5px;padding:2px 7px;text-transform:uppercase;letter-spacing:.5px;font-family:'DM Mono',monospace}
-.opp-sub{font-size:10px;color:rgba(201,168,76,.42);font-family:'DM Mono',monospace}
-.minis{display:flex;gap:3px;margin-top:4px;flex-wrap:wrap}
-.mini{width:11px;height:16px;border-radius:2.5px;background:linear-gradient(135deg,#1A2744,#0F1830);border:1px solid rgba(201,168,76,.35)}
-/* compact text fallback for hand size — see the mobile media query,
-   where the .mini chips get hidden for space and this takes over */
-.card-count{display:none;font-size:9px;color:rgba(201,168,76,.42);font-family:'DM Mono',monospace;margin-top:3px}
+.opp.turn .avatar{box-shadow:0 0 0 3px var(--gold),0 4px 16px rgba(201,168,76,.5)}
+.rank-badge{display:inline-flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));color:var(--inkdark);
+  font-size:10px;font-weight:800;line-height:1;padding:3px 7px;border-radius:6px;font-family:'DM Mono',monospace}
+.avatar .rank-badge{position:absolute;top:-4px;left:-7px;z-index:2;font-size:9px;padding:2px 5px;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.seat-card{margin-top:-7px;width:100%;background:rgba(9,13,24,.85);border:1px solid rgba(201,168,76,.16);border-radius:9px;
+  padding:9px 6px 4px;box-shadow:0 3px 10px rgba(0,0,0,.35);transition:border-color .2s,box-shadow .2s}
+.opp.turn .seat-card{border-color:rgba(201,168,76,.55);box-shadow:0 0 16px rgba(201,168,76,.22)}
+.opp-name{display:flex;flex-direction:column;align-items:center;gap:1px;overflow:hidden}
+.opp-name-text{font-size:10.5px;font-weight:700;color:#E8D5A3;font-family:'Playfair Display',serif;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tagchip{font-size:7.5px;background:rgba(201,168,76,.15);color:var(--gold);border-radius:5px;padding:1.5px 6px;text-transform:uppercase;letter-spacing:.4px;font-family:'DM Mono',monospace}
+.opp-sub{font-size:8.5px;color:rgba(201,168,76,.48);font-family:'DM Mono',monospace;white-space:nowrap}
+.minis{display:none}
+/* compact text readout of hand size — the only hand-size indicator now
+   that seats are small circular chips (individual .mini chips no
+   longer fit the width budget at any player count) */
+.card-count{display:block;font-size:8.5px;color:rgba(201,168,76,.48);font-family:'DM Mono',monospace;margin-top:2px}
 /* Open Show reveal: actual face-up cards landing one at a time, plus the
-   running point total beneath them — replaces the blank .mini chips only
-   for the duration of that reveal. */
-.minis.reveal{gap:2px}
-.mini-face{display:flex;align-items:center;justify-content:center;min-width:18px;height:20px;padding:0 3px;
-  border-radius:3px;background:#FAFAF8;color:var(--cardink);font-size:9px;font-weight:800;
+   running point total beneath them — replaces the card-count text only
+   for the duration of that reveal. Wraps (never grows sideways) so a
+   reveal in progress can't widen a seat into its neighbours — and caps
+   how much it can grow *taller* too (max 2 rows, extra chips clipped):
+   an uncapped reveal was measured tall enough (up to 145px vs. a normal
+   125px seat) to break the seat-vs-seat spacing at the most crowded
+   combination — 7 players revealing on a narrow phone — regardless of
+   how the ring's angle range or spacing was tuned, since every seat's
+   *shared* height budget (used uniformly so seats stay level with each
+   other) has to inflate for the tallest one. */
+.minis.reveal{display:flex;gap:2px;flex-wrap:wrap;justify-content:center;margin-top:3px;max-height:39px;overflow:hidden}
+.mini-face{display:flex;align-items:center;justify-content:center;min-width:16px;height:18px;padding:0 2px;
+  border-radius:3px;background:#FAFAF8;color:var(--cardink);font-size:8px;font-weight:800;
   font-family:'Playfair Display',serif;box-shadow:0 2px 5px rgba(0,0,0,.4);animation:newTagPulse .3s ease-out}
 .mini-face.red{color:var(--red)}
-.opp-reveal-sum{font-size:11px;font-weight:800;color:var(--gold);font-family:'DM Mono',monospace;margin-top:3px}
+.opp-reveal-sum{font-size:10px;font-weight:800;color:var(--gold);font-family:'DM Mono',monospace;margin-top:2px}
+/* seat chips shrink in three tiers as the table fills up, so up to 7
+   opponents can ring the felt without crowding each other */
+#opponents.n-mid .opp{width:64px}
+#opponents.n-mid .avatar{width:34px;height:34px;font-size:13px}
+#opponents.n-mid .opp-name-text{font-size:9.5px}
+#opponents.n-mid .opp-sub{font-size:7.5px}
+#opponents.n-many .opp{width:54px}
+#opponents.n-many .avatar{width:28px;height:28px;font-size:11px;border-width:1.5px}
+#opponents.n-many .seat-card{padding:7px 4px 3px;border-radius:7px}
+#opponents.n-many .opp-name-text{font-size:8.5px}
+#opponents.n-many .opp-sub{font-size:6.5px}
+#opponents.n-many .avatar .rank-badge{font-size:7px;padding:1.5px 4px}
+#opponents.n-many .tagchip{display:none}
 
-/* #table stays top-aligned (flex-start) so it can never push content
-   above its own box into #opponents — but #table-inner uses
-   margin:auto 0 to center *itself* within #table when there's room,
-   and gracefully collapses to 0 (i.e. top-aligned, like its parent)
-   when the content is taller than the available space instead of
-   overflowing both ways. This is the classic "safe centering" trick:
-   auto margins can't go negative, so unlike justify-content:center
-   they never let content escape upward past the container's top edge
-   even when #opponents wraps to 2 rows at high player counts and eats
-   most of the vertical room. */
-#table{flex:1;display:flex;flex-direction:column;align-items:center;width:100%;position:relative;min-height:0;padding:6px 12px;overflow-y:auto}
+/* pinned toward the bottom of the arena rather than centered — the
+   opponent ring only ever needs headroom *above* the felt (the arc
+   never extends below it, that's where the viewer's own hand already
+   sits in a separate footer), so centering would waste half of that
+   free space below the felt where no seat can ever use it. */
+#table{flex:1;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;width:100%;position:relative;min-height:0;padding:6px 12px;overflow-y:auto}
+/* true centering (margin:auto splits free space evenly above/below) —
+   pinning table-inner to the bottom instead (an earlier attempt at
+   this) fixed a tight-headroom edge case for 1-2 players, but left a
+   large dead gap at the *top* of the arena on any roomy/tall viewport,
+   since all the free space piled up on one side instead of splitting.
+   That edge case is now handled by layoutOpponentSeats' own keepout
+   push-out + pairwise separation safety net instead (correct
+   regardless of how table-inner is centered), so centering can go back
+   to being genuinely symmetric. Auto margins still collapse to 0
+   rather than going negative if content is taller than #table, so it
+   degrades to flush-top instead of overflowing upward. */
 #table-inner{display:flex;flex-direction:column;align-items:center;gap:16px;width:100%;margin:auto 0}
-#piles{position:relative;width:100%;max-width:480px;display:flex;gap:clamp(20px,6vw,40px);align-items:flex-start;justify-content:center;flex-wrap:wrap;
+#piles{position:relative;width:100%;max-width:300px;display:flex;gap:clamp(16px,5vw,32px);align-items:flex-start;justify-content:center;flex-wrap:wrap;
   background:radial-gradient(ellipse at 50% 32%,var(--felt) 0%,#0E3222 60%,var(--felt-d) 100%);
   border:5px solid #081E12;border-radius:clamp(36px,12vw,64px);
-  padding:clamp(30px,8vw,50px) clamp(20px,6vw,36px);
+  padding:clamp(24px,7vw,40px) clamp(16px,5vw,28px);
   box-shadow:inset 0 0 0 2.5px rgba(201,168,76,.22),inset 0 0 55px rgba(0,0,0,.55),0 20px 55px rgba(0,0,0,.55)}
 .pile-spark{position:absolute;font-size:16px;color:rgba(201,168,76,.55);opacity:.85;text-shadow:0 0 8px rgba(201,168,76,.4);pointer-events:none}
 .pile-spark.tl{top:14px;left:20px}
@@ -293,27 +321,26 @@ input:focus{border-color:var(--gold)}
   #piles{padding:14px 22px;border-radius:44px;gap:18px}
   #my-hand{padding-top:12px}
 }
-/* compact circular seating for phones — every opponent stays in one row,
-   shrinking evenly (flex:1) so the whole table is visible without
-   scrolling or wrapping, however many players are seated */
+/* narrow phones: felt shrinks further and every seat tier shrinks one
+   more notch, so the ring of opponents still clears the table with the
+   little horizontal room a portrait phone has */
 @media (max-width:480px){
-  #opponents{flex-wrap:nowrap;gap:4px;padding:18px 6px 2px}
-  .opp{flex:1 1 0;min-width:0;flex-direction:column;align-items:center;gap:2px;padding:6px 4px 5px;border-radius:12px;background:rgba(201,168,76,.04)}
-  .opp:first-child:nth-last-child(2),.opp:first-child:nth-last-child(2)~.opp:last-child,
-  .opp:first-child:nth-last-child(3),.opp:first-child:nth-last-child(3)~.opp:nth-child(2),.opp:first-child:nth-last-child(3)~.opp:last-child,
-  .opp:first-child:nth-last-child(4),.opp:first-child:nth-last-child(4)~.opp:nth-child(2),.opp:first-child:nth-last-child(4)~.opp:nth-child(3),.opp:first-child:nth-last-child(4)~.opp:last-child,
-  .opp:first-child:nth-last-child(5),.opp:first-child:nth-last-child(5)~.opp:nth-child(2),.opp:first-child:nth-last-child(5)~.opp:nth-child(3),.opp:first-child:nth-last-child(5)~.opp:nth-child(4),.opp:first-child:nth-last-child(5)~.opp:last-child{margin-top:0}
-  .avatar{width:30px;height:30px;font-size:12px;border-width:1.5px}
-  .opp-name{flex-direction:column;gap:1px;width:100%}
-  .opp-name-text{font-size:10px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .opp-sub{font-size:7.5px}
-  .rank-badge{font-size:7px;padding:1.5px 4px;border-radius:4px}
-  .tagchip,.minis:not(.reveal){display:none}
-  .card-count{display:block}
+  #piles{max-width:220px}
+  .opp{width:58px}
+  .avatar{width:32px;height:32px;font-size:12px;border-width:1.5px}
+  .seat-card{padding:7px 5px 3px}
+  .opp-name-text{font-size:9.5px}
+  .opp-sub{font-size:7px}
+  .card-count{font-size:7.5px}
+  .avatar .rank-badge{font-size:7px;padding:1.5px 4px;border-radius:4px}
+  #opponents.n-mid .opp,#opponents.n-many .opp{width:46px}
+  #opponents.n-mid .avatar,#opponents.n-many .avatar{width:26px;height:26px;font-size:10px}
+  #opponents.n-mid .opp-name-text,#opponents.n-many .opp-name-text{font-size:7.5px}
+  #opponents.n-mid .opp-sub,#opponents.n-many .opp-sub{font-size:6px}
+  #opponents.n-mid .tagchip{display:none}
   #open-starter-badge{padding:4px 14px 5px;border-radius:12px}
   .open-starter-label{font-size:8px;letter-spacing:2px}
   .open-starter-name{font-size:20px}
-  #opponents{padding-bottom:10px}
 }
 
 /* ======================================================
@@ -468,9 +495,8 @@ input:focus{border-color:var(--gold)}
   .open-starter-name{font-size:18px}
 }
 @media(max-height:700px) and (max-width:480px){
-  #opponents{padding:10px 6px 2px}
-  #table{gap:8px;padding:4px 8px}
-  #piles{padding:12px 12px;border-radius:22px}
+  #table{padding:4px 8px}
+  #piles{padding:12px 12px;border-radius:22px;max-width:190px}
   #my-area{gap:5px;padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
   #my-hand{padding-top:8px}
   #actions .btn{padding:11px 8px;font-size:12px;min-height:42px}
@@ -497,7 +523,23 @@ input:focus{border-color:var(--gold)}
 /* ---------- bigger table + cards on desktop/web ---------- */
 @media(min-width:900px){
   :root{--cw:clamp(70px,7vw,100px)}
-  #piles{max-width:640px;gap:clamp(28px,4vw,52px);padding:clamp(36px,5vw,58px) clamp(26px,4vw,44px)}
+  #piles{max-width:420px;gap:clamp(20px,3vw,40px);padding:clamp(30px,4vw,46px) clamp(20px,3vw,34px)}
+  .opp{width:96px}
+  .avatar{width:52px;height:52px;font-size:19px;border-width:2.5px}
+  .seat-card{padding:11px 8px 5px;border-radius:11px}
+  .opp-name-text{font-size:13px}
+  .opp-sub{font-size:10.5px}
+  .card-count{font-size:10px}
+  .avatar .rank-badge{font-size:10px;padding:2.5px 6px;border-radius:7px}
+  .tagchip{font-size:9px;padding:2px 7px}
+  #opponents.n-mid .opp{width:72px}
+  #opponents.n-mid .avatar{width:38px;height:38px;font-size:14px}
+  #opponents.n-mid .opp-name-text{font-size:10.5px}
+  #opponents.n-mid .opp-sub{font-size:8px}
+  #opponents.n-many .opp{width:62px}
+  #opponents.n-many .avatar{width:34px;height:34px;font-size:13px}
+  #opponents.n-many .opp-name-text{font-size:9.5px}
+  #opponents.n-many .opp-sub{font-size:7.5px}
 }
 </style>
 </head>
@@ -624,35 +666,37 @@ input:focus{border-color:var(--gold)}
       <button class="icon-btn" id="btn-help2">?</button>
     </div>
   </header>
-  <div id="opponents"></div>
-  <div id="table">
-    <div id="table-inner">
-      <div id="attack-badge" class="hidden">⚡ PICK +<span id="attack-n"></span></div>
-      <div id="open-starter-badge" class="hidden">
-        <div class="open-starter-label">OPEN CARD</div>
-        <div class="open-starter-name" id="open-starter-name"></div>
+  <div id="arena">
+    <div id="opponents"></div>
+    <div id="table">
+      <div id="table-inner">
+        <div id="attack-badge" class="hidden">⚡ PICK +<span id="attack-n"></span></div>
+        <div id="open-starter-badge" class="hidden">
+          <div class="open-starter-label">OPEN CARD</div>
+          <div class="open-starter-name" id="open-starter-name"></div>
+        </div>
+        <div id="piles">
+          <span class="pile-spark tl">✦</span>
+          <span class="pile-spark tr">✦</span>
+          <span class="pile-spark bl">✦</span>
+          <span class="pile-spark br">✦</span>
+          <div class="pile" id="deck-pile">
+            <div class="card back deckcard" id="deck-top"></div>
+            <div class="pile-cap">DECK · <span id="deck-count">0</span></div>
+          </div>
+          <div class="pile" id="open-pile">
+            <div id="open-cards"></div>
+            <div class="pile-cap" id="open-pile-cap">OPEN</div>
+          </div>
+          <div class="pile hidden" id="pending-pile">
+            <div id="pending-cards"></div>
+            <div class="pile-cap">PLAYED</div>
+          </div>
+        </div>
+        <div id="status-bar"></div>
+        <div id="turn-timer" class="hidden"></div>
+        <div id="log-line"></div>
       </div>
-      <div id="piles">
-        <span class="pile-spark tl">✦</span>
-        <span class="pile-spark tr">✦</span>
-        <span class="pile-spark bl">✦</span>
-        <span class="pile-spark br">✦</span>
-        <div class="pile" id="deck-pile">
-          <div class="card back deckcard" id="deck-top"></div>
-          <div class="pile-cap">DECK · <span id="deck-count">0</span></div>
-        </div>
-        <div class="pile" id="open-pile">
-          <div id="open-cards"></div>
-          <div class="pile-cap" id="open-pile-cap">OPEN</div>
-        </div>
-        <div class="pile hidden" id="pending-pile">
-          <div id="pending-cards"></div>
-          <div class="pile-cap">PLAYED</div>
-        </div>
-      </div>
-      <div id="status-bar"></div>
-      <div id="turn-timer" class="hidden"></div>
-      <div id="log-line"></div>
     </div>
   </div>
   <footer id="my-area">
@@ -1289,6 +1333,210 @@ function cardEl(c,opts={}){
 }
 const isEnd=()=>G&&(G.phase==='roundEnd'||G.phase==='matchEnd');
 
+/* Places every .opp chip on an ellipse ringing the felt, surrounding it
+   from left round the top to right (the bottom stays clear — that's
+   where the viewer's own hand already sits, in a separate footer below
+   the arena). The ellipse's own radius is derived from #piles' *actual*
+   measured box each call, not a hand-tuned constant, so seats clear the
+   felt by construction at every viewport size and player count instead
+   of relying on guessed percentages staying in sync with it. A single
+   trailing clamp then keeps each chip's own footprint fully inside the
+   arena, so a seat can never poke off-screen either. */
+function layoutOpponentSeats(){
+  const arena=$('#arena'),piles=$('#piles');
+  const seats=[...document.querySelectorAll('#opponents .opp')];
+  const n=seats.length;
+  if(!n||!arena||!piles)return;
+  const aRect=arena.getBoundingClientRect();
+  /* the very first render() of a fresh game often fires while #scr-game
+     is still display:none — goScr defers the actual screen swap by
+     160ms for its fade transition (see the goScr override below), so
+     the arena has no box yet. Retry on the next frame instead of
+     leaving every seat stuck at the CSS default center point until
+     some unrelated later render() happens to fix it. */
+  if(!aRect.width||!aRect.height){setTimeout(layoutOpponentSeats,30);return;}
+  const pRect=piles.getBoundingClientRect();
+  /* the open-card/attack badge floats directly above the felt (inside
+     #table-inner, not #piles) whenever it's actually shown — fold
+     whichever one is visible right now into the "felt cluster" so the
+     ellipse sizing (and the hard keepout clamp below) both account for
+     it without permanently taxing the common case where neither badge
+     is on screen. */
+  let cluster={left:pRect.left,top:pRect.top,right:pRect.right,bottom:pRect.bottom};
+  [$('#open-starter-badge'),$('#attack-badge')].forEach(b=>{
+    if(b&&!b.classList.contains('hidden')){
+      const r=b.getBoundingClientRect();
+      cluster.left=Math.min(cluster.left,r.left);cluster.top=Math.min(cluster.top,r.top);
+      cluster.right=Math.max(cluster.right,r.right);cluster.bottom=Math.max(cluster.bottom,r.bottom);
+    }
+  });
+  const gap=14;
+  /* seats are centered on their point (translate(-50%,-50%)), so the
+     radius needs to clear the cluster by its own half-extent *plus*
+     the seat chip's own half-extent — not just a flat gap — or the near
+     edge of the seat (whichever one is closest) still laps over it. Uses
+     the *largest* seat, not just the first one — during an Open Show
+     reveal, seats can grow taller than usual (revealed cards wrapping
+     to a second row) by different amounts per player depending on
+     exactly which cards they're holding, so a single sampled seat can
+     under-measure its neighbours. */
+  const maxOffsetW=Math.max(...seats.map(s=>s.offsetWidth));
+  const maxOffsetH=Math.max(...seats.map(s=>s.offsetHeight));
+  const seatHalfW=(maxOffsetW/2)/aRect.width*100;
+  const seatHalfH=(maxOffsetH/2)/aRect.height*100;
+  const clusterHalfW=((cluster.right-cluster.left)/2+gap)/aRect.width*100+seatHalfW;
+  const clusterHalfH=((cluster.bottom-cluster.top)/2+gap)/aRect.height*100+seatHalfH;
+  /* ellipse centered on the cluster's own measured midpoint, not an
+     assumed 50%/50% — #table-inner also holds the status/log text below
+     the felt, so simply centering #table-inner (flex justify-content:
+     center) doesn't necessarily put the felt itself at the arena's
+     exact midpoint. */
+  const cx=((cluster.left+cluster.right)/2-aRect.left)/aRect.width*100;
+  const cy=((cluster.top+cluster.bottom)/2-aRect.top)/aRect.height*100;
+  const hw=(maxOffsetW/2)/aRect.width*100+1.5;
+  const hh=(maxOffsetH/2)/aRect.height*100+1.5;
+  /* clusterHalfW/H above is only the *minimum* radius needed to clear
+     the table — on a roomy viewport that leaves the whole ring hugging
+     tight around a small table with lots of dead space around it. Let
+     the ring grow to actually use the room that's really there (up to
+     ~85% of the true available gap out to the arena's own edge), capped
+     at ~2x the minimum so it stays proportionate to the table rather
+     than stretching out absurdly on a huge window. Never shrinks below
+     the correctness floor either way. */
+  const availRx=Math.max(0,Math.min(cx,100-cx)-hw-2);
+  const availRy=Math.max(0,Math.min(cy,100-cy)-hh-2);
+  const rx=Math.max(clusterHalfW,Math.min(availRx*.85,clusterHalfW*2));
+  const ry=Math.max(clusterHalfH,Math.min(availRy*.85,clusterHalfH*2));
+  /* on a viewport with real room beside the felt, wrap seats further
+     down the *sides* of the table too (130°→410°, a 280° sweep) instead
+     of just the top semicircle, using space that otherwise sits empty —
+     but on a narrow phone the gutter beside the felt is barely wider
+     than one seat, so stacking several seats down it just forces them
+     into the same corner with nowhere to separate (confirmed: this
+     produced a genuine seat-on-seat overlap in testing). Fall back to
+     the safer top-only arc there instead. (An Open Show reveal used to
+     make this worse by growing seats taller — now capped via
+     .minis.reveal's max-height above, so this check only needs to
+     account for normal seat size.) */
+  const wideSweep=availRx>seatHalfW*2.8;
+  const startA=wideSweep?130:160,endA=wideSweep?410:380;
+  /* equal-angle spacing bunches seats together near the ellipse's own
+     side vertices (curvature is tightest there, so a fixed angle step
+     covers much less on-screen distance) — walking the curve in fixed
+     small angle increments and dividing it by *arc length* instead
+     keeps the seats visually even all the way round, sides included. */
+  const startRad=startA*Math.PI/180,endRad=endA*Math.PI/180,steps=360;
+  const cum=[0];let px=rx*Math.cos(startRad),py=ry*Math.sin(startRad);
+  for(let i=1;i<=steps;i++){
+    const t=startRad+(endRad-startRad)*i/steps;
+    const x=rx*Math.cos(t),y=ry*Math.sin(t);
+    cum.push(cum[i-1]+Math.hypot(x-px,y-py));
+    px=x;py=y;
+  }
+  const total=cum[steps];
+  const angleAtLen=len=>{
+    for(let i=1;i<=steps;i++)if(cum[i]>=len){
+      const f=(len-cum[i-1])/((cum[i]-cum[i-1])||1);
+      return startRad+(endRad-startRad)*(i-1+f)/steps;
+    }
+    return endRad;
+  };
+  const keepout={left:cluster.left-gap,top:cluster.top-gap,right:cluster.right+gap,bottom:cluster.bottom+gap};
+  const koL=(keepout.left-aRect.left)/aRect.width*100,koR=(keepout.right-aRect.left)/aRect.width*100;
+  const koT=(keepout.top-aRect.top)/aRect.height*100,koB=(keepout.bottom-aRect.top)/aRect.height*100;
+  const bw=maxOffsetW/aRect.width*100,bh=maxOffsetH/aRect.height*100;
+  const clampToArena=p=>{p.x=Math.min(100-hw,Math.max(hw,p.x));p.y=Math.min(100-hh,Math.max(hh,p.y));};
+  const pushOffKeepout=p=>{
+    const sL=p.x-bw/2,sR=p.x+bw/2,sT=p.y-bh/2,sB=p.y+bh/2;
+    if(!(sR>koL&&sL<koR&&sB>koT&&sT<koB))return;
+    /* push a touch past the boundary (not just flush against it) so the
+       seat isn't left balanced right on the overlap threshold — the
+       pairwise separation pass below nudges seats by a pixel or two at
+       a time, and a seat sitting exactly on the line would re-trigger
+       this on the very next such nudge, fighting the separation pass
+       instead of settling. */
+    const pad=1.5;
+    const pushLeft=sR-koL+pad,pushRight=koR-sL+pad,pushUp=sB-koT+pad,pushDown=koB-sT+pad;
+    const canUp=(p.y-pushUp)>=hh;
+    const canDown=(p.y+pushDown)<=100-hh;
+    const options=[];
+    if(canUp)options.push(['up',pushUp]);
+    /* push-down only matters now that the ring wraps below the felt's
+       own center (the wider 130°→410° sweep) — a seat sitting under
+       the table needs to clear its *bottom* edge, not get shoved
+       "up" into it. */
+    if(canDown)options.push(['down',pushDown]);
+    options.push(['left',pushLeft],['right',pushRight]);
+    options.sort((a,b)=>a[1]-b[1]);
+    const [dir]=options[0];
+    if(dir==='up')p.y-=pushUp;else if(dir==='down')p.y+=pushDown;else if(dir==='left')p.x-=pushLeft;else p.x+=pushRight;
+    clampToArena(p);
+  };
+  const positions=seats.map((el,i)=>{
+    const rad=n===1?Math.PI*1.5:angleAtLen(total*(i+0.5)/n);
+    /* arena-bounds clamp runs *before* the keepout check, not after —
+       clamping afterwards can slide an already-cleared seat straight
+       back into the felt/badge (a seat the ellipse legitimately placed
+       just above the arena's own top edge would get pulled back down
+       by an edge clamp applied last, undoing the clearance it had). */
+    const p={x:cx+rx*Math.cos(rad),y:cy+ry*Math.sin(rad)};
+    clampToArena(p);
+    /* hard safety net: whatever the ellipse (+ edge clamp) produced, a
+       seat may never actually overlap the felt/badge cluster. Resolve
+       any remaining overlap by the shortest push out of the cluster's
+       box (left/right/up — never down, seats never sit below the
+       table) that's still reachable within the arena, falling through
+       to a horizontal push when there's no headroom left to go up —
+       this guarantees correctness even in tight corners the radius
+       tuning above didn't quite anticipate (e.g. a lone opponent with
+       little headroom between the topbar and a tall open-card badge). */
+    pushOffKeepout(p);
+    return p;
+  });
+  /* pushing a seat sideways off the keepout box can, in a crowded ring,
+     land it on top of its neighbour (both converge on the same clear
+     edge of the cluster) — a few passes of simple pairwise separation
+     resolves that without reopening the keepout/arena constraints,
+     since any move it makes is re-validated against both afterwards.
+     The split is room-aware, not a flat 50/50: a naive even split
+     silently fails when one of the pair is already pinned against an
+     arena edge — its half gets cancelled straight back by the edge
+     clamp, so the other seat (which actually has room) needs to absorb
+     that leftover distance too, or the pair never actually separates. */
+  const splitRoomAware=(lo1,hi1,v1,lo2,hi2,v2,need)=>{
+    const mid=(v1+v2)/2;
+    let want1=mid-need/2,want2=mid+need/2;
+    if(want1<lo1){want2+=lo1-want1;want1=lo1;}
+    if(want2>hi2){want1-=want2-hi2;want2=hi2;}
+    return [Math.max(lo1,Math.min(hi1,want1)),Math.max(lo2,Math.min(hi2,want2))];
+  };
+  for(let pass=0;pass<100;pass++){
+    let moved=false;
+    for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+      const a=positions[i],b=positions[j];
+      const dx=b.x-a.x,dy=b.y-a.y;
+      const overlapX=bw-Math.abs(dx),overlapY=bh-Math.abs(dy);
+      if(overlapX<=0||overlapY<=0)continue;
+      moved=true;
+      if(overlapX<overlapY){
+        const left=dx>=0?a:b,right=dx>=0?b:a;
+        [left.x,right.x]=splitRoomAware(hw,100-hw,left.x,hw,100-hw,right.x,bw);
+      }else{
+        const top=dy>=0?a:b,bottom=dy>=0?b:a;
+        [top.y,bottom.y]=splitRoomAware(hh,100-hh,top.y,hh,100-hh,bottom.y,bh);
+      }
+      pushOffKeepout(a);pushOffKeepout(b);
+    }
+    if(!moved)break;
+  }
+  seats.forEach((el,i)=>{el.style.left=positions[i].x+'%';el.style.top=positions[i].y+'%';});
+}
+let seatLayoutTimer=null;
+window.addEventListener('resize',()=>{
+  clearTimeout(seatLayoutTimer);
+  seatLayoutTimer=setTimeout(layoutOpponentSeats,60);
+});
+
 function render(){
   syncLogAudio();
   if(!G){updateTurnTimer();return;}
@@ -1316,6 +1564,10 @@ function render(){
   const oppIdxs=myIdx>=0
     ?Array.from({length:G.players.length-1},(_,k)=>(myIdx+k+1)%G.players.length)
     :G.players.map((_,i)=>i);
+  /* seat chips shrink in tiers as the ring fills up — see the n-mid/
+     n-many CSS rules — so up to 7 opponents can surround the felt
+     without crowding each other */
+  opp.className=oppIdxs.length>=6?'n-many':oppIdxs.length>=4?'n-mid':'';
   for(const i of oppIdxs){
     const p=G.players[i];
     const d=document.createElement('div');
@@ -1324,28 +1576,23 @@ function render(){
     const inVoice=voicePresent.has(p.id);
     /* Open Show reveal in progress: show the actual cards that have
        landed so far (face up) plus a running point total, instead of
-       the usual face-down mini chips — this is the whole point of an
-       Open Show, so it only ever applies during one. */
+       the usual card-count text — this is the whole point of an Open
+       Show, so it only ever applies during one. */
     const revealCnt=(G.openShow!=null&&openShowReveal)?(openShowReveal.byPlayerIdx[i]||0):null;
     const revealedHand=revealCnt!=null?sortHand(p.hand).slice(0,revealCnt):null;
-    /* .card-count is a compact text fallback for the same info the
-       .minis chips show visually — the chips get hidden on narrow
-       mobile layouts (no room to render one chip per card once
-       opponents compact into a single row), so without this, mobile
-       players had no way to see how many cards anyone was holding at
-       all. Hidden by default (desktop already shows it via the chips);
-       the mobile media query flips which one is visible. */
     const handHtml=p.elim?'':(revealedHand
       ?`<div class="minis reveal">${revealedHand.map(c=>`<span class="mini-face${(!isJoker(c)&&(c.s==='H'||c.s==='D'))?' red':''}">${lbl(c)}</span>`).join('')}</div>
         <div class="opp-reveal-sum">${handSum(revealedHand)} pts</div>`
-      :`<div class="minis">${p.hand.map(()=>'<span class="mini"></span>').join('')}</div>
-        <div class="card-count">${p.hand.length} card${p.hand.length===1?'':'s'}</div>`);
-    d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}${inVoice?'<span class="voice-mic">🎙️</span>':''}</div>
-      <div><div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span><span class="rank-badge">#${rankOf(i)}</span>${p.isBot?`<span class="tagchip">${esc(p.diff)}</span>`:''}</div>
-      <div class="opp-sub">${p.elim?'OUT · ':''}score ${p.score}</div>
-      ${handHtml}</div>`;
+      :`<div class="card-count">${p.hand.length} card${p.hand.length===1?'':'s'}</div>`);
+    d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}<span class="rank-badge">#${rankOf(i)}</span>${inVoice?'<span class="voice-mic">🎙️</span>':''}</div>
+      <div class="seat-card">
+        <div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span>${p.isBot?`<span class="tagchip">${esc(p.diff)}</span>`:''}</div>
+        <div class="opp-sub">${p.elim?'OUT · ':''}score ${p.score}</div>
+        ${handHtml}
+      </div>`;
     opp.appendChild(d);
   }
+  layoutOpponentSeats();
 
   /* center piles */
   $('#deck-count').textContent=G.deck.length;
