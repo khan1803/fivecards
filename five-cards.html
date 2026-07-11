@@ -158,38 +158,48 @@ input:focus{border-color:var(--gold)}
    for someone else), but the pop-up animation target is generic —
    whoever's uid the broadcast names, their seat animates, opponent or
    you, so no extra markup is needed on opponent seats at all.
-   pointer-events:auto is required here — #opponents itself is
-   pointer-events:none (so the overlay never blocks the felt beneath
-   it), which every *other* thing living inside a .opp has been fine
-   with since none of it was ever clickable before this button. Without
-   this override the icon looks and sits exactly where it should but
-   silently swallows nothing — clicks fall straight through to
-   whatever's underneath, which is why plain el.click() calls appeared
-   to work in testing (that DOM method fires the handler directly,
-   bypassing real hit-testing/pointer-events entirely) while an actual
-   press did nothing. */
-.cough-btn{background:none;border:0;padding:0;margin-left:2px;font-size:11px;line-height:1;cursor:pointer;
-  filter:grayscale(.2);transition:transform .1s;pointer-events:auto}
+   A proper corner badge on the avatar (like .rank-badge/.voice-mic),
+   not a small inline glyph next to the name — that was hard to spot
+   and, worse, hard to actually tap accurately on a phone. Bottom-right
+   corner is the only one free (top-left is the rank badge, top-right
+   the voice mic). pointer-events:auto is required here — #opponents
+   itself is pointer-events:none (so the overlay never blocks the felt
+   beneath it), which every *other* thing living inside a .opp has been
+   fine with since none of it was ever clickable before this button.
+   Without this override the icon looks and sits exactly where it
+   should but silently swallows nothing — clicks fall straight through
+   to whatever's underneath, which is why plain el.click() calls
+   appeared to work in testing (that DOM method fires the handler
+   directly, bypassing real hit-testing/pointer-events entirely) while
+   an actual press did nothing. */
+.cough-btn{position:absolute;bottom:-7px;right:-7px;z-index:2;width:26px;height:26px;border-radius:50%;
+  background:var(--panel);border:1.5px solid rgba(224,90,60,.55);display:flex;align-items:center;justify-content:center;
+  font-size:15px;line-height:1;padding:0;cursor:pointer;pointer-events:auto;
+  box-shadow:0 2px 7px rgba(0,0,0,.45);transition:transform .1s,box-shadow .15s}
 .cough-btn:active{transform:scale(1.3)}
-/* the seat itself reacts too (shake + a red glow on the avatar), not
-   just a small floating emoji — on a crowded 8-seat table a tiny pop
-   alone is easy to miss; a visible shake on the *specific* avatar makes
-   the source unambiguous even at a glance. */
-.opp.coughing .avatar{animation:coughShake .5s ease-in-out;box-shadow:0 0 0 3px rgba(224,90,60,.65),0 4px 16px rgba(224,90,60,.5)}
+/* the whole seat reacts, not just a small floating emoji — on a
+   crowded 8-seat table a tiny pop alone is easy to miss. The avatar
+   shakes and glows, the seat-card's own border flashes too, so the
+   specific seat is unambiguous even at a glance, and the emoji itself
+   pops big and lingers. */
+.opp.coughing .avatar{animation:coughShake .7s ease-in-out;box-shadow:0 0 0 4px rgba(224,90,60,.8),0 0 24px rgba(224,90,60,.65)}
+.opp.coughing .seat-card{border-color:rgba(224,90,60,.8);box-shadow:0 0 20px rgba(224,90,60,.45)}
 @keyframes coughShake{
   0%,100%{transform:translate(0,0) rotate(0)}
-  20%{transform:translate(-3px,0) rotate(-7deg)}
-  40%{transform:translate(3px,0) rotate(7deg)}
-  60%{transform:translate(-2px,0) rotate(-4deg)}
-  80%{transform:translate(2px,0) rotate(4deg)}
+  15%{transform:translate(-4px,0) rotate(-8deg)}
+  30%{transform:translate(4px,0) rotate(8deg)}
+  45%{transform:translate(-3px,0) rotate(-6deg)}
+  60%{transform:translate(3px,0) rotate(6deg)}
+  75%{transform:translate(-2px,0) rotate(-3deg)}
+  90%{transform:translate(2px,0) rotate(3deg)}
 }
-.cough-pop{position:absolute;top:-16px;left:50%;font-size:28px;pointer-events:none;z-index:7;
-  animation:coughPop 1.1s ease-out forwards;filter:drop-shadow(0 2px 5px rgba(0,0,0,.55))}
+.cough-pop{position:absolute;top:-22px;left:50%;font-size:38px;pointer-events:none;z-index:7;
+  animation:coughPop 1.4s ease-out forwards;filter:drop-shadow(0 3px 6px rgba(0,0,0,.6))}
 @keyframes coughPop{
   0%{transform:translate(-50%,0) scale(.4);opacity:0}
-  20%{transform:translate(-50%,-8px) scale(1.3);opacity:1}
-  70%{transform:translate(-50%,-30px) scale(1.05);opacity:1}
-  100%{transform:translate(-50%,-46px) scale(.9);opacity:0}
+  18%{transform:translate(-50%,-10px) scale(1.4);opacity:1}
+  75%{transform:translate(-50%,-38px) scale(1.1);opacity:1}
+  100%{transform:translate(-50%,-56px) scale(.9);opacity:0}
 }
 /* seat chips shrink in three tiers as the table fills up, so up to 7
    opponents can ring the felt without crowding each other */
@@ -1585,9 +1595,9 @@ function render(){
     d.className='opp me'+(myTurn?' turn':'')+(me.elim?' elim':'');
     d.id='my-seat';d.dataset.uid=me.id;
     const inVoice=voicePresent.has(me.id);
-    d.innerHTML=`<div class="avatar">${esc((me.name[0]||'?').toUpperCase())}<span class="rank-badge">#${rankOf(myIdx)}</span>${inVoice?'<span class="voice-mic">🎙️</span>':''}</div>
+    d.innerHTML=`<div class="avatar">${esc((me.name[0]||'?').toUpperCase())}<span class="rank-badge">#${rankOf(myIdx)}</span>${inVoice?'<span class="voice-mic">🎙️</span>':''}<button class="cough-btn" title="Cough">🤧</button></div>
       <div class="seat-card">
-        <div class="opp-name"><span class="opp-name-text">${esc(me.name)} (you)</span>${(showOpenBadge&&myIdx===G.starter)?'<span class="tagchip open-tag">Open card</span>':''}<button class="cough-btn" title="Cough">🤧</button></div>
+        <div class="opp-name"><span class="opp-name-text">${esc(me.name)} (you)</span>${(showOpenBadge&&myIdx===G.starter)?'<span class="tagchip open-tag">Open card</span>':''}</div>
         <div class="opp-sub">${me.elim?'OUT · ':''}score ${me.score}</div>
       </div>`;
     d.querySelector('.cough-btn').onclick=e=>{e.stopPropagation();triggerCough();};
@@ -2238,11 +2248,11 @@ function playCoughEffect(uid){
   /* shake + glow the specific avatar, not just a floating emoji, so the
      source seat is unambiguous even on a crowded 8-seat table */
   seat.classList.add('coughing');
-  setTimeout(()=>seat.classList.remove('coughing'),500);
+  setTimeout(()=>seat.classList.remove('coughing'),700);
   const pop=document.createElement('span');
   pop.className='cough-pop';pop.textContent='🤧';
   seat.appendChild(pop);
-  setTimeout(()=>pop.remove(),1100);
+  setTimeout(()=>pop.remove(),1400);
 }
 
 /* ================= VOICE CHAT (WebRTC mesh, signaled via Firebase) =================
