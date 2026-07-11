@@ -2012,7 +2012,7 @@ const FIREBASE_CONFIG={
 const ROOMS='fivecards/rooms/';
 const myUid=localStorage.fcUid||(localStorage.fcUid='u'+Math.random().toString(36).slice(2,10));
 let db=null;
-let mp={code:null,ref:null,isHost:false,isSpectator:false,room:null,lastV:-1,odArmed:false,chatRef:null,chatLog:[],chatUnread:0,chatOpen:false,specRef:null,coughRef:null};
+let mp={code:null,ref:null,isHost:false,isSpectator:false,room:null,lastV:-1,odArmed:false,chatRef:null,chatLog:[],chatUnread:0,chatOpen:false,specRef:null,coughRef:null,stateRef:null};
 
 function fbInit(){
   if(db)return true;
@@ -2106,6 +2106,24 @@ function attachRoom(code){
     const c=s.val();if(!c||c.uid===myUid)return;
     if(c.ts&&c.ts>=attachTs-3000)playCoughEffect(c.uid);
   });
+  /* IMPORTANT: this is a *root* listener — .on('value') on mp.ref fires
+     on literally any write anywhere under the room, not just the ones
+     relevant here. chat, spectator presence and cough are already their
+     own scoped listeners above and don't trigger this. But voice's RTC
+     signaling (sendSignal() pushes to rtc/{uid} for every ICE candidate
+     — a single peer pair can generate a dozen-plus during setup, times
+     every pair in the room once several players join voice) and voice
+     presence (voice/{uid}) both live under this same root, so this
+     handler used to re-fire — and re-parse + reassign the *entire game
+     state* — on every one of those, none of which have anything to do
+     with whose turn it is. That's wasteful on its own, but worse: it
+     multiplies the odds of this client's own recently-applied local
+     move (already mutated into G in memory, mpWrite() in flight but not
+     yet round-tripped) getting stomped by a same-tick reprocessing of
+     the room snapshot mid-flight. Game state now gets its own listener
+     scoped to just the state child below, so it only ever reacts to an
+     actual move — this handler is left owning only lobby-relevant
+     fields (players/spectators/status/host) it actually needs. */
   mp.ref.on('value',s=>{
     const r=s.val();
     if(!r){leaveRoom(true);toast('Room was closed');return;}
@@ -2118,18 +2136,35 @@ function attachRoom(code){
     if(r.status==='lobby'){
       if(!mp.isSpectator&&!mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().remove();mp.odArmed=true;}
       G=null;renderLobby();goScr('scr-lobby');closeModal();
-    }else if(r.status==='playing'&&r.state){
-      if(!mp.isSpectator&&mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().cancel();mp.odArmed=false;}
-      let g;try{g=JSON.parse(r.state);}catch(e){return;}
-      if(typeof g.v==='number'&&g.v<mp.lastV)return;   // stale echo
-      mp.lastV=g.v||0;
-      if(G===null)announcedRound=-1;   // fresh entry from the lobby — this match's round 1 hasn't been announced yet
-      G=g;G.mode='mp';
-      myIdx=mp.isSpectator?-1:G.players.findIndex(p=>p.id===myUid);
-      const me=G.players[myIdx];
-      sel=new Set(me?[...sel].filter(id=>me.hand.some(c=>c.id===id)):[]);
-      goScr('scr-game');render();
     }
+  });
+  /* game state — scoped to just this one child, so it only fires on an
+     actual move (see the big comment above for why sharing the root
+     listener was a real problem, not just noise). */
+  mp.stateRef=mp.ref.child('state');
+  mp.stateRef.on('value',s=>{
+    const raw=s.val();
+    /* mpBackToLobby() explicitly nulls this out when a match ends —
+       reset the stale-echo tracker so the *next* match's writes (v
+       starting back near 0, see newMatch()) aren't rejected as "older
+       than" whatever high v the previous match finished on. Deliberately
+       not gated on mp.room.status here: that field is written by a
+       *separate* root listener, and Firebase doesn't guarantee which of
+       two listeners on different paths fires first for the same atomic
+       multi-path update — gating on it risked this listener seeing the
+       new match's state before the root listener had updated
+       mp.room.status to 'playing', silently dropping the transition. */
+    if(!raw){mp.lastV=-1;return;}
+    let g;try{g=JSON.parse(raw);}catch(e){return;}
+    if(typeof g.v==='number'&&g.v<mp.lastV)return;   // stale echo
+    mp.lastV=g.v||0;
+    if(!mp.isSpectator&&mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().cancel();mp.odArmed=false;}
+    if(G===null)announcedRound=-1;   // fresh entry from the lobby — this match's round 1 hasn't been announced yet
+    G=g;G.mode='mp';
+    myIdx=mp.isSpectator?-1:G.players.findIndex(p=>p.id===myUid);
+    const me=G.players[myIdx];
+    sel=new Set(me?[...sel].filter(id=>me.hand.some(c=>c.id===id)):[]);
+    goScr('scr-game');render();
   });
 }
 function renderLobby(){
@@ -2163,7 +2198,17 @@ function mpBackToLobby(){
      match, then clear the spectator list */
   mp.ref.child('spectators').get().then(s=>{
     const specs=s.val()||{};
-    const updates={status:'lobby',spectators:null};
+    /* clear the finished match's state too, not just spectators — a
+       fresh match's v starts back near 0 (see newMatch()), and without
+       this the old match's leftover state (now stale) would still be
+       sitting in the room the moment a new one starts. Two problems if
+       it lingers: the stale-echo guard on mp.lastV (still holding
+       whatever high v the finished match ended on) would reject the new
+       match's first few writes outright, and a client that reconnects
+       while everyone's just sitting in the lobby would see that
+       leftover state and could try to jump straight into "game" view
+       off data that isn't live. */
+    const updates={status:'lobby',spectators:null,state:null};
     Object.entries(specs).forEach(([uid,sp])=>{updates['players/'+uid]={name:sp.name,order:sp.order};});
     mp.ref.update(updates);
   });
@@ -2434,6 +2479,7 @@ function leaveRoom(remote){
   if(mp.chatRef)mp.chatRef.off();
   if(mp.specRef)mp.specRef.off();
   if(mp.coughRef)mp.coughRef.off();
+  if(mp.stateRef)mp.stateRef.off();
   closeChat();
   leaveVoice();
   if(mp.ref){
@@ -2462,7 +2508,7 @@ function leaveRoom(remote){
     }
   }
   localStorage.removeItem('fcRoom');
-  mp={code:null,ref:null,isHost:false,isSpectator:false,room:null,lastV:-1,odArmed:false,chatRef:null,chatLog:[],chatUnread:0,chatOpen:false,specRef:null,coughRef:null};
+  mp={code:null,ref:null,isHost:false,isSpectator:false,room:null,lastV:-1,odArmed:false,chatRef:null,chatLog:[],chatUnread:0,chatOpen:false,specRef:null,coughRef:null,stateRef:null};
   G=null;sel.clear();closeModal();goScr('scr-home');
 }
 
