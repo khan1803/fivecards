@@ -87,22 +87,25 @@ input:focus{border-color:var(--gold)}
 #round-info{font-size:11px;color:rgba(201,168,76,.55);font-weight:700;letter-spacing:2.5px;font-family:'DM Mono',monospace}
 /* ---------- circular seating ----------
    #arena stacks #opponents (an absolute overlay) on top of #table. Each
-   .opp is placed at a left/top % computed in JS (layoutOpponentSeats)
-   from an ellipse whose radius is derived from #piles' own measured
-   size at render time — so seats are *guaranteed* to clear the felt by
-   construction, however big the felt happens to render at any given
-   viewport/player-count, rather than relying on hand-tuned constants
-   that could drift out of sync. #opponents itself has pointer-events:
-   none (nothing under it is clickable) so it never blocks the table. */
+   .opp — including your own seat, .opp.me, which closes the circle at
+   the bottom of the rim — is placed at a left/top % computed in JS
+   (layoutOpponentSeats) directly on the felt's own rim, since #felt is
+   now a real ellipse/circle shape rather than an approximated one, so
+   seats are *guaranteed* to clear the felt by construction however big
+   it renders at any given viewport/player-count. #opponents itself has
+   pointer-events:none (nothing under it is clickable) so it never
+   blocks the table. */
 #arena{position:relative;flex:1;display:flex;flex-direction:column;min-height:0;width:100%}
 #opponents{position:absolute;inset:0;pointer-events:none;z-index:3}
 .opp{position:absolute;left:50%;top:50%;--lift:0px;
   transform:translate(-50%,-50%) translateY(var(--lift));
-  display:flex;flex-direction:column;align-items:center;width:76px;text-align:center;
+  display:flex;flex-direction:column;align-items:center;width:100px;text-align:center;
   transition:transform .2s,opacity .2s}
+.opp.me .avatar{border-color:var(--gold);box-shadow:0 0 0 2px rgba(201,168,76,.35),0 2px 8px rgba(0,0,0,.4)}
+.opp.me .opp-name-text{color:var(--gold)}
 .opp.elim{opacity:.4}
-.avatar{position:relative;z-index:1;width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#4A3A80,#2A2460);
-  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex:0 0 auto;color:#E8D5A3;
+.avatar{position:relative;z-index:1;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#4A3A80,#2A2460);
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:19px;flex:0 0 auto;color:#E8D5A3;
   border:2px solid rgba(201,168,76,.38);box-shadow:0 2px 8px rgba(0,0,0,.4);font-family:'Playfair Display',serif}
 .opp:nth-of-type(4n+2) .avatar{background:linear-gradient(135deg,#2A5A38,#163020)}
 .opp:nth-of-type(4n+3) .avatar{background:linear-gradient(135deg,#7A5520,#4A3410)}
@@ -117,15 +120,19 @@ input:focus{border-color:var(--gold)}
   padding:9px 6px 4px;box-shadow:0 3px 10px rgba(0,0,0,.35);transition:border-color .2s,box-shadow .2s}
 .opp.turn .seat-card{border-color:rgba(201,168,76,.55);box-shadow:0 0 16px rgba(201,168,76,.22)}
 .opp-name{display:flex;flex-direction:column;align-items:center;gap:1px;overflow:hidden}
-.opp-name-text{font-size:10.5px;font-weight:700;color:#E8D5A3;font-family:'Playfair Display',serif;
+.opp-name-text{font-size:13.5px;font-weight:700;color:#E8D5A3;font-family:'Playfair Display',serif;
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tagchip{font-size:7.5px;background:rgba(201,168,76,.15);color:var(--gold);border-radius:5px;padding:1.5px 6px;text-transform:uppercase;letter-spacing:.4px;font-family:'DM Mono',monospace}
-.opp-sub{font-size:8.5px;color:rgba(201,168,76,.48);font-family:'DM Mono',monospace;white-space:nowrap}
+.tagchip{font-size:9px;background:rgba(201,168,76,.15);color:var(--gold);border-radius:5px;padding:2px 7px;text-transform:uppercase;letter-spacing:.4px;font-family:'DM Mono',monospace}
+/* the starter's OPEN CARD marker now lives right on their seat chip,
+   not as a big badge floating over the felt center — same information,
+   just anchored to whoever it actually applies to */
+.open-tag{background:linear-gradient(135deg,var(--goldlt),var(--gold2));color:var(--inkdark);font-weight:800;animation:newTagPulse .3s ease-out}
+.opp-sub{font-size:10.5px;color:rgba(201,168,76,.55);font-family:'DM Mono',monospace;white-space:nowrap}
 .minis{display:none}
 /* compact text readout of hand size — the only hand-size indicator now
    that seats are small circular chips (individual .mini chips no
    longer fit the width budget at any player count) */
-.card-count{display:block;font-size:8.5px;color:rgba(201,168,76,.48);font-family:'DM Mono',monospace;margin-top:2px}
+.card-count{display:block;font-size:10.5px;color:rgba(201,168,76,.6);font-family:'DM Mono',monospace;margin-top:2px}
 /* Open Show reveal: actual face-up cards landing one at a time, plus the
    running point total beneath them — replaces the card-count text only
    for the duration of that reveal. Wraps (never grows sideways) so a
@@ -145,70 +152,50 @@ input:focus{border-color:var(--gold)}
 .opp-reveal-sum{font-size:10px;font-weight:800;color:var(--gold);font-family:'DM Mono',monospace;margin-top:2px}
 /* seat chips shrink in three tiers as the table fills up, so up to 7
    opponents can ring the felt without crowding each other */
-#opponents.n-mid .opp{width:64px}
-#opponents.n-mid .avatar{width:34px;height:34px;font-size:13px}
-#opponents.n-mid .opp-name-text{font-size:9.5px}
-#opponents.n-mid .opp-sub{font-size:7.5px}
-#opponents.n-many .opp{width:54px}
-#opponents.n-many .avatar{width:28px;height:28px;font-size:11px;border-width:1.5px}
+#opponents.n-mid .opp{width:86px}
+#opponents.n-mid .avatar{width:44px;height:44px;font-size:16px}
+#opponents.n-mid .opp-name-text{font-size:12px}
+#opponents.n-mid .opp-sub{font-size:9.5px}
+#opponents.n-many .opp{width:72px}
+#opponents.n-many .avatar{width:38px;height:38px;font-size:15px;border-width:1.5px}
 #opponents.n-many .seat-card{padding:7px 4px 3px;border-radius:7px}
-#opponents.n-many .opp-name-text{font-size:8.5px}
-#opponents.n-many .opp-sub{font-size:6.5px}
+#opponents.n-many .opp-name-text{font-size:11px}
+#opponents.n-many .opp-sub{font-size:8.5px}
 #opponents.n-many .avatar .rank-badge{font-size:7px;padding:1.5px 4px}
 #opponents.n-many .tagchip{display:none}
 
-/* pinned toward the bottom of the arena rather than centered — the
-   opponent ring only ever needs headroom *above* the felt (the arc
-   never extends below it, that's where the viewer's own hand already
-   sits in a separate footer), so centering would waste half of that
-   free space below the felt where no seat can ever use it. */
-#table{flex:1;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;width:100%;position:relative;min-height:0;padding:6px 12px;overflow-y:auto}
-/* true centering (margin:auto splits free space evenly above/below) —
-   pinning table-inner to the bottom instead (an earlier attempt at
-   this) fixed a tight-headroom edge case for 1-2 players, but left a
-   large dead gap at the *top* of the arena on any roomy/tall viewport,
-   since all the free space piled up on one side instead of splitting.
-   That edge case is now handled by layoutOpponentSeats' own keepout
-   push-out + pairwise separation safety net instead (correct
-   regardless of how table-inner is centered), so centering can go back
-   to being genuinely symmetric. Auto margins still collapse to 0
-   rather than going negative if content is taller than #table, so it
-   degrades to flush-top instead of overflowing upward. */
-#table-inner{display:flex;flex-direction:column;align-items:center;gap:16px;width:100%;margin:auto 0}
-#piles{position:relative;width:100%;max-width:300px;display:flex;gap:clamp(16px,5vw,32px);align-items:flex-start;justify-content:center;flex-wrap:wrap;
+#table{flex:1;z-index:1;display:flex;justify-content:center;width:100%;position:relative;min-height:0;padding:50px 62px 46px}
+/* the felt is now one real poker-style oval that fills the arena — the
+   player seats sit directly on its rim (computed in layoutOpponentSeats)
+   instead of ringing an approximated rounded-rect table. */
+#felt{position:relative;flex:1;max-width:920px;align-self:center;height:100%;max-height:600px;min-height:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
   background:radial-gradient(ellipse at 50% 32%,var(--felt) 0%,#0E3222 60%,var(--felt-d) 100%);
-  border:5px solid #081E12;border-radius:clamp(36px,12vw,64px);
-  padding:clamp(24px,7vw,40px) clamp(16px,5vw,28px);
-  box-shadow:inset 0 0 0 2.5px rgba(201,168,76,.22),inset 0 0 55px rgba(0,0,0,.55),0 20px 55px rgba(0,0,0,.55)}
+  border:9px solid #16110B;border-radius:50%;
+  padding:5% 11%;
+  box-shadow:0 0 0 5px #2B2215,0 0 0 7px rgba(201,168,76,.3),inset 0 0 0 3px rgba(201,168,76,.2),inset 0 0 90px rgba(0,0,0,.55),0 26px 70px rgba(0,0,0,.6)}
+#piles{position:relative;display:flex;gap:clamp(16px,4vw,32px);align-items:flex-start;justify-content:center;margin-bottom:4%}
 .pile-spark{position:absolute;font-size:16px;color:rgba(201,168,76,.55);opacity:.85;text-shadow:0 0 8px rgba(201,168,76,.4);pointer-events:none}
-.pile-spark.tl{top:14px;left:20px}
-.pile-spark.tr{top:14px;right:20px}
-.pile-spark.bl{bottom:14px;left:20px}
-.pile-spark.br{bottom:14px;right:20px}
+.pile-spark.tl{top:17%;left:15%}
+.pile-spark.tr{top:17%;right:15%}
+.pile-spark.bl{bottom:17%;left:15%}
+.pile-spark.br{bottom:17%;right:15%}
 .pile{display:flex;flex-direction:column;align-items:center;gap:8px}
 .pile-cap{font-size:9px;letter-spacing:2.5px;color:rgba(255,255,255,.6);font-weight:700;font-family:'DM Mono',monospace;text-transform:uppercase}
 #open-cards,#pending-cards{display:flex;gap:6px;min-height:var(--ch)}
 #pending-cards .card{opacity:.88}
-/* Both badges are normal flex children of #table, placed before its
-   #piles sibling — not absolutely positioned off #piles (that let them
-   ride up over #opponents at high player counts once opponents wrapped
-   onto a second row) and deliberately NOT pulled toward #piles with a
-   negative margin either: a negative margin on a centered flex child
-   still lets it escape above its container's own box (confirmed via
-   measurement — #table's box had a clean 0px gap to #opponents, but the
-   badge inside it still poked ~24px above #table's own top edge). Zero
-   margin is the only construction that's actually guaranteed safe. */
 #attack-badge{position:relative;z-index:5;align-self:center;
   background:linear-gradient(180deg,#E2635C,#A32620);color:#fff;font-weight:800;font-size:14px;letter-spacing:.5px;
   border-radius:999px;padding:7px 18px;box-shadow:0 4px 18px rgba(163,38,32,.5);animation:pulse 1s infinite;font-family:'DM Mono',monospace}
-#open-starter-badge{position:relative;z-index:4;align-self:center;
-  text-align:center;pointer-events:none;max-width:88%;
-  background:linear-gradient(135deg,var(--goldlt),var(--gold2));color:var(--inkdark);
-  border-radius:16px;padding:6px 20px 8px;box-shadow:0 4px 20px rgba(184,132,46,.42)}
-.open-starter-label{font-size:9px;font-weight:800;letter-spacing:2.5px;opacity:.75;font-family:'DM Mono',monospace}
-.open-starter-name{font-size:28px;font-weight:900;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Playfair Display',serif}
+/* while dealing: your hand and actions are hidden/frozen so the round
+   visibly starts only after every card has landed */
+body.dealing #my-hand .card{opacity:0;transform:translateY(8px);transition:none}
+#my-hand .card{transition:opacity .25s ease,transform .25s ease}
+body.dealing #actions .btn{pointer-events:none;opacity:.35}
+body.dealing #deck-top.pickable,body.dealing #open-cards .card{pointer-events:none}
+body.dealing .card-count{visibility:hidden}
 #status-bar{font-size:14px;font-weight:600;font-style:italic;min-height:22px;text-align:center;padding:0 14px;color:#E8D5A3;font-family:'Playfair Display',serif}
-#log-line{font-size:10px;color:rgba(201,168,76,.42);min-height:16px;cursor:pointer;text-align:center;padding:0 14px;font-family:'DM Mono',monospace;letter-spacing:.3px}
+#log-line{font-size:10px;color:rgba(201,168,76,.42);min-height:16px;cursor:pointer;text-align:center;padding:0 14px;font-family:'DM Mono',monospace;letter-spacing:.3px;margin-top:-6px}
 
 /* ---------- cards ---------- */
 .card{width:var(--cw);height:var(--ch);border-radius:9px;background:#FAFAF8;color:var(--cardink);position:relative;
@@ -318,29 +305,27 @@ input:focus{border-color:var(--gold)}
   border:7px solid transparent;border-top-color:#0A0E1A}
 .chat-bubble.below::after{bottom:auto;top:-7px;border-top-color:transparent;border-bottom-color:#0A0E1A}
 @media (max-height:640px){
-  #piles{padding:14px 22px;border-radius:44px;gap:18px}
+  #table{padding:44px 46px 10px}
   #my-hand{padding-top:12px}
 }
 /* narrow phones: felt shrinks further and every seat tier shrinks one
    more notch, so the ring of opponents still clears the table with the
    little horizontal room a portrait phone has */
 @media (max-width:480px){
-  #piles{max-width:220px}
-  .opp{width:58px}
-  .avatar{width:32px;height:32px;font-size:12px;border-width:1.5px}
+  #table{padding:46px 34px 8px}
+  #felt{padding:7% 9%;gap:8px}
+  .opp{width:78px}
+  .avatar{width:42px;height:42px;font-size:16px;border-width:1.5px}
   .seat-card{padding:7px 5px 3px}
-  .opp-name-text{font-size:9.5px}
-  .opp-sub{font-size:7px}
-  .card-count{font-size:7.5px}
+  .opp-name-text{font-size:12px}
+  .opp-sub{font-size:9.5px}
+  .card-count{font-size:9px}
   .avatar .rank-badge{font-size:7px;padding:1.5px 4px;border-radius:4px}
-  #opponents.n-mid .opp,#opponents.n-many .opp{width:46px}
-  #opponents.n-mid .avatar,#opponents.n-many .avatar{width:26px;height:26px;font-size:10px}
-  #opponents.n-mid .opp-name-text,#opponents.n-many .opp-name-text{font-size:7.5px}
-  #opponents.n-mid .opp-sub,#opponents.n-many .opp-sub{font-size:6px}
+  #opponents.n-mid .opp,#opponents.n-many .opp{width:62px}
+  #opponents.n-mid .avatar,#opponents.n-many .avatar{width:34px;height:34px;font-size:13px}
+  #opponents.n-mid .opp-name-text,#opponents.n-many .opp-name-text{font-size:10px}
+  #opponents.n-mid .opp-sub,#opponents.n-many .opp-sub{font-size:8px}
   #opponents.n-mid .tagchip{display:none}
-  #open-starter-badge{padding:4px 14px 5px;border-radius:12px}
-  .open-starter-label{font-size:8px;letter-spacing:2px}
-  .open-starter-name{font-size:20px}
 }
 
 /* ======================================================
@@ -384,10 +369,10 @@ input:focus{border-color:var(--gold)}
 [data-theme="neon"] .seg button.sel{background:linear-gradient(180deg,var(--goldlt),var(--gold2))}
 [data-theme="neon"] .mp-box{border-color:rgba(240,84,60,.13)}
 [data-theme="neon"] .lp{border-color:rgba(240,84,60,.13)}
-[data-theme="neon"] #piles{
+[data-theme="neon"] #felt{
   background:radial-gradient(ellipse at 50% 32%,#0C3838 0%,#082828 60%,#041414 100%);
-  border-color:#041414;
-  box-shadow:inset 0 0 0 2.5px rgba(240,84,60,.22),inset 0 0 55px rgba(0,0,0,.6),0 20px 55px rgba(0,0,0,.6),0 0 80px rgba(240,84,60,.05)
+  border-color:#0A0810;
+  box-shadow:0 0 0 5px #1A1420,0 0 0 7px rgba(240,84,60,.3),inset 0 0 0 3px rgba(240,84,60,.2),inset 0 0 90px rgba(0,0,0,.6),0 26px 70px rgba(0,0,0,.6),0 0 80px rgba(240,84,60,.05)
 }
 [data-theme="neon"] .pile-spark{color:rgba(240,84,60,.65)}
 [data-theme="neon"] .card.back{background:linear-gradient(135deg,#1A1030,#0E0820);border-color:var(--gold)}
@@ -401,7 +386,6 @@ input:focus{border-color:var(--gold)}
 [data-theme="neon"] .opp.turn{background:rgba(240,84,60,.07);border-color:rgba(240,84,60,.55);box-shadow:0 0 22px rgba(240,84,60,.18);animation:neonOppPulse 2s ease-in-out infinite}
 [data-theme="neon"] #round-info{color:rgba(240,84,60,.55)}
 [data-theme="neon"] #attack-badge{background:linear-gradient(180deg,#FF7A5C,#A83020);box-shadow:0 4px 18px rgba(240,84,60,.5)}
-[data-theme="neon"] #open-starter-badge{background:linear-gradient(135deg,var(--goldlt),var(--gold2))}
 [data-theme="neon"] #my-area{background:rgba(240,84,60,.012)}
 [data-theme="neon"] #my-area.turn{border-top-color:var(--gold);animation:neonTurnGlow 2.2s ease-in-out infinite}
 [data-theme="neon"] #modal{background:linear-gradient(180deg,#14102A,#0C0820);border-color:rgba(240,84,60,.2)}
@@ -480,7 +464,6 @@ input:focus{border-color:var(--gold)}
   #my-hand .card:not(:first-child){margin-left:calc(var(--cw)*-.38)}
 }
 @media(max-width:480px){
-  #piles{padding:18px 14px;border-radius:28px;gap:14px}
   #actions{gap:8px;width:100%;padding:0 8px}
   #actions .btn{flex:1;padding:13px 8px;font-size:12px;min-height:44px;letter-spacing:1px}
   #status-bar{font-size:13px}
@@ -490,13 +473,9 @@ input:focus{border-color:var(--gold)}
   #topbar{padding:8px 10px}
   .icon-btn{width:34px;height:34px;font-size:14px;border-radius:8px}
   #round-info{font-size:10px;letter-spacing:1.5px}
-  #open-starter-badge{padding:4px 14px 5px;border-radius:12px}
-  .open-starter-label{font-size:8px;letter-spacing:2px}
-  .open-starter-name{font-size:18px}
 }
 @media(max-height:700px) and (max-width:480px){
-  #table{padding:4px 8px}
-  #piles{padding:12px 12px;border-radius:22px;max-width:190px}
+  #table{padding:38px 26px 6px}
   #my-area{gap:5px;padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
   #my-hand{padding-top:8px}
   #actions .btn{padding:11px 8px;font-size:12px;min-height:42px}
@@ -523,21 +502,21 @@ input:focus{border-color:var(--gold)}
 /* ---------- bigger table + cards on desktop/web ---------- */
 @media(min-width:900px){
   :root{--cw:clamp(70px,7vw,100px)}
-  #piles{max-width:420px;gap:clamp(20px,3vw,40px);padding:clamp(30px,4vw,46px) clamp(20px,3vw,34px)}
-  .opp{width:96px}
-  .avatar{width:52px;height:52px;font-size:19px;border-width:2.5px}
+  #table{padding:66px 84px 18px}
+  .opp{width:120px}
+  .avatar{width:62px;height:62px;font-size:23px;border-width:2.5px}
   .seat-card{padding:11px 8px 5px;border-radius:11px}
-  .opp-name-text{font-size:13px}
-  .opp-sub{font-size:10.5px}
-  .card-count{font-size:10px}
+  .opp-name-text{font-size:15.5px}
+  .opp-sub{font-size:12px}
+  .card-count{font-size:11.5px}
   .avatar .rank-badge{font-size:10px;padding:2.5px 6px;border-radius:7px}
   .tagchip{font-size:9px;padding:2px 7px}
-  #opponents.n-mid .opp{width:72px}
-  #opponents.n-mid .avatar{width:38px;height:38px;font-size:14px}
+  #opponents.n-mid .opp{width:96px}
+  #opponents.n-mid .avatar{width:48px;height:48px;font-size:18px}
   #opponents.n-mid .opp-name-text{font-size:10.5px}
   #opponents.n-mid .opp-sub{font-size:8px}
-  #opponents.n-many .opp{width:62px}
-  #opponents.n-many .avatar{width:34px;height:34px;font-size:13px}
+  #opponents.n-many .opp{width:82px}
+  #opponents.n-many .avatar{width:44px;height:44px;font-size:16px}
   #opponents.n-many .opp-name-text{font-size:9.5px}
   #opponents.n-many .opp-sub{font-size:7.5px}
 }
@@ -669,17 +648,13 @@ input:focus{border-color:var(--gold)}
   <div id="arena">
     <div id="opponents"></div>
     <div id="table">
-      <div id="table-inner">
+      <div id="felt">
+        <span class="pile-spark tl">✦</span>
+        <span class="pile-spark tr">✦</span>
+        <span class="pile-spark bl">✦</span>
+        <span class="pile-spark br">✦</span>
         <div id="attack-badge" class="hidden">⚡ PICK +<span id="attack-n"></span></div>
-        <div id="open-starter-badge" class="hidden">
-          <div class="open-starter-label">OPEN CARD</div>
-          <div class="open-starter-name" id="open-starter-name"></div>
-        </div>
         <div id="piles">
-          <span class="pile-spark tl">✦</span>
-          <span class="pile-spark tr">✦</span>
-          <span class="pile-spark bl">✦</span>
-          <span class="pile-spark br">✦</span>
           <div class="pile" id="deck-pile">
             <div class="card back deckcard" id="deck-top"></div>
             <div class="pile-cap">DECK · <span id="deck-count">0</span></div>
@@ -693,13 +668,13 @@ input:focus{border-color:var(--gold)}
             <div class="pile-cap">PLAYED</div>
           </div>
         </div>
-        <div id="status-bar"></div>
-        <div id="turn-timer" class="hidden"></div>
-        <div id="log-line"></div>
       </div>
     </div>
   </div>
   <footer id="my-area">
+    <div id="status-bar"></div>
+    <div id="turn-timer" class="hidden"></div>
+    <div id="log-line"></div>
     <div id="my-hand"></div>
     <div id="actions">
       <button class="btn ghost" id="btn-show">SHOW</button>
@@ -1333,20 +1308,18 @@ function cardEl(c,opts={}){
 }
 const isEnd=()=>G&&(G.phase==='roundEnd'||G.phase==='matchEnd');
 
-/* Places every .opp chip on an ellipse ringing the felt, surrounding it
-   from left round the top to right (the bottom stays clear — that's
-   where the viewer's own hand already sits, in a separate footer below
-   the arena). The ellipse's own radius is derived from #piles' *actual*
-   measured box each call, not a hand-tuned constant, so seats clear the
-   felt by construction at every viewport size and player count instead
-   of relying on guessed percentages staying in sync with it. A single
-   trailing clamp then keeps each chip's own footprint fully inside the
-   arena, so a seat can never poke off-screen either. */
+/* Places every .opp chip — including your own seat, .opp.me, which
+   pins to the bottom of the rim and closes the circle — directly on
+   #felt's own rim. #felt is now a real ellipse/circle shape (not an
+   approximated rounded-rect table), so seat centers can sit exactly on
+   its measured boundary rather than clearing a guessed clearance
+   rectangle: rx/ry come straight from #felt's own half-width/height. */
 function layoutOpponentSeats(){
-  const arena=$('#arena'),piles=$('#piles');
-  const seats=[...document.querySelectorAll('#opponents .opp')];
+  const arena=$('#arena'),felt=$('#felt'),piles=$('#piles');
+  const meSeat=document.getElementById('my-seat');
+  const seats=[...document.querySelectorAll('#opponents .opp:not(#my-seat)')];
   const n=seats.length;
-  if(!n||!arena||!piles)return;
+  if((!n&&!meSeat)||!arena||!felt||!piles)return;
   const aRect=arena.getBoundingClientRect();
   /* the very first render() of a fresh game often fires while #scr-game
      is still display:none — goScr defers the actual screen swap by
@@ -1355,76 +1328,38 @@ function layoutOpponentSeats(){
      leaving every seat stuck at the CSS default center point until
      some unrelated later render() happens to fix it. */
   if(!aRect.width||!aRect.height){setTimeout(layoutOpponentSeats,30);return;}
-  const pRect=piles.getBoundingClientRect();
-  /* the open-card/attack badge floats directly above the felt (inside
-     #table-inner, not #piles) whenever it's actually shown — fold
-     whichever one is visible right now into the "felt cluster" so the
-     ellipse sizing (and the hard keepout clamp below) both account for
-     it without permanently taxing the common case where neither badge
-     is on screen. */
-  let cluster={left:pRect.left,top:pRect.top,right:pRect.right,bottom:pRect.bottom};
-  [$('#open-starter-badge'),$('#attack-badge')].forEach(b=>{
-    if(b&&!b.classList.contains('hidden')){
-      const r=b.getBoundingClientRect();
-      cluster.left=Math.min(cluster.left,r.left);cluster.top=Math.min(cluster.top,r.top);
-      cluster.right=Math.max(cluster.right,r.right);cluster.bottom=Math.max(cluster.bottom,r.bottom);
-    }
-  });
-  const gap=14;
-  /* seats are centered on their point (translate(-50%,-50%)), so the
-     radius needs to clear the cluster by its own half-extent *plus*
-     the seat chip's own half-extent — not just a flat gap — or the near
-     edge of the seat (whichever one is closest) still laps over it. Uses
-     the *largest* seat, not just the first one — during an Open Show
-     reveal, seats can grow taller than usual (revealed cards wrapping
-     to a second row) by different amounts per player depending on
-     exactly which cards they're holding, so a single sampled seat can
-     under-measure its neighbours. */
-  const maxOffsetW=Math.max(...seats.map(s=>s.offsetWidth));
-  const maxOffsetH=Math.max(...seats.map(s=>s.offsetHeight));
+  const fRect=felt.getBoundingClientRect();
+  /* uses the *largest* seat, not just the first one — during an Open
+     Show reveal, seats can grow taller than usual (revealed cards
+     wrapping to a second row) by different amounts per player depending
+     on exactly which cards they're holding, so a single sampled seat
+     can under-measure its neighbours. (.minis.reveal also caps its own
+     max-height so this can't run away regardless.) */
+  const allEls=meSeat?[...seats,meSeat]:seats;
+  const maxOffsetW=Math.max(...allEls.map(s=>s.offsetWidth));
+  const maxOffsetH=Math.max(...allEls.map(s=>s.offsetHeight));
   const seatHalfW=(maxOffsetW/2)/aRect.width*100;
   const seatHalfH=(maxOffsetH/2)/aRect.height*100;
-  const clusterHalfW=((cluster.right-cluster.left)/2+gap)/aRect.width*100+seatHalfW;
-  const clusterHalfH=((cluster.bottom-cluster.top)/2+gap)/aRect.height*100+seatHalfH;
-  /* ellipse centered on the cluster's own measured midpoint, not an
-     assumed 50%/50% — #table-inner also holds the status/log text below
-     the felt, so simply centering #table-inner (flex justify-content:
-     center) doesn't necessarily put the felt itself at the arena's
-     exact midpoint. */
-  const cx=((cluster.left+cluster.right)/2-aRect.left)/aRect.width*100;
-  const cy=((cluster.top+cluster.bottom)/2-aRect.top)/aRect.height*100;
+  /* seat centers sit just *outside* the felt's rim (rim + ~65% of the
+     chip's own half-extent) — the chip's inner edge kisses the table
+     edge like a real poker seat, without lapping over the piles. */
+  const rx=(fRect.width/2)/aRect.width*100+seatHalfW*.65;
+  const ry=(fRect.height/2)/aRect.height*100+seatHalfH*.65;
+  const cx=((fRect.left+fRect.right)/2-aRect.left)/aRect.width*100;
+  const cy=((fRect.top+fRect.bottom)/2-aRect.top)/aRect.height*100;
   const hw=(maxOffsetW/2)/aRect.width*100+1.5;
   const hh=(maxOffsetH/2)/aRect.height*100+1.5;
-  /* clusterHalfW/H above is only the *minimum* radius needed to clear
-     the table — on a roomy viewport that leaves the whole ring hugging
-     tight around a small table with lots of dead space around it. Let
-     the ring grow to actually use the room that's really there (up to
-     ~85% of the true available gap out to the arena's own edge), capped
-     at ~2x the minimum so it stays proportionate to the table rather
-     than stretching out absurdly on a huge window. Never shrinks below
-     the correctness floor either way. */
-  const availRx=Math.max(0,Math.min(cx,100-cx)-hw-2);
-  const availRy=Math.max(0,Math.min(cy,100-cy)-hh-2);
-  const rx=Math.max(clusterHalfW,Math.min(availRx*.85,clusterHalfW*2));
-  const ry=Math.max(clusterHalfH,Math.min(availRy*.85,clusterHalfH*2));
-  /* on a viewport with real room beside the felt, wrap seats further
-     down the *sides* of the table too (130°→410°, a 280° sweep) instead
-     of just the top semicircle, using space that otherwise sits empty —
-     but on a narrow phone the gutter beside the felt is barely wider
-     than one seat, so stacking several seats down it just forces them
-     into the same corner with nowhere to separate (confirmed: this
-     produced a genuine seat-on-seat overlap in testing). Fall back to
-     the safer top-only arc there instead. (An Open Show reveal used to
-     make this worse by growing seats taller — now capped via
-     .minis.reveal's max-height above, so this check only needs to
-     account for normal seat size.) */
-  const wideSweep=availRx>seatHalfW*2.8;
-  const startA=wideSweep?130:160,endA=wideSweep?410:380;
-  /* equal-angle spacing bunches seats together near the ellipse's own
-     side vertices (curvature is tightest there, so a fixed angle step
-     covers much less on-screen distance) — walking the curve in fixed
-     small angle increments and dividing it by *arc length* instead
-     keeps the seats visually even all the way round, sides included. */
+  /* full circle, arc-length-even seating: my own seat (if any) is
+     pinned at the bottom vertex (90°); the n opponents take the
+     remaining P-1 even arc slots the rest of the way round, so *every*
+     gap — including the two flanking my seat — is the same arc
+     distance. Without a seat of my own (spectator view) the n seats
+     just share the full circle evenly. Equal *arc-length* spacing
+     (not equal angle) keeps seats visually even all the way round —
+     equal-angle bunches them near the ellipse's own tighter-curvature
+     side, since a fixed angle step covers much less on-screen distance
+     there. */
+  const startA=90,endA=450;
   const startRad=startA*Math.PI/180,endRad=endA*Math.PI/180,steps=360;
   const cum=[0];let px=rx*Math.cos(startRad),py=ry*Math.sin(startRad);
   for(let i=1;i<=steps;i++){
@@ -1441,7 +1376,14 @@ function layoutOpponentSeats(){
     }
     return endRad;
   };
-  const keepout={left:cluster.left-gap,top:cluster.top-gap,right:cluster.right+gap,bottom:cluster.bottom+gap};
+  /* seats straddle the felt rim freely, but may never lap the actual
+     deck/open/played piles — a much smaller, tighter keepout than the
+     whole felt, resolved by the shortest push that stays inside the
+     arena (up/down/left/right, whichever is both smallest and actually
+     reachable before an edge clamp would just undo it). */
+  const pRect=piles.getBoundingClientRect();
+  const gap=8;
+  const keepout={left:pRect.left-gap,top:pRect.top-gap,right:pRect.right+gap,bottom:pRect.bottom+gap};
   const koL=(keepout.left-aRect.left)/aRect.width*100,koR=(keepout.right-aRect.left)/aRect.width*100;
   const koT=(keepout.top-aRect.top)/aRect.height*100,koB=(keepout.bottom-aRect.top)/aRect.height*100;
   const bw=maxOffsetW/aRect.width*100,bh=maxOffsetH/aRect.height*100;
@@ -1457,14 +1399,9 @@ function layoutOpponentSeats(){
        instead of settling. */
     const pad=1.5;
     const pushLeft=sR-koL+pad,pushRight=koR-sL+pad,pushUp=sB-koT+pad,pushDown=koB-sT+pad;
-    const canUp=(p.y-pushUp)>=hh;
-    const canDown=(p.y+pushDown)<=100-hh;
+    const canUp=(p.y-pushUp)>=hh,canDown=(p.y+pushDown)<=100-hh;
     const options=[];
     if(canUp)options.push(['up',pushUp]);
-    /* push-down only matters now that the ring wraps below the felt's
-       own center (the wider 130°→410° sweep) — a seat sitting under
-       the table needs to clear its *bottom* edge, not get shoved
-       "up" into it. */
     if(canDown)options.push(['down',pushDown]);
     options.push(['left',pushLeft],['right',pushRight]);
     options.sort((a,b)=>a[1]-b[1]);
@@ -1472,30 +1409,31 @@ function layoutOpponentSeats(){
     if(dir==='up')p.y-=pushUp;else if(dir==='down')p.y+=pushDown;else if(dir==='left')p.x-=pushLeft;else p.x+=pushRight;
     clampToArena(p);
   };
-  const positions=seats.map((el,i)=>{
-    const rad=n===1?Math.PI*1.5:angleAtLen(total*(i+0.5)/n);
+  const P=n+(meSeat?1:0);
+  const oppPositions=seats.map((el,i)=>{
+    const rad=P===1?Math.PI*1.5:angleAtLen(total*(i+(meSeat?1:0.5))/P);
     /* arena-bounds clamp runs *before* the keepout check, not after —
        clamping afterwards can slide an already-cleared seat straight
-       back into the felt/badge (a seat the ellipse legitimately placed
-       just above the arena's own top edge would get pulled back down
-       by an edge clamp applied last, undoing the clearance it had). */
+       back into the piles (a seat the ellipse legitimately placed just
+       past the arena's own edge would get pulled back down by an edge
+       clamp applied last, undoing the clearance it had). */
     const p={x:cx+rx*Math.cos(rad),y:cy+ry*Math.sin(rad)};
     clampToArena(p);
-    /* hard safety net: whatever the ellipse (+ edge clamp) produced, a
-       seat may never actually overlap the felt/badge cluster. Resolve
-       any remaining overlap by the shortest push out of the cluster's
-       box (left/right/up — never down, seats never sit below the
-       table) that's still reachable within the arena, falling through
-       to a horizontal push when there's no headroom left to go up —
-       this guarantees correctness even in tight corners the radius
-       tuning above didn't quite anticipate (e.g. a lone opponent with
-       little headroom between the topbar and a tall open-card badge). */
     pushOffKeepout(p);
     return p;
   });
+  const mePosition=meSeat?(()=>{
+    const p={x:cx+rx*Math.cos(startRad),y:cy+ry*Math.sin(startRad)};
+    clampToArena(p);
+    pushOffKeepout(p);
+    return p;
+  })():null;
+  const positions=mePosition?[...oppPositions,mePosition]:oppPositions;
+  const posEls=mePosition?[...seats,meSeat]:seats;
+  const totalSeats=positions.length;
   /* pushing a seat sideways off the keepout box can, in a crowded ring,
      land it on top of its neighbour (both converge on the same clear
-     edge of the cluster) — a few passes of simple pairwise separation
+     edge of the piles) — a few passes of simple pairwise separation
      resolves that without reopening the keepout/arena constraints,
      since any move it makes is re-validated against both afterwards.
      The split is room-aware, not a flat 50/50: a naive even split
@@ -1512,7 +1450,7 @@ function layoutOpponentSeats(){
   };
   for(let pass=0;pass<100;pass++){
     let moved=false;
-    for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+    for(let i=0;i<totalSeats;i++)for(let j=i+1;j<totalSeats;j++){
       const a=positions[i],b=positions[j];
       const dx=b.x-a.x,dy=b.y-a.y;
       const overlapX=bw-Math.abs(dx),overlapY=bh-Math.abs(dy);
@@ -1529,7 +1467,7 @@ function layoutOpponentSeats(){
     }
     if(!moved)break;
   }
-  seats.forEach((el,i)=>{el.style.left=positions[i].x+'%';el.style.top=positions[i].y+'%';});
+  posEls.forEach((el,i)=>{el.style.left=positions[i].x+'%';el.style.top=positions[i].y+'%';});
 }
 let seatLayoutTimer=null;
 window.addEventListener('resize',()=>{
@@ -1549,9 +1487,9 @@ function render(){
   /* announce whose open card it is, big and on the table itself — but
      only until that player actually discards; after that it's old news */
   const starterP=G.players[G.starter];
+  /* whose OPEN CARD it is lives right on their seat chip (see below) —
+     but only until they actually discard; after that it's old news */
   const showOpenBadge=!isEnd()&&starterP&&G.turn===G.starter&&G.phase==='discard';
-  $('#open-starter-badge').classList.toggle('hidden',!showOpenBadge);
-  if(showOpenBadge)$('#open-starter-name').textContent=starterP.name;
 
   /* rank badges next to every username, always visible */
   const ranked=rankRows(G.players.map((p,i)=>({i,total:p.score})),'total');
@@ -1565,9 +1503,10 @@ function render(){
     ?Array.from({length:G.players.length-1},(_,k)=>(myIdx+k+1)%G.players.length)
     :G.players.map((_,i)=>i);
   /* seat chips shrink in tiers as the ring fills up — see the n-mid/
-     n-many CSS rules — so up to 7 opponents can surround the felt
-     without crowding each other */
-  opp.className=oppIdxs.length>=6?'n-many':oppIdxs.length>=4?'n-mid':'';
+     n-many CSS rules — so up to 8 total seats (opponents + your own)
+     can surround the felt without crowding each other */
+  const totalSeatCount=oppIdxs.length+(myIdx>=0?1:0);
+  opp.className=totalSeatCount>=7?'n-many':totalSeatCount>=5?'n-mid':'';
   for(const i of oppIdxs){
     const p=G.players[i];
     const d=document.createElement('div');
@@ -1586,9 +1525,23 @@ function render(){
       :`<div class="card-count">${p.hand.length} card${p.hand.length===1?'':'s'}</div>`);
     d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}<span class="rank-badge">#${rankOf(i)}</span>${inVoice?'<span class="voice-mic">🎙️</span>':''}</div>
       <div class="seat-card">
-        <div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span>${p.isBot?`<span class="tagchip">${esc(p.diff)}</span>`:''}</div>
+        <div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span>${(showOpenBadge&&i===G.starter)?'<span class="tagchip open-tag">Open card</span>':(p.isBot?`<span class="tagchip">${esc(p.diff)}</span>`:'')}</div>
         <div class="opp-sub">${p.elim?'OUT · ':''}score ${p.score}</div>
         ${handHtml}
+      </div>`;
+    opp.appendChild(d);
+  }
+  /* my own seat chip closes the circle at the bottom of the rim (skipped
+     for spectators, who aren't seated) */
+  if(myIdx>=0&&me){
+    const d=document.createElement('div');
+    d.className='opp me'+(myTurn?' turn':'')+(me.elim?' elim':'');
+    d.id='my-seat';d.dataset.uid=me.id;
+    const inVoice=voicePresent.has(me.id);
+    d.innerHTML=`<div class="avatar">${esc((me.name[0]||'?').toUpperCase())}<span class="rank-badge">#${rankOf(myIdx)}</span>${inVoice?'<span class="voice-mic">🎙️</span>':''}</div>
+      <div class="seat-card">
+        <div class="opp-name"><span class="opp-name-text">${esc(me.name)} (you)</span>${(showOpenBadge&&myIdx===G.starter)?'<span class="tagchip open-tag">Open card</span>':''}</div>
+        <div class="opp-sub">${me.elim?'OUT · ':''}score ${me.score}</div>
       </div>`;
     opp.appendChild(d);
   }
@@ -1649,7 +1602,8 @@ function render(){
 
   /* status + meta + log */
   let st='';
-  if(mp.isSpectator)st=isEnd()?'Round over':`👁 Spectating — ${G.players[G.turn].name} is playing…`;
+  if(isDealing())st='Dealing…';
+  else if(mp.isSpectator)st=isEnd()?'Round over':`👁 Spectating — ${G.players[G.turn].name} is playing…`;
   else if(isEnd())st='Round over';
   else if(iCanSnapShow)st=`⚡ Fresh deal — you may Show now, before ${G.players[G.turn].name} plays`;
   else if(!me||me.elim)st=`${G.players[G.turn].name} is playing…`;
@@ -1693,11 +1647,33 @@ function render(){
   else if(!revealPending){closeModalIf('round');closeModalIf('match');}
 
   if(pendingDealAnim){
+    /* the very first render() of a fresh game often fires while
+       #scr-game is still display:none — goScr defers the actual screen
+       swap by 160ms for its fade transition (see the goScr override
+       below) — so playDealAnimation() would measure zero-sized
+       elements and silently bail (return 0), permanently skipping the
+       flying-card animation *and* the dealing-freeze lock for that
+       round with no visible symptom. Leave pendingDealAnim set and
+       retry shortly instead of consuming it on a doomed attempt. */
+    const scrEl=$('#scr-game');
+    const scrReady=scrEl&&scrEl.classList.contains('on')&&scrEl.getBoundingClientRect().width>0;
+    if(!scrReady){setTimeout(render,30);return;}
     pendingDealAnim=false;
     const doDeal=()=>{
       if(!G)return;
       (G.openShow!=null?sndOpenShowRound:sndDealRound)();
       const dur=playDealAnimation();
+      /* lock the game for the length of the animation: hide the hand,
+         freeze bots and input, then re-render + resume when it's done */
+      if(dur>0){
+        dealingUntil=Date.now()+dur;
+        document.body.classList.add('dealing');
+        $('#status-bar').textContent='Dealing…';
+        setTimeout(()=>{
+          document.body.classList.remove('dealing');
+          if(G){render();if(G.mode==='bot')pump();}
+        },dur);
+      }
       if(willAnimateOpenShow){
         setTimeout(()=>{
           openShowRevealPending=false;
@@ -1718,7 +1694,7 @@ function render(){
 }
 
 function onCardClick(c){
-  if(!G)return;
+  if(!G||isDealing())return;
   const me=G.players[myIdx];
   if(!me||me.elim||G.turn!==myIdx||G.phase!=='discard')return;
   if(G.attack>0&&!isAtkCard(c)){toast('Play a 2 / Joker or pick up');sndError();return;}
@@ -1887,8 +1863,14 @@ function autoPlayTurn(){
   }
 }
 
+/* hard gate: while cards are visibly flying onto the table, nobody
+   plays — not you, not bots — so the round only actually starts once
+   every card has landed on screen. dealingUntil is a wall-clock
+   timestamp; input + bot scheduling both check it. */
+let dealingUntil=0;
+const isDealing=()=>Date.now()<dealingUntil;
 function applyMove(m){
-  if(!G)return;
+  if(!G||isDealing())return;
   const err=rawApply(G,m);
   if(err){toast(err);sndError();return err;}
   sel.clear();
@@ -1902,6 +1884,12 @@ function afterChange(){
 function pump(){
   render();
   if(!G||G.mode!=='bot'||isEnd())return;
+  /* deal animation still running — hold every bot move until it ends */
+  if(isDealing()){
+    clearTimeout(botTimer);
+    botTimer=setTimeout(pump,dealingUntil-Date.now()+60);
+    return;
+  }
   const p=G.players[G.turn];
   if(!p.isBot)return;
   clearTimeout(botTimer);
