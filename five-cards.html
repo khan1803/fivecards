@@ -248,7 +248,10 @@ input:focus{border-color:var(--gold)}
   background:linear-gradient(180deg,#E2635C,#A32620);color:#fff;font-weight:800;font-size:14px;letter-spacing:.5px;
   border-radius:999px;padding:7px 18px;box-shadow:0 4px 18px rgba(163,38,32,.5);animation:pulse 1s infinite;font-family:'DM Mono',monospace}
 /* while dealing: your hand and actions are hidden/frozen so the round
-   visibly starts only after every card has landed */
+   visibly starts only after every card has landed. Normal deals only —
+   Open Show never touches body.dealing at all (its reveal is host-tap-
+   driven, see uiRevealNextCard), so #my-hand stays visible and populates
+   card-by-card in step with everyone else's seat chips throughout. */
 body.dealing #my-hand .card{opacity:0;transform:translateY(8px);transition:none}
 #my-hand .card{transition:opacity .25s ease,transform .25s ease}
 body.dealing #actions .btn{pointer-events:none;opacity:.35}
@@ -903,8 +906,23 @@ function deal(g,openShowBy){
   g.turn=g.starter;g.attack=0;g.phase='discard';g.turnCount=0;g.v++;
   if(g.openShow!=null){
     glog(g,`— Round ${g.round}: ${g.players[g.openShow].name} calls an OPEN SHOW! —`);
+    /* Open Show's reveal is now host-click-driven, not a timer: this just
+       records who's in it (dealOrder — same starter-first, direction-
+       stepped order the deal itself just used) and that nobody's card
+       has been tapped over yet. resolveShow() below still computes the
+       real outcome (scores, elim, winner) immediately — that has to stay
+       synchronous, everything else in the engine depends on it — but the
+       *display* of that outcome (round modal, elim styling for anyone
+       newly knocked out by this round) is gated on openShowRevealDone
+       everywhere in render(), so nothing about the result leaks out
+       (least of all "you're eliminated") before every card is actually
+       shown, one host-tap at a time. */
+    g.openShowParticipants=dealOrder.slice();
+    g.openShowRevealed={};dealOrder.forEach(i=>{g.openShowRevealed[i]=0;});
+    g.openShowRevealDone=false;
     resolveShow(g,g.openShow,true);
   }else{
+    g.openShowParticipants=null;g.openShowRevealed=null;g.openShowRevealDone=true;
     glog(g,`— Round ${g.round}: ${g.players[g.starter].name} starts, open card ${lbl(g.open[0])} —`);
   }
 }
@@ -1137,12 +1155,16 @@ const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 let sel=new Set(),modalKind=null,toastTimer=null;
 
 /* ---- sound (WebAudio synth — no external assets/network needed) ---- */
-let soundOn=localStorage.fcSound!=='off',actx=null,lastSeenSeq=-1,pendingDealAnim=false,openShowRevealPending=false,showAnnouncePending=false,announcedRound=-1;
-/* tracks how many of each player's cards have visibly landed during an
-   Open Show's live 1-card-at-a-time deal — {byPlayerIdx:{playerIndex:count}}
-   while a reveal is in progress, else null. Drives the running per-player
-   point total shown as cards land (see playDealAnimation + render). */
-let openShowReveal=null;
+let soundOn=localStorage.fcSound!=='off',actx=null,lastSeenSeq=-1,pendingDealAnim=false,showAnnouncePending=false,announcedRound=-1;
+/* Open Show reveal bookkeeping — the authoritative "how many cards has
+   each player been shown" now lives on G itself (G.openShowRevealed),
+   synced like any other move, so it's identical on every client. These
+   two are purely local: openShowIntroRound plays the round-start sound
+   and closes any stale modal exactly once per round; lastRevealSnapshot/
+   lastRevealRound let render() notice "X's count just went up" on
+   *any* client (whoever tapped, or whoever just received the sync) and
+   play that one card's flight+tick exactly once, without a timer. */
+let openShowIntroRound=-1,openShowBannerPending=false,lastRevealSnapshot=null,lastRevealRound=-1;
 function ensureAudio(){
   if(!soundOn)return null;
   if(!actx){try{actx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){soundOn=false;return null;}}
@@ -1250,8 +1272,12 @@ function playSoundForLog(line){
   }
   /* the deal sound is always triggered explicitly from render() now (not
      here), since a direction reversal needs its own alert shown — and
-     its sound played — before the deal sound/animation are allowed to run */
-  if(line.startsWith('— Round')){pendingDealAnim=true;return;}
+     its sound played — before the deal sound/animation are allowed to run.
+     An Open Show's own "— Round N: X calls an OPEN SHOW!" line deliberately
+     does NOT set pendingDealAnim — that whole timer-driven flying-card
+     path is normal-deal-only now; Open Show's reveal is host-tap-driven
+     (see render()'s openShowRevealing branch and uiRevealNextCard). */
+  if(line.startsWith('— Round')&&!line.includes('OPEN SHOW')){pendingDealAnim=true;return;}
   if(line.includes('reshuffled')){showReshuffleAlert();return sndShuffle();}
   if(line.includes('⚡'))return sndAttack();
   if(line.includes('plays'))return sndDiscard();
@@ -1292,9 +1318,33 @@ function flyCard(x0,y0,x1,y1,card){
   });
   setTimeout(()=>el.remove(),card?950:450);
 }
-/* Returns the total animation time in ms so callers (e.g. an Open Show
-   reveal) can delay showing results until the deal has finished playing. */
+/* One card, right now, from the deck to whichever seat (or #my-hand) pi
+   actually is — computed fresh at call time rather than from any
+   pre-captured snapshot, so it's always targeting wherever that seat is
+   *currently* laid out, not wherever it was when some earlier batch of
+   targets got measured. */
+function playOpenShowCardReveal(pi){
+  sndCardTick();
+  const deckEl=$('#deck-top');
+  if(!deckEl||!G)return;
+  const dr=deckEl.getBoundingClientRect();
+  if(!dr.width)return;
+  const p=G.players[pi];
+  const target=(pi===myIdx)?$('#my-hand')
+    :(p?[...document.querySelectorAll('#opponents .opp')].find(o=>o.dataset.uid===p.id):null);
+  if(!target)return;
+  const tr=target.getBoundingClientRect();
+  if(!tr.width)return;
+  flyCard(dr.left+dr.width/2,dr.top+dr.height/2,tr.left+tr.width/2,tr.top+tr.height/2,null);
+}
+/* Returns the total animation time in ms. Open Show no longer uses this at
+   all — its reveal is host-tap-driven (see uiRevealNextCard/render's own
+   reveal-diffing), one real, atomic action at a time instead of a fixed
+   timer chain, specifically because the timer version kept drifting out
+   of sync between the sound and the card actually landing, and because a
+   fixed 1-card/sec pace isn't actually what anyone wanted control over. */
 function playDealAnimation(){
+  if(G.openShow!=null)return 0;
   const scr=$('#scr-game');
   if(!scr||!scr.classList.contains('on'))return 0;
   const deckEl=$('#deck-top');
@@ -1315,49 +1365,16 @@ function playDealAnimation(){
   const targets=(isSpectating||meElim)?oppEls:[...oppEls,...(mh?[mh]:[])];
   if(!targets.length||!G)return 0;
   const rects=targets.map(t=>t.getBoundingClientRect());
-  /* which real player each animation target actually is — derived
-     directly from the DOM (data-uid for a seat chip, myIdx for my own
-     hand) so it's automatically in sync with `targets` above, including
-     the elimination filtering. The previous version derived this
-     separately (a fixed rotation starting at myIdx) which could point at
-     the wrong seat, or a since-eliminated one, whenever elimination order
-     didn't match seat order. */
-  const targetPlayerIdx=targets.map(t=>t===mh?myIdx:G.players.findIndex(p=>p.id===t.dataset.uid));
-  const isOpen=G.openShow!=null;
-  let handsSorted=null,playerOrder=null;
-  if(isOpen){
-    playerOrder=targetPlayerIdx;
-    handsSorted=playerOrder.map(pi=>sortHand((G.players[pi]&&G.players[pi].hand)||[]));
-    openShowReveal={byPlayerIdx:{}};
-    playerOrder.forEach(pi=>{openShowReveal.byPlayerIdx[pi]=0;});
-  }else{
-    openShowReveal=null;
-  }
-  /* Open Show deals at a deliberate 1 card/sec — slow enough that
-     players can actually track and mentally add up what's landing
-     where, which is the whole point of the suspense. Every player's
-     running point total updates the instant their card actually lands
-     (not the whole hand at once), so everyone watches each other's
-     totals climb card by card. */
-  const perCard=isOpen?1000:95;
+  const perCard=95;
   let i=0;
   for(let round=0;round<5;round++){
-    rects.forEach((r,ti)=>{
+    rects.forEach(r=>{
       const tx=r.left+r.width/2,ty=r.top+r.height/2;
-      const card=isOpen?(handsSorted[ti]&&handsSorted[ti][round]):null;
-      const pi=isOpen?playerOrder[ti]:null;
-      setTimeout(()=>{flyCard(x0,y0,tx,ty,card);if(isOpen)sndCardTick();},i*perCard);
-      if(isOpen&&card){
-        setTimeout(()=>{
-          if(!openShowReveal)return;             // a newer deal may have superseded this one
-          openShowReveal.byPlayerIdx[pi]=(openShowReveal.byPlayerIdx[pi]||0)+1;
-          render();
-        },i*perCard+900);
-      }
+      setTimeout(()=>{flyCard(x0,y0,tx,ty,null);},i*perCard);
       i++;
     });
   }
-  return i*perCard+(isOpen?950:450)+250;
+  return i*perCard+450+250;
 }
 
 function goScr(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));}
@@ -1577,6 +1594,26 @@ function render(){
   const starterP=G.players[G.starter];
   const showOpenBadge=!isEnd()&&!!starterP;
 
+  /* Open Show's outcome (scores, who just got eliminated) is computed the
+     instant the deal happens — but must not be *visible* until every card
+     has actually been tapped through. Otherwise the reveal is pointless
+     theater: you'd see someone's OUT/eliminated seat styling the moment
+     the round starts, before a single card has landed, spoiling the exact
+     surprise the whole feature exists for. Anyone who was *already* out
+     before this Open Show started keeps showing as out as normal — only
+     players who were active participants in *this* round's reveal get
+     suppressed, and only until openShowRevealDone flips true. */
+  const openShowRevealing=G.openShow!=null&&!G.openShowRevealDone;
+  const suppressElim=i=>openShowRevealing&&G.openShowParticipants&&G.openShowParticipants.includes(i);
+  /* same reasoning applies to the score itself, not just the elim flag —
+     everyone's score for this round already moved (winners +0, losers
+     +their sum, a losing shower +60) the instant resolveShow ran, so
+     showing the *post-round* number early is just as much of a spoiler
+     as an OUT label would be. Show the pre-round number until the reveal
+     finishes, then let it jump to the real total along with everything
+     else. */
+  const dispScore=(p,i)=>suppressElim(i)?p.score-(p.roundPts[p.roundPts.length-1]||0):p.score;
+
   /* rank badges next to every username, always visible */
   const ranked=rankRows(G.players.map((p,i)=>({i,total:p.score})),'total');
   const rankOf=i=>{const r=ranked.find(x=>x.i===i);return r?r.rank:1;};
@@ -1595,24 +1632,27 @@ function render(){
   opp.className=totalSeatCount>=7?'n-many':totalSeatCount>=5?'n-mid':'';
   for(const i of oppIdxs){
     const p=G.players[i];
+    const dispElim=p.elim&&!suppressElim(i);
     const d=document.createElement('div');
-    d.className='opp'+(i===G.turn&&!isEnd()&&!p.elim?' turn':'')+(p.elim?' elim':'');
+    d.className='opp'+(i===G.turn&&!isEnd()&&!dispElim?' turn':'')+(dispElim?' elim':'');
     d.dataset.uid=p.id;
     const inVoice=voicePresent.has(p.id);
     /* Open Show reveal in progress: show the actual cards that have
        landed so far (face up) plus a running point total, instead of
        the usual card-count text — this is the whole point of an Open
-       Show, so it only ever applies during one. */
-    const revealCnt=(G.openShow!=null&&openShowReveal)?(openShowReveal.byPlayerIdx[i]||0):null;
+       Show, so it only ever applies during one. Driven by the synced
+       G.openShowRevealed (host-tap-driven) rather than a local timer, so
+       every client — host or not — shows exactly the same progress. */
+    const revealCnt=(G.openShow!=null&&G.openShowRevealed)?(G.openShowRevealed[i]||0):null;
     const revealedHand=revealCnt!=null?sortHand(p.hand).slice(0,revealCnt):null;
-    const handHtml=p.elim?'':(revealedHand
+    const handHtml=dispElim?'':(revealedHand
       ?`<div class="minis reveal">${revealedHand.map(c=>`<span class="mini-face${(!isJoker(c)&&(c.s==='H'||c.s==='D'))?' red':''}">${lbl(c)}</span>`).join('')}</div>
         <div class="opp-reveal-sum">${handSum(revealedHand)} pts</div>`
       :`<div class="card-count">${p.hand.length} card${p.hand.length===1?'':'s'}</div>`);
     d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}<span class="rank-badge">#${rankOf(i)}</span>${inVoice?'<span class="voice-mic">🎙️</span>':''}</div>
       <div class="seat-card">
         <div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span>${(showOpenBadge&&i===G.starter)?'<span class="tagchip open-tag">Open card</span>':(p.isBot?`<span class="tagchip">${esc(p.diff)}</span>`:'')}</div>
-        <div class="opp-sub">${p.elim?'OUT · ':''}score ${p.score}</div>
+        <div class="opp-sub">${dispElim?'OUT · ':''}score ${dispScore(p,i)}</div>
         ${handHtml}
       </div>`;
     opp.appendChild(d);
@@ -1620,21 +1660,22 @@ function render(){
   /* my own seat chip closes the circle at the bottom of the rim (skipped
      for spectators, who aren't seated) */
   if(myIdx>=0&&me){
+    const dispElimMe=me.elim&&!suppressElim(myIdx);
     const d=document.createElement('div');
-    d.className='opp me'+(myTurn?' turn':'')+(me.elim?' elim':'');
+    d.className='opp me'+(myTurn?' turn':'')+(dispElimMe?' elim':'');
     d.id='my-seat';d.dataset.uid=me.id;
     const inVoice=voicePresent.has(me.id);
     /* my own running total during an Open Show reveal, right next to my
        own name, same as every opponent gets — my actual cards still only
        show in #my-hand below (already reveal-gated there), this is just
        the point-total callout matching everyone else's seat chip */
-    const myRevealCntSeat=(G.openShow!=null&&openShowReveal)?(openShowReveal.byPlayerIdx[myIdx]||0):null;
-    const myRevealHtml=(myRevealCntSeat!=null&&!me.elim)
+    const myRevealCntSeat=(G.openShow!=null&&G.openShowRevealed)?(G.openShowRevealed[myIdx]||0):null;
+    const myRevealHtml=(myRevealCntSeat!=null&&!dispElimMe)
       ?`<div class="opp-reveal-sum">${handSum(sortHand(me.hand).slice(0,myRevealCntSeat))} pts</div>`:'';
     d.innerHTML=`<div class="avatar">${esc((me.name[0]||'?').toUpperCase())}<span class="rank-badge">#${rankOf(myIdx)}</span>${inVoice?'<span class="voice-mic">🎙️</span>':''}<button class="cough-btn" title="Cough"><img src="${COUGH_IMG_B64}" alt="cough"></button></div>
       <div class="seat-card">
         <div class="opp-name"><span class="opp-name-text">${esc(me.name)} (you)</span>${(showOpenBadge&&myIdx===G.starter)?'<span class="tagchip open-tag">Open card</span>':''}</div>
-        <div class="opp-sub">${me.elim?'OUT · ':''}score ${me.score}</div>
+        <div class="opp-sub">${dispElimMe?'OUT · ':''}score ${dispScore(me,myIdx)}</div>
         ${myRevealHtml}
       </div>`;
     d.querySelector('.cough-btn').onclick=e=>{e.stopPropagation();triggerCough();};
@@ -1645,7 +1686,8 @@ function render(){
   /* center piles */
   $('#deck-count').textContent=G.deck.length;
   const canDraw=myTurn&&G.phase==='draw';
-  $('#deck-top').classList.toggle('pickable',canDraw);
+  const canTapReveal=openShowRevealing&&(G.mode!=='mp'||mp.isHost);
+  $('#deck-top').classList.toggle('pickable',canDraw||canTapReveal);
   const oc=$('#open-cards');oc.innerHTML='';
   for(const c of G.open){
     const el=cardEl(c,{pickable:canDraw});
@@ -1665,9 +1707,11 @@ function render(){
   $('#my-area').classList.toggle('turn',myTurn);
   const mh=$('#my-hand');mh.innerHTML='';
   /* during an Open Show reveal, my own hand lands card by card same as
-     everyone else's — no peeking at the total early just because it's mine */
-  const myRevealCnt=(G.openShow!=null&&openShowReveal)?(openShowReveal.byPlayerIdx[myIdx]||0):null;
-  if(me&&!me.elim){
+     everyone else's — no peeking at the total early just because it's
+     mine, driven by the same synced G.openShowRevealed as every seat */
+  const myRevealCnt=(G.openShow!=null&&G.openShowRevealed)?(G.openShowRevealed[myIdx]||0):null;
+  const dispElimMe2=me&&me.elim&&!suppressElim(myIdx);
+  if(me&&!dispElimMe2){
     const myHandSorted=sortHand(me.hand);
     const myHandShown=myRevealCnt!=null?myHandSorted.slice(0,myRevealCnt):myHandSorted;
     for(const c of myHandShown){
@@ -1676,6 +1720,24 @@ function render(){
       el.onclick=()=>onCardClick(c);
       mh.appendChild(el);
     }
+  }
+
+  /* Diff G.openShowRevealed against what we last saw and play the
+     flight+tick for exactly whichever card(s) just landed — works
+     identically for the host's own tap (local mutation, this render()
+     call fires immediately) and for every other client (same field,
+     synced in via Firebase, same diff). Seats/hand above are already
+     rebuilt for this render pass, so target positions are always fresh. */
+  if(G.openShow!=null&&G.openShowRevealed){
+    if(lastRevealRound!==G.round){lastRevealSnapshot={};lastRevealRound=G.round;}
+    for(const pi of (G.openShowParticipants||[])){
+      const cur=G.openShowRevealed[pi]||0;
+      const prev=(lastRevealSnapshot&&lastRevealSnapshot[pi])||0;
+      for(let k=prev;k<cur;k++)playOpenShowCardReveal(pi);
+    }
+    lastRevealSnapshot={...G.openShowRevealed};
+  }else{
+    lastRevealSnapshot=null;
   }
 
   /* actions */
@@ -1698,6 +1760,12 @@ function render(){
   /* status + meta + log */
   let st='';
   if(isDealing())st='Dealing…';
+  else if(openShowRevealing){
+    const ordr=G.openShowParticipants||[];
+    const tot=ordr.reduce((s,i)=>s+(G.openShowRevealed[i]||0),0);
+    const mx=ordr.length*5;
+    st=canTapReveal?`🎴 Tap the deck to reveal the next card (${tot}/${mx})`:`🎴 Host is revealing cards… (${tot}/${mx})`;
+  }
   else if(mp.isSpectator)st=isEnd()?'Round over':`👁 Spectating — ${G.players[G.turn].name} is playing…`;
   else if(isEnd())st='Round over';
   else if(iCanSnapShow)st=`⚡ Fresh deal — you may Show now, before ${G.players[G.turn].name} plays`;
@@ -1710,30 +1778,62 @@ function render(){
   if(me){
     $('#my-rank-badge').textContent='#'+rankOf(myIdx);
     const myShownSum=myRevealCnt!=null?handSum(sortHand(me.hand).slice(0,myRevealCnt)):handSum(me.hand);
-    $('#my-meta').textContent=me.elim?`${me.name} · OUT · score ${me.score}`
-      :`${me.name} · hand ${myShownSum} pts · score ${me.score}`;
+    $('#my-meta').textContent=dispElimMe2?`${me.name} · OUT · score ${dispScore(me,myIdx)}`
+      :`${me.name} · hand ${myShownSum} pts · score ${dispScore(me,myIdx)}`;
   }else if(mp.isSpectator){
     $('#my-rank-badge').textContent='';
     $('#my-meta').textContent='👁 Spectating';
   }
 
   /* end-of-round modals — never dump the full result the instant it
-     resolves. An Open Show gets its slow face-up reveal; a normal Show
-     first gets a big "X calls for a Show!!!" alert so nobody misses
-     what just happened, THEN the breakdown appears. */
-  const willAnimateOpenShow=pendingDealAnim&&G.openShow!=null&&(G.phase==='roundEnd'||G.phase==='matchEnd');
+     resolves. A normal Show first gets a big "X calls for a Show!!!"
+     alert so nobody misses what just happened, THEN the breakdown
+     appears. An Open Show withholds its result completely — no modal,
+     no elim/score change visible anywhere (see suppressElim/dispScore
+     above) — until every card has actually been tapped through by the
+     host; only then does the "X won/lost" banner and round breakdown
+     appear, for every client at once, off the shared openShowRevealDone
+     flag rather than a timer nobody could keep in sync. */
   const freshResult=G.result&&(G.phase==='roundEnd'||G.phase==='matchEnd')&&G.round!==announcedRound;
-  const revealPending=openShowRevealPending||showAnnouncePending;
-  if(willAnimateOpenShow){
+  const openShowJustFinished=G.openShow!=null&&G.openShowRevealDone&&G.round!==announcedRound;
+  const revealPending=showAnnouncePending||openShowBannerPending;
+  if(openShowRevealing){
+    if(openShowIntroRound!==G.round){
+      openShowIntroRound=G.round;
+      sndOpenShowRound();
+      /* whatever modal was open (almost always the *previous* round's
+         breakdown, or the "X has called an Open Show" one) has to close
+         right now — otherwise only the client that directly triggered the
+         deal (the host, via uiNextRound's own explicit closeModal()) ever
+         actually sees the table; every other client just gets this new
+         state hea via Firebase with no such call in that path. */
+      closeModal();
+    }
+  }else if(openShowJustFinished){
     announcedRound=G.round;
-    openShowRevealPending=true;
+    openShowBannerPending=true;
+    showOpenShowResultBanner(G.result.showerName,G.result.ok);
+    const scheduledRound1=G.round;
+    setTimeout(()=>{
+      openShowBannerPending=false;
+      /* bail if a *newer* round has since started — this delayed callback
+         only knows what G.phase is *right now*, not whether it's still
+         talking about the round it was scheduled for. Without this guard
+         a slow-to-fire callback from an old round could call up a modal
+         (or worse, skip a fresh Open Show's own suppression) using
+         whatever G happens to be by the time it finally runs. */
+      if(!G||G.round!==scheduledRound1)return;
+      if(G.phase==='roundEnd')showRoundModal();
+      else if(G.phase==='matchEnd'){sndFanfare();showMatchModal();}
+    },1700);
   }else if(freshResult&&G.openShow==null){
     announcedRound=G.round;
     showAnnouncePending=true;
     showAnnounceBanner(G.result.showerName);
+    const scheduledRound2=G.round;
     setTimeout(()=>{
       showAnnouncePending=false;
-      if(!G)return;
+      if(!G||G.round!==scheduledRound2)return;
       if(G.phase==='roundEnd'){(G.result&&G.result.ok?sndGood:sndBadShow)();showRoundModal();}
       else if(G.phase==='matchEnd'){sndFanfare();showMatchModal();}
     },1800);
@@ -1749,14 +1849,16 @@ function render(){
        elements and silently bail (return 0), permanently skipping the
        flying-card animation *and* the dealing-freeze lock for that
        round with no visible symptom. Leave pendingDealAnim set and
-       retry shortly instead of consuming it on a doomed attempt. */
+       retry shortly instead of consuming it on a doomed attempt. Never
+       set at all for an Open Show deal (see playSoundForLog) — that has
+       its own, non-timer path above. */
     const scrEl=$('#scr-game');
     const scrReady=scrEl&&scrEl.classList.contains('on')&&scrEl.getBoundingClientRect().width>0;
     if(!scrReady){setTimeout(render,30);return;}
     pendingDealAnim=false;
     const doDeal=()=>{
       if(!G)return;
-      (G.openShow!=null?sndOpenShowRound:sndDealRound)();
+      sndDealRound();
       const dur=playDealAnimation();
       /* lock the game for the length of the animation: hide the hand,
          freeze bots and input, then re-render + resume when it's done */
@@ -1767,25 +1869,6 @@ function render(){
         setTimeout(()=>{
           document.body.classList.remove('dealing');
           if(G){render();if(G.mode==='bot')pump();}
-        },dur);
-      }
-      if(willAnimateOpenShow){
-        setTimeout(()=>{
-          if(!G){openShowRevealPending=false;return;}
-          const showFollowup=()=>{
-            openShowRevealPending=false;
-            if(!G)return;
-            if(G.phase==='roundEnd')showRoundModal();
-            else if(G.phase==='matchEnd'){sndFanfare();showMatchModal();}
-          };
-          /* the reveal itself already determined the outcome — this banner
-             is purely the "and the winner is…" beat between the last card
-             landing and the round breakdown, same announce-banner pattern
-             a normal Show gets, just worded for Open Show specifically. */
-          if(G.result){
-            showOpenShowResultBanner(G.result.showerName,G.result.ok);
-            setTimeout(showFollowup,1700);
-          }else showFollowup();
         },dur);
       }
     };
@@ -2078,6 +2161,33 @@ function uiCallOpenShow(){
   if(!me||me.elim||me.score<G.limit*0.9)return;
   G.openShowCalledBy=myIdx;
   G.v++;
+  afterChange();
+}
+/* One tap = one real card, to one real player, with its sound and its
+   flight happening at the exact same instant — deliberately not a timer,
+   after the 1-card/sec version kept drifting out of sync between the
+   sound and the card actually landing, and because a fixed pace wasn't
+   what anyone actually wanted control over. Host-only (mp) so there's
+   still only ever one writer, same reasoning as uiNextRound. Cycles
+   through G.openShowParticipants round-robin — 1 card each per lap, 5
+   laps total — same order the actual deal used. The *visual* flight and
+   tick sound for whichever card just got revealed aren't triggered here
+   directly; render() diffs G.openShowRevealed against what it last saw
+   and plays them from there, which is what makes this work identically
+   whether it's your own tap (local G mutation, render() runs immediately)
+   or a synced update from the host's tap arriving over Firebase. */
+function uiRevealNextCard(){
+  if(!G||G.openShow==null||G.openShowRevealDone)return;
+  if(G.mode==='mp'&&!mp.isHost)return;
+  const order=G.openShowParticipants||[];
+  if(!order.length)return;
+  const total=order.reduce((s,i)=>s+(G.openShowRevealed[i]||0),0);
+  const maxTotal=order.length*5;
+  if(total>=maxTotal)return;
+  const pi=order[total%order.length];
+  G.openShowRevealed[pi]=(G.openShowRevealed[pi]||0)+1;
+  G.v++;
+  if(total+1>=maxTotal)G.openShowRevealDone=true;
   afterChange();
 }
 function uiPlayAgain(){
@@ -2700,6 +2810,7 @@ $('#btn-show').onclick=()=>{
 function confirmShow(){closeModal();applyMove({t:'show',pi:myIdx});}
 $('#deck-pile').onclick=()=>{
   if(!G)return;
+  if(G.openShow!=null&&!G.openShowRevealDone){uiRevealNextCard();return;}
   const me=G.players[myIdx];
   if(me&&!me.elim&&G.turn===myIdx&&G.phase==='draw')applyMove({t:'draw',src:'deck'});
 };
