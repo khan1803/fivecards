@@ -1800,9 +1800,22 @@ function showRoundModal(){
   const iCanOpenShow=me&&!me.elim&&me.score>=G.limit*0.9;
   const openNote=iCanOpenShow?`<p class="tag" style="color:var(--red)">⚠️ You're at ${me.score}/${G.limit} — one more bad round and you're out.
     Call an Open Show to gamble on an instant face-up deal instead.</p>`:'';
+  /* In multiplayer, only the host may hit plain "Next Round": every
+     client used to render this modal with a live button, so N players
+     could each independently shuffle+write a new deal and race to
+     overwrite each other's state (raw .set(), no transaction) — the
+     actual cause of games desyncing/sticking, worse with more players
+     simply from more chances of a near-simultaneous click. Open Show
+     stays available to whichever eligible player wants to call it
+     (it's their gamble to make, not the host's) — but while anyone is
+     eligible, the host's plain button is hidden so the two paths can't
+     race each other. */
+  const anyoneOpenEligible=G.players.some(p=>!p.elim&&p.score>=G.limit*0.9);
+  const iCanAdvance=G.mode!=='mp'||(mp.isHost&&!anyoneOpenEligible);
   const openBtn=iCanOpenShow?`<button class="btn danger" onclick="uiNextRoundOpen()">⚠️ Call Open Show</button>`:'';
+  const nextBtn=iCanAdvance?`<button class="btn primary" onclick="uiNextRound()">Next Round →</button>`:(iCanOpenShow?'':`<p class="tag">⏳ Waiting for ${anyoneOpenEligible?'a player to decide on Open Show':'the host to start the next round'}…</p>`);
   openModal('round',`<h2>Round ${G.round}${r.openShow?' · OPEN SHOW ⚠️':''}</h2>${head}${resultTable(r.rows,r.shower)}${openNote}
-    <div class="mbtns"><button class="btn primary" onclick="uiNextRound()">Next Round →</button>${openBtn}</div>`);
+    <div class="mbtns">${nextBtn}${openBtn}</div>`);
 }
 /* Metrics-as-rows, players-as-columns leaderboard — one column per
    player (sorted best→worst) so the full round-by-round history reads
@@ -1971,6 +1984,7 @@ function startBotGame(){
 }
 function uiNextRound(){
   if(!G||G.phase!=='roundEnd')return;
+  if(G.mode==='mp'&&!mp.isHost)return;   // only the host may deal — see showRoundModal()
   closeModal();
   /* Open Show is a human player's call to make, never a bot's — bots
      always deal a normal round. */
