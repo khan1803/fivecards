@@ -685,6 +685,7 @@ body.dealing .card-count{visibility:hidden}
     <div id="lobby-players" style="width:100%"></div>
     <button class="btn primary big" id="btn-start-mp">Start Game</button>
     <p class="tag hidden" id="lobby-wait">Waiting for host to start…</p>
+    <button class="btn ghost small hidden" id="btn-takeover-host">Take over as host</button>
     <div id="lobby-voicebar">
       <button class="btn ghost" id="btn-voice-lobby"><span id="voice-lobby-icon">🎤</span>&ensp;Voice</button>
       <button class="btn ghost" id="btn-chat-lobby">💬&ensp;Chat</button>
@@ -1862,18 +1863,28 @@ function showRoundModal(){
      G.openShowCalledBy at the moment it fires. */
   const iCanAdvance=G.mode!=='mp'||mp.isHost;
   const calledBy=G.openShowCalledBy;
+  /* Escape hatch for exactly the situation that first prompted the
+     host-only-deals rule: the actual host's device (a different browser/
+     device than "you", since identity is per-localStorage) may just not
+     be around — closed tab, other device, whatever — leaving everyone
+     else stuck staring at a "waiting for host" message forever. Any
+     player can claim host at any time; effHost()/mp.isHost react live off
+     Firebase, so the moment this writes, every other client (including
+     the old host's, if it's actually still open) sees the same new host
+     and stops offering its own Next Round button — no split-brain. */
+  const takeOverBtn=(G.mode==='mp'&&!iCanAdvance)?`<button class="btn ghost small" onclick="uiTakeOverHost()">Take over as host</button>`:'';
   let extra,nextBtn;
   if(calledBy!=null){
     const callerName=esc(G.players[calledBy].name);
     extra=`<p class="tag" style="color:var(--red)">🎲 ${callerName} has called an Open Show for the next round!</p>`;
     nextBtn=iCanAdvance
       ?`<button class="btn danger" onclick="uiNextRound()">⚠️ Deal Open Show →</button>`
-      :`<p class="tag">⏳ Waiting for the host to deal the Open Show…</p>`;
+      :`<p class="tag">⏳ Waiting for the host to deal the Open Show…</p>${takeOverBtn}`;
   }else{
     const openNote=iCanOpenShow?`<p class="tag" style="color:var(--red)">⚠️ You're at ${me.score}/${G.limit} — one more bad round and you're out.
       Call an Open Show to gamble on an instant face-up deal instead.</p>`:'';
     const openBtn=iCanOpenShow?`<button class="btn danger" onclick="uiCallOpenShow()">⚠️ Call Open Show</button>`:'';
-    const baseBtn=iCanAdvance?`<button class="btn primary" onclick="uiNextRound()">Next Round →</button>`:`<p class="tag">⏳ Waiting for the host to start the next round…</p>`;
+    const baseBtn=iCanAdvance?`<button class="btn primary" onclick="uiNextRound()">Next Round →</button>`:`<p class="tag">⏳ Waiting for the host to start the next round…</p>${takeOverBtn}`;
     extra=openNote;
     nextBtn=baseBtn+openBtn;
   }
@@ -2265,7 +2276,21 @@ function renderLobby(){
   $('#btn-start-mp').classList.toggle('hidden',!mp.isHost);
   $('#btn-start-mp').disabled=ps.length<2;
   $('#lobby-wait').classList.toggle('hidden',mp.isHost);
+  $('#btn-takeover-host').classList.toggle('hidden',mp.isHost);
   updateVoiceUI();
+}
+/* Any connected player may claim host — the real host's device might be
+   a different browser/tab entirely (identity is per-localStorage, not
+   per-person) and simply not be around to advance the game. Writing
+   host directly is safe: mp.isHost is recomputed live from Firebase on
+   every client (see attachRoom's mp.ref.on('value',...) → effHost), so
+   the instant this lands, every client's own Next Round button updates
+   to match — including the old host's, if it's actually still open —
+   so there's no window where two clients both think they can deal. */
+function uiTakeOverHost(){
+  if(!mp.ref||mp.isHost)return;
+  mp.ref.child('host').set(myUid);
+  toast('You are now the host');
 }
 function mpStart(){
   const r=mp.room;if(!r||!mp.isHost)return;
@@ -2629,6 +2654,7 @@ $('#btn-start-bot').onclick=startBotGame;
 $('#btn-create').onclick=createRoom;
 $('#btn-join').onclick=joinRoom;
 $('#btn-start-mp').onclick=mpStart;
+$('#btn-takeover-host').onclick=uiTakeOverHost;
 $('#btn-leave-lobby').onclick=()=>leaveRoom(false);
 $('#btn-copy').onclick=()=>{
   if(navigator.clipboard&&mp.code)navigator.clipboard.writeText(mp.code).then(()=>toast('Code copied!'));
