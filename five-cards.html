@@ -80,6 +80,10 @@ input:focus{border-color:var(--gold)}
 .lp{background:rgba(201,168,76,.04);border:1px solid rgba(201,168,76,.12);border-radius:10px;padding:12px 14px;font-weight:700;font-family:'Playfair Display',serif;color:#E8D5A3;
   display:flex;align-items:center;gap:6px}
 .lp-mic{font-size:12px;opacity:.85}
+.lp-kick{margin-left:auto;width:24px;height:24px;border-radius:50%;flex:0 0 auto;
+  background:transparent;border:1.5px solid rgba(184,50,50,.4);color:rgba(237,232,216,.5);
+  font-size:12px;font-weight:800;line-height:1;cursor:pointer;transition:background .15s,color .15s}
+.lp-kick:active{background:var(--red);color:#fff;border-color:var(--red)}
 #lobby-players{display:flex;flex-direction:column;gap:8px}
 #lobby-voicebar{display:flex;gap:10px;width:100%}
 #lobby-voicebar .btn{flex:1}
@@ -195,6 +199,17 @@ input:focus{border-color:var(--gold)}
   box-shadow:0 2px 7px rgba(0,0,0,.45);transition:transform .1s,box-shadow .15s}
 .cough-btn img{width:100%;height:100%;object-fit:cover}
 .cough-btn:active{transform:scale(1.3)}
+/* host-only, opponents only (see canKick in render()) — bottom-right is
+   free on an opponent's avatar since only your own seat ever gets the
+   cough badge there. Small and quiet by default (this is a rarely-used
+   admin action, not something to visually compete with the rest of the
+   seat), red so its one active use — removing someone — reads as the
+   deliberate, destructive action it is. */
+.kick-btn{position:absolute;bottom:-7px;right:-7px;z-index:2;width:22px;height:22px;border-radius:50%;
+  background:var(--panel);border:1.5px solid rgba(184,50,50,.55);color:rgba(237,232,216,.55);
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;line-height:1;
+  padding:0;cursor:pointer;pointer-events:auto;box-shadow:0 2px 7px rgba(0,0,0,.45);transition:transform .1s,background .15s,color .15s}
+.kick-btn:active{transform:scale(1.25);background:var(--red);color:#fff}
 /* the whole seat reacts, not just a small floating emoji — on a
    crowded 8-seat table a tiny pop alone is easy to miss. The avatar
    shakes and glows, the seat-card's own border flashes too, so the
@@ -1240,6 +1255,32 @@ function ensureAudio(){
 document.addEventListener('pointerdown',()=>{
   if(soundOn&&actx&&actx.state==='suspended')actx.resume();
 },{passive:true});
+/* Backgrounding the tab (switching apps, an incoming call, screen lock)
+   is where two separate persistent complaints actually meet: mobile
+   browsers suspend the AudioContext on backgrounding and don't reliably
+   resume it just because the tab is visible again (the pointerdown
+   listener above only fires on an actual *tap*, which might not happen
+   for a few seconds after returning) — and worse, any setTimeout that
+   was mid-flight when the tab backgrounded (the dealing-lock's own
+   cleanup timer chief among them: document.body.classList.remove
+   ('dealing')) can get throttled for the *entire* time the tab was
+   backgrounded on most mobile browsers, meaning it fires very late or
+   is still pending when the user returns — leaving body.dealing's
+   pointer-events:none rules stuck on every button/the deck/the open
+   pile with nothing left to ever clear them, which reads exactly like
+   "the screen is frozen" until a manual refresh. isDealing() itself is
+   wall-clock based so it's never actually wrong, but the CSS class that
+   physically blocks input is a one-shot setTimeout, not derived from
+   isDealing() on every render — so it's the one thing that needs an
+   explicit recovery check here. */
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible')return;
+  if(soundOn&&actx&&actx.state==='suspended')actx.resume();
+  if(document.body.classList.contains('dealing')&&!isDealing()){
+    document.body.classList.remove('dealing');
+  }
+  if(G)render();
+});
 function tone(freq,start,dur,type,vol){
   const ac=ensureAudio();if(!ac)return;
   const o=ac.createOscillator(),g=ac.createGain();
@@ -1744,7 +1785,13 @@ function render(){
       ?`<div class="minis reveal">${revealedHand.map(c=>`<span class="mini-face${(!isJoker(c)&&(c.s==='H'||c.s==='D'))?' red':''}">${lbl(c)}</span>`).join('')}</div>
         <div class="opp-reveal-sum">${handSum(revealedHand)} pts</div>`
       :`<div class="card-count">${p.hand.length} card${p.hand.length===1?'':'s'}</div>`);
-    d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}<span class="rank-badge">#${rankOf(i)}</span>${inVoice?'<span class="voice-mic">🎙️</span>':''}</div>
+    /* host-only escape hatch for a frozen/unresponsive player: kicking
+       marks them eliminated (same path a self-initiated leave already
+       takes) so the game carries on without waiting on a client that
+       may never respond again. Never shown for an opponent who's
+       already out — nothing left to kick. */
+    const canKick=G.mode==='mp'&&mp.isHost&&!p.elim;
+    d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}<span class="rank-badge">#${rankOf(i)}</span>${inVoice?'<span class="voice-mic">🎙️</span>':''}${canKick?`<button class="kick-btn" title="Kick ${esc(p.name)}">✕</button>`:''}</div>
       <div class="seat-card">
         <div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span>${(showOpenBadge&&i===G.starter)?'<span class="tagchip open-tag">Open card</span>'
           :(showOpenBadge&&i===nextStarterI)?'<span class="tagchip next-open-tag">Next Open Card</span>'
@@ -1752,6 +1799,7 @@ function render(){
         <div class="opp-sub">${dispElim?'OUT · ':''}score ${dispScore(p,i)}</div>
         ${handHtml}
       </div>`;
+    if(canKick)d.querySelector('.kick-btn').onclick=e=>{e.stopPropagation();uiKickPlayer(p.id,p.name);};
     opp.appendChild(d);
   }
   /* my own seat chip closes the circle at the bottom of the rim (skipped
@@ -2000,10 +2048,19 @@ function onCardClick(c){
      fresh on every render regardless of when it was made, so an
      unanswerable pre-selection simply leaves the button disabled until
      adjusted, never lets through an actually-invalid discard. */
-  if(G.turn===myIdx&&G.phase==='discard'&&G.attack>0&&!isAtkCard(c)){
+  const alreadySelected=sel.has(c.id);
+  /* Only blocks *adding* a non-attack card while genuinely under attack
+     on your own turn — deselecting is always allowed regardless. Without
+     that distinction, cards pre-selected before the attack existed (a
+     normal set you were planning to discard) got permanently stuck
+     selected the moment an attack landed on your turn: this same check
+     used to fire on the deselect click too, so there was no way to clear
+     them and isolate a real 2/Joker counter — you'd be forced to pick up
+     even holding one, exactly the bug Saif reported with a screenshot. */
+  if(!alreadySelected&&G.turn===myIdx&&G.phase==='discard'&&G.attack>0&&!isAtkCard(c)){
     toast('Play a 2 / Joker or pick up');sndError();return;
   }
-  if(sel.has(c.id))sel.delete(c.id);else sel.add(c.id);
+  if(alreadySelected)sel.delete(c.id);else sel.add(c.id);
   render();
 }
 
@@ -2503,7 +2560,7 @@ function renderLobby(){
   const ps=Object.entries(r.players||{}).map(([u,p])=>({u,...p})).sort((a,b)=>a.order-b.order);
   const host=effHost(r);
   $('#lobby-players').innerHTML=ps.map(p=>
-    `<div class="lp">${p.u===host?'⭐ ':''}${esc(p.name)}${p.u===myUid?' <span style="color:var(--dim)">(you)</span>':''}${voicePresent.has(p.u)?' <span class="lp-mic">🎙️</span>':''}</div>`).join('');
+    `<div class="lp">${p.u===host?'⭐ ':''}${esc(p.name)}${p.u===myUid?' <span style="color:var(--dim)">(you)</span>':''}${voicePresent.has(p.u)?' <span class="lp-mic">🎙️</span>':''}${(mp.isHost&&p.u!==myUid)?`<button class="lp-kick" title="Remove ${esc(p.name)}" data-kick-uid="${esc(p.u)}" data-kick-name="${esc(p.name)}">✕</button>`:''}</div>`).join('');
   $('#btn-start-mp').classList.toggle('hidden',!mp.isHost);
   $('#btn-start-mp').disabled=ps.length<2;
   $('#lobby-wait').classList.toggle('hidden',mp.isHost);
@@ -2522,6 +2579,50 @@ function uiTakeOverHost(){
   if(!mp.ref||mp.isHost)return;
   mp.ref.child('host').set(myUid);
   toast('You are now the host');
+}
+/* Host-only escape hatch for a frozen/unresponsive player — used from
+   both the lobby (full removal, no match to speak of yet — same as
+   leaveRoom()'s own lobby-leave path) and mid-match (marks them
+   eliminated, mirroring leaveRoom()'s self-leave-mid-match path exactly,
+   so the game can carry on rather than waiting forever on a client that
+   may never respond again). Confirmed via a modal first — destructive,
+   can't be undone, and a stray tap on the wrong seat would otherwise be
+   a real way to accidentally knock a fine player out of the game. */
+function uiKickPlayer(targetUid,targetName){
+  if(!mp.ref||!mp.isHost)return;
+  const inLobby=mp.room&&mp.room.status==='lobby';
+  const msg=inLobby
+    ?`They'll be removed from the room.`
+    :`They'll be eliminated and the game continues without them.`;
+  openModal('confirm',`<h2>Kick ${esc(targetName)}?</h2>
+    <p>${msg} This can't be undone.</p>
+    <div class="mbtns"><button class="btn danger" onclick="confirmKick('${esc(targetUid)}')">Kick Player</button>
+    <button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);
+}
+function confirmKick(targetUid){
+  closeModal();
+  if(!mp.ref||!mp.isHost)return;
+  if(mp.room&&mp.room.status==='lobby'){
+    mp.ref.child('players/'+targetUid).remove();
+  }else{
+    hostKickPlayer(targetUid);
+  }
+}
+function hostKickPlayer(targetUid){
+  if(!G||G.mode!=='mp'||!mp.isHost)return;
+  const ti=G.players.findIndex(p=>p.id===targetUid);
+  if(ti<0||ti===myIdx)return;
+  const tp=G.players[ti];
+  if(tp.elim)return;
+  tp.elim=true;glog(G,`${tp.name} was kicked by the host`);
+  if(G.turn===ti&&G.pending.length){G.heap.push(...G.pending);G.pending=[];}
+  const left=activeIdxs(G);
+  if(left.length<=1&&G.phase!=='matchEnd'){
+    G.phase='matchEnd';
+    G.winner=left.length?G.players[left[0]].name:tp.name;
+  }else if(G.turn===ti){G.phase='discard';G.attack=0;G.turn=nextActive(G,ti);}
+  G.v++;
+  afterChange();
 }
 function mpStart(){
   const r=mp.room;if(!r||!mp.isHost)return;
@@ -2887,6 +2988,16 @@ $('#btn-join').onclick=joinRoom;
 $('#btn-start-mp').onclick=mpStart;
 $('#btn-takeover-host').onclick=uiTakeOverHost;
 $('#btn-leave-lobby').onclick=()=>leaveRoom(false);
+/* delegated — #lobby-players is fully rebuilt by renderLobby() on every
+   update, so a per-button .onclick would need re-wiring every time too;
+   data-attributes read fresh off whichever button was actually clicked
+   sidestep that and avoid interpolating a name straight into an inline
+   onclick string (an apostrophe in a name, e.g. "O'Brien", would break
+   out of that string and silently kill the handler). */
+$('#lobby-players').addEventListener('click',e=>{
+  const b=e.target.closest('.lp-kick');
+  if(b)uiKickPlayer(b.dataset.kickUid,b.dataset.kickName);
+});
 $('#btn-copy').onclick=()=>{
   if(navigator.clipboard&&mp.code)navigator.clipboard.writeText(mp.code).then(()=>toast('Code copied!'));
 };
