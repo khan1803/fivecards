@@ -284,8 +284,20 @@ body.dealing .card-count{visibility:hidden}
 #my-area{width:100%;display:flex;flex-direction:column;align-items:center;gap:10px;
   padding:20px 8px calc(14px + env(safe-area-inset-bottom));border-top:1px solid rgba(201,168,76,.14);transition:box-shadow .25s;background:rgba(201,168,76,.015)}
 #my-area.turn{box-shadow:0 -6px 30px rgba(201,168,76,.18);border-top-color:var(--gold)}
-#my-hand{display:flex;justify-content:center;padding-top:16px;max-width:100%}
-#my-hand .card{cursor:pointer}
+/* layoutMyHand() (see JS) tightens the per-card overlap to fit large
+   hands (e.g. after picking up a big attack); overflow-x is the fallback
+   past that — a big-enough hand on a narrow-enough phone can still swipe
+   to reach every card even at the tightest overlap the JS allows.
+   padding-top bumped from 16 to 30px: setting overflow-x here forces
+   overflow-y to compute as auto too (a real CSS rule, not a bug — you
+   can't have one axis scrollable and the other genuinely visible), so
+   there has to be enough clear room above the cards for a selected
+   card's own -16px lift (-21px at the pop animation's peak) plus the
+   NEW-tag badge's -7px offset, or they'd start clipping against the
+   scroll container's edge the instant this landed. */
+#my-hand{display:flex;justify-content:center;padding-top:30px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+#my-hand::-webkit-scrollbar{display:none}
+#my-hand .card{cursor:pointer;flex:0 0 auto}
 #my-hand .card:not(:first-child){margin-left:calc(var(--cw)*-.32)}
 #actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 /* laid out in normal flow beside the text (not absolutely positioned
@@ -369,7 +381,7 @@ body.dealing .card-count{visibility:hidden}
 .chat-bubble.below::after{bottom:auto;top:-7px;border-top-color:transparent;border-bottom-color:#0A0E1A}
 @media (max-height:640px){
   #table{padding:44px 46px 10px}
-  #my-hand{padding-top:12px}
+  #my-hand{padding-top:28px}   /* keep enough clearance for the sel-lift/pop peak + NEW badge — see the base rule's comment */
 }
 /* narrow phones: felt shrinks further and every seat tier shrinks one
    more notch, so the ring of opponents still clears the table with the
@@ -540,7 +552,7 @@ body.dealing .card-count{visibility:hidden}
 @media(max-height:700px) and (max-width:480px){
   #table{padding:38px 26px 6px}
   #my-area{gap:5px;padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
-  #my-hand{padding-top:8px}
+  #my-hand{padding-top:26px}   /* keep enough clearance for the sel-lift/pop peak + NEW badge — see the base rule's comment */
   #actions .btn{padding:11px 8px;font-size:12px;min-height:42px}
   #status-bar{font-size:12px;min-height:16px}
 }
@@ -851,7 +863,7 @@ function newMatch(defs,limit,mode,numDecks){
   return {mode,limit:+limit||240,numDecks:numDecks||1,round:0,starter:-1,starterDir:1,starterStep:0,directionChanged:false,
     players:defs.map((d,i)=>({id:d.id||'p'+i,name:d.name,isBot:!!d.isBot,diff:d.diff||null,score:0,elim:false,hand:[],wins:0,roundPts:[]})),
     deck:[],open:[],heap:[],pending:[],turn:0,attack:0,phase:'discard',
-    turnCount:0,result:null,winner:null,log:[],logSeq:0,lastDrawn:null,openShow:null,v:0};
+    turnCount:0,result:null,winner:null,log:[],logSeq:0,lastDrawn:null,openShow:null,pickedUpThisTurn:false,v:0};
 }
 const activeIdxs=g=>g.players.map((p,i)=>p.elim?-1:i).filter(i=>i>=0);
 /* Steps by g.starterDir, not a hardcoded +1 — the actual turn-by-turn
@@ -903,7 +915,7 @@ function deal(g,openShowBy){
   }
   for(let k=0;k<5;k++)for(const i of dealOrder)g.players[i].hand.push(g.deck.pop());
   g.open=[g.deck.pop()];g.heap=[];g.pending=[];g.lastDrawn=null;
-  g.turn=g.starter;g.attack=0;g.phase='discard';g.turnCount=0;g.v++;
+  g.turn=g.starter;g.attack=0;g.phase='discard';g.turnCount=0;g.pickedUpThisTurn=false;g.v++;
   if(g.openShow!=null){
     glog(g,`— Round ${g.round}: ${g.players[g.openShow].name} calls an OPEN SHOW! —`);
     /* Open Show's reveal is now host-click-driven, not a timer: this just
@@ -950,7 +962,7 @@ function mvDiscard(g,pi,ids){
        normal turn afterward and it naturally cycles then. */
     g.heap.push(...cards);
     g.attack+=2*cards.length;
-    g.turn=nextActive(g,pi);g.turnCount++;
+    g.turn=nextActive(g,pi);g.turnCount++;g.pickedUpThisTurn=false;
   }else{
     g.pending=cards;g.phase='draw';
   }
@@ -974,7 +986,7 @@ function mvDraw(g,pi,src,cardId){
   g.heap.push(...g.open);
   g.open=g.pending;g.pending=[];
   g.phase='discard';
-  g.turn=nextActive(g,pi);g.turnCount++;g.v++;
+  g.turn=nextActive(g,pi);g.turnCount++;g.pickedUpThisTurn=false;g.v++;
   return null;
 }
 function mvPickup(g,pi){
@@ -984,6 +996,12 @@ function mvPickup(g,pi){
   for(let k=0;k<g.attack;k++){const c=drawDeck(g);if(c){p.hand.push(c);picked.push(c.id);}}
   glog(g,`${p.name} picks up ${picked.length} ⚡`);
   g.lastDrawn=picked.length?{playerId:p.id,cardIds:picked}:null;
+  /* Having to pick up costs you the chance to Show this turn — no
+     peeking-then-bailing after a forced pickup, you have to actually
+     play out a normal discard+draw. Cleared the moment your turn
+     genuinely ends (see mvDiscard's atk-chain branch and mvDraw) or a
+     fresh round is dealt. */
+  g.pickedUpThisTurn=true;
   /* picking up resolves the attack but does NOT end the turn — the
      player stays put (still 'discard' phase, attack now 0) and takes
      their own normal discard+draw turn right after, same as anyone
@@ -1040,6 +1058,9 @@ function mvShow(g,pi){
   if(g.phase!=='discard')return 'not your turn';
   if(g.turn!==pi&&!canSnapShow(g,pi))return 'not your turn';
   if(g.attack>0)return 'answer the attack first';
+  /* having to pick up this turn costs you the option to Show it —
+     you must actually play out a normal discard+draw first */
+  if(g.turn===pi&&g.pickedUpThisTurn)return 'picked up this turn — discard first';
   resolveShow(g,pi,false);
   return null;
 }
@@ -1135,7 +1156,10 @@ function botMove(g){
     return{t:'pickup'};
   }
   if(!p.hand.length)return{t:'show'};   // nothing left to play — an empty hand always shows
-  if(shouldShow(g,pi,handSum(p.hand),d))return{t:'show'};
+  /* picking up this turn costs the option to Show it — same rule mvShow
+     enforces for a human, applied here too so a bot never wastes a move
+     attempting (and getting silently rejected for) an invalid show */
+  if(!g.pickedUpThisTurn&&shouldShow(g,pi,handSum(p.hand),d))return{t:'show'};
   /* hard: if the next player looks ready to show, hit them with a +2 */
   if(d==='hard'){
     const nx=nextActive(g,pi);
@@ -1410,6 +1434,41 @@ function cardEl(c,opts={}){
   return d;
 }
 const isEnd=()=>G&&(G.phase==='roundEnd'||G.phase==='matchEnd');
+
+/* Picking up a big attack (+10, +12...) can leave a hand of 15-17+ cards
+   with nowhere near enough width on a phone to fit them at the normal
+   overlap — they'd just spill off the edge of the screen with no way to
+   even see, let alone tap, the ones that don't fit. Rather than a fixed
+   set of size tiers, this measures the *actual* available width and
+   computes exactly how much overlap is needed to fit everything — small
+   hands keep the normal CSS overlap untouched (this bails out early if
+   it already fits), large hands compress smoothly as they grow. A hard
+   floor (never overlap more than 82% of a card) keeps every card's
+   corner index legible even at the extreme end; #my-hand's own
+   overflow-x is the final safety net past that, so nothing is ever
+   truly unreachable, just scrollable. */
+function layoutMyHand(mh){
+  const cards=[...mh.querySelectorAll('.card')];
+  const n=cards.length;
+  if(n<2)return;
+  /* #my-hand itself has no explicit width — it shrink-wraps to its own
+     content, so mh.clientWidth is nearly self-referential (~however wide
+     the cards already are) and useless as an "available space" reading.
+     #my-area *does* stretch to width:100% of a stable ancestor, so measure
+     that instead (minus its own left+right padding) for the true budget. */
+  const areaEl=mh.parentElement;
+  const areaStyle=areaEl?getComputedStyle(areaEl):null;
+  const containerW=areaEl?areaEl.clientWidth-(parseFloat(areaStyle.paddingLeft)||0)-(parseFloat(areaStyle.paddingRight)||0):0;
+  if(!containerW)return;
+  const cw=cards[0].getBoundingClientRect().width;
+  if(!cw)return;
+  const naturalMargin=parseFloat(getComputedStyle(cards[1]).marginLeft)||0;   // already negative
+  const naturalTotalWidth=cw+(n-1)*(cw+naturalMargin);
+  if(naturalTotalWidth<=containerW)return;   // fits fine at the default overlap — leave it alone
+  const maxOverlap=cw*0.82;
+  const overlap=Math.min(Math.max(cw-((containerW-cw)/(n-1)),0),maxOverlap);
+  cards.forEach((el,i)=>{if(i>0)el.style.marginLeft=(-overlap)+'px';});
+}
 
 /* Places every .opp chip — including your own seat, .opp.me, which
    pins to the bottom of the rim and closes the circle — directly on
@@ -1721,6 +1780,7 @@ function render(){
       mh.appendChild(el);
     }
   }
+  layoutMyHand(mh);
 
   /* Diff G.openShowRevealed against what we last saw and play the
      flight+tick for exactly whichever card(s) just landed — works
@@ -1748,7 +1808,9 @@ function render(){
      discarded even once, every active player (not just whoever's turn
      it is) can show off their raw dealt hand */
   const iCanSnapShow=!!(me&&!me.elim&&!myTurn&&canSnapShow(G,myIdx));
-  bShow.classList.toggle('hidden',!((myTurn&&G.phase==='discard'&&G.attack<=0)||iCanSnapShow));
+  /* having to pick up this turn costs you the option to Show it — must
+     play out a normal discard+draw first (see mvPickup/mvShow) */
+  bShow.classList.toggle('hidden',!((myTurn&&G.phase==='discard'&&G.attack<=0&&!G.pickedUpThisTurn)||iCanSnapShow));
   if(me)bShow.textContent=iCanSnapShow?`⚡ SHOW (${handSum(me.hand)})`:`SHOW (${handSum(me.hand)})`;
   bDisc.classList.toggle('hidden',!(myTurn&&G.phase==='discard'));
   bDisc.disabled=!selOk;
@@ -1885,8 +1947,23 @@ function render(){
 function onCardClick(c){
   if(!G||isDealing())return;
   const me=G.players[myIdx];
-  if(!me||me.elim||G.turn!==myIdx||G.phase!=='discard')return;
-  if(G.attack>0&&!isAtkCard(c)){toast('Play a 2 / Joker or pick up');sndError();return;}
+  if(!me||me.elim||isEnd())return;
+  /* Selecting is allowed any time you're still in the round, not just on
+     your own turn — pre-picking while you wait means your Discard button
+     (which only ever actually appears/enables once G.turn===myIdx) is
+     ready to fire the instant your turn arrives, instead of you having
+     to read your hand and decide from scratch under a running timer.
+     The "must answer the attack" nudge only fires when it's genuinely
+     your turn to answer one right now — G.attack can still change before
+     your turn actually comes around, so validating against it any
+     earlier would just be guessing at a future that hasn't happened;
+     selOk/bDisc.disabled already re-validate the *current* selection
+     fresh on every render regardless of when it was made, so an
+     unanswerable pre-selection simply leaves the button disabled until
+     adjusted, never lets through an actually-invalid discard. */
+  if(G.turn===myIdx&&G.phase==='discard'&&G.attack>0&&!isAtkCard(c)){
+    toast('Play a 2 / Joker or pick up');sndError();return;
+  }
   if(sel.has(c.id))sel.delete(c.id);else sel.add(c.id);
   render();
 }
@@ -2065,29 +2142,34 @@ function tickTurnTimer(){
     autoPlayTurn();
   }
 }
-/* Timed out: pick up if under attack, otherwise discard your single
-   highest card (always a legal solo discard) and draw from the deck —
-   cascades through a pickup-then-discard-then-draw sequence in one go
-   so an AFK player's turn actually completes instead of stalling the
-   whole table. */
+/* Timed out: exactly ONE forced action, never a cascade. This used to
+   loop through pickup-then-discard-then-draw in a single synchronous
+   burst whenever the timer hit zero — meaning a timed-out pickup (you
+   didn't have a counter, or just hesitated) would *also* immediately
+   auto-discard your highest card in the very same breath, before you
+   ever got to see the Show button with your newly-enlarged hand. A
+   forced pickup still leaves a real decision (Show vs Discard) that
+   deserves its own fresh look, not getting swallowed by the same
+   timeout that forced the pickup. updateTurnTimer() already resets to
+   a full fresh countdown on any v change (it keys off G.v, which every
+   move bumps), so doing just one action here and returning naturally
+   gives whatever comes next its own full timer — an AFK player's turn
+   still fully resolves, just one timeout per step instead of one
+   timeout for the whole turn. */
 function autoPlayTurn(){
   if(!G||G.mode!=='mp'||isEnd()||G.turn!==myIdx)return;
   const me=G.players[myIdx];
   if(!me||me.elim)return;
   toast('Time’s up — auto-playing your turn');
-  let guard=0;
-  while(G&&G.turn===myIdx&&!isEnd()&&guard<5){
-    guard++;
-    if(G.phase==='discard'){
-      if(G.attack>0)applyMove({t:'pickup'});
-      else if(!me.hand.length)applyMove({t:'show'});
-      else{
-        const highest=me.hand.slice().sort((a,b)=>val(b)-val(a))[0];
-        applyMove({t:'discard',ids:[highest.id]});
-      }
-    }else if(G.phase==='draw'){
-      applyMove({t:'draw',src:'deck'});
-    }else break;
+  if(G.phase==='discard'){
+    if(G.attack>0)applyMove({t:'pickup'});
+    else if(!me.hand.length)applyMove({t:'show'});
+    else{
+      const highest=me.hand.slice().sort((a,b)=>val(b)-val(a))[0];
+      applyMove({t:'discard',ids:[highest.id]});
+    }
+  }else if(G.phase==='draw'){
+    applyMove({t:'draw',src:'deck'});
   }
 }
 
@@ -2800,6 +2882,7 @@ $('#btn-show').onclick=()=>{
   const me=G.players[myIdx];
   if(!me||me.elim||G.phase!=='discard')return;
   if(G.turn!==myIdx&&!canSnapShow(G,myIdx))return;
+  if(G.turn===myIdx&&G.pickedUpThisTurn)return;
   const sum=handSum(me.hand);
   openModal('confirm',`<h2>Show your cards?</h2>
     <p>Your hand is worth <b style="color:var(--gold)">${sum}</b> points.
