@@ -1817,14 +1817,18 @@ function render(){
     const myRevealCntSeat=(G.openShow!=null&&G.openShowRevealed)?(G.openShowRevealed[myIdx]||0):null;
     const myRevealHtml=(myRevealCntSeat!=null&&!dispElimMe)
       ?`<div class="opp-reveal-sum">${handSum(sortHand(me.hand).slice(0,myRevealCntSeat))} pts</div>`:'';
-    d.innerHTML=`<div class="avatar">${esc((me.name[0]||'?').toUpperCase())}<span class="rank-badge">#${rankOf(myIdx)}</span>${inVoice?'<span class="voice-mic">🎙️</span>':''}<button class="cough-btn" title="Cough"><img src="${COUGH_IMG_B64}" alt="cough"></button></div>
+    /* no cough for an eliminated player — they're out, not at the table
+       to react from anymore. Suppressed during an Open Show reveal too
+       (dispElimMe already accounts for that), same as everything else
+       gated on real elim status. */
+    d.innerHTML=`<div class="avatar">${esc((me.name[0]||'?').toUpperCase())}<span class="rank-badge">#${rankOf(myIdx)}</span>${inVoice?'<span class="voice-mic">🎙️</span>':''}${dispElimMe?'':`<button class="cough-btn" title="Cough"><img src="${COUGH_IMG_B64}" alt="cough"></button>`}</div>
       <div class="seat-card">
         <div class="opp-name"><span class="opp-name-text">${esc(me.name)} (you)</span>${(showOpenBadge&&myIdx===G.starter)?'<span class="tagchip open-tag">Open card</span>'
           :(showOpenBadge&&myIdx===nextStarterI)?'<span class="tagchip next-open-tag">Next Open Card</span>':''}</div>
         <div class="opp-sub">${dispElimMe?'OUT · ':''}score ${dispScore(me,myIdx)}</div>
         ${myRevealHtml}
       </div>`;
-    d.querySelector('.cough-btn').onclick=e=>{e.stopPropagation();triggerCough();};
+    if(!dispElimMe)d.querySelector('.cough-btn').onclick=e=>{e.stopPropagation();triggerCough();};
     opp.appendChild(d);
   }
   layoutOpponentSeats();
@@ -2128,7 +2132,10 @@ function showRoundModal(){
      Firebase, so the moment this writes, every other client (including
      the old host's, if it's actually still open) sees the same new host
      and stops offering its own Next Round button — no split-brain. */
-  const takeOverBtn=(G.mode==='mp'&&!iCanAdvance)?`<button class="btn ghost small" onclick="uiTakeOverHost()">Take over as host</button>`:'';
+  /* Eliminated players (and spectators — me is undefined for them) don't
+     get to steer the table they're no longer actually competing at;
+     take-over stays available to whoever's still actually playing. */
+  const takeOverBtn=(G.mode==='mp'&&!iCanAdvance&&me&&!me.elim)?`<button class="btn ghost small" onclick="uiTakeOverHost()">Take over as host</button>`:'';
   let extra,nextBtn;
   if(calledBy!=null){
     const callerName=esc(G.players[calledBy].name);
@@ -2577,6 +2584,9 @@ function renderLobby(){
    so there's no window where two clients both think they can deal. */
 function uiTakeOverHost(){
   if(!mp.ref||mp.isHost)return;
+  /* mid-match only — G is null in the lobby, where there's no
+     elimination concept yet and everyone's still eligible */
+  if(G&&myIdx>=0&&G.players[myIdx]&&G.players[myIdx].elim)return;
   mp.ref.child('host').set(myUid);
   toast('You are now the host');
 }
@@ -2725,7 +2735,7 @@ function showChatBubble(uid,name,text){
    voice call at all. */
 function triggerCough(){
   const me=G&&myIdx>=0?G.players[myIdx]:null;
-  if(!me)return;
+  if(!me||me.elim)return;
   playCoughEffect(me.id);   // immediate local feedback, no round-trip wait
   if(mp.ref)mp.ref.child('cough').push({uid:myUid,ts:firebase.database.ServerValue.TIMESTAMP});
 }
