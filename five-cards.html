@@ -702,7 +702,7 @@ body.dealing .card-count{visibility:hidden}
     </div>
     <span class="lbl">Number of bots</span>
     <div class="seg" id="seg-nbots">
-      <button data-v="1">1</button><button data-v="2" class="sel">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button><button data-v="7">7</button>
+      <button data-v="1">1</button><button data-v="2" class="sel">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button><button data-v="7">7</button><button data-v="8">8</button><button data-v="9">9</button>
     </div>
     <span class="lbl">Number of decks</span>
     <div class="seg" id="seg-decks">
@@ -743,7 +743,7 @@ body.dealing .card-count{visibility:hidden}
         <button class="btn primary" id="btn-join">Join</button>
       </div>
     </div>
-    <p class="tag">2–8 players · share the room code with friends</p>
+    <p class="tag">2–10 players · share the room code with friends</p>
     <button class="btn ghost" data-back>← Back</button>
   </div>
 </section>
@@ -1824,7 +1824,7 @@ function render(){
     ?Array.from({length:G.players.length-1},(_,k)=>(myIdx+k+1)%G.players.length)
     :G.players.map((_,i)=>i);
   /* seat chips shrink in tiers as the ring fills up — see the n-mid/
-     n-many CSS rules — so up to 8 total seats (opponents + your own)
+     n-many CSS rules — so up to 10 total seats (opponents + your own)
      can surround the felt without crowding each other */
   const totalSeatCount=oppIdxs.length+(myIdx>=0?1:0);
   opp.className=totalSeatCount>=7?'n-many':totalSeatCount>=5?'n-mid':'';
@@ -2405,7 +2405,7 @@ function pump(){
 }
 function startBotGame(){
   const myName=getName('#inp-name-bot');if(!myName)return;
-  const names=shuffle(['Ace','Ruby','Jax','Queenie','Kingsley','Maverick','Diesel','Scout']);
+  const names=shuffle(['Ace','Ruby','Jax','Queenie','Kingsley','Maverick','Diesel','Scout','Nash','Piper']);
   const defs=[{name:myName,isBot:false}];
   for(let i=0;i<setup.nbots;i++)defs.push({name:names[i],isBot:true,diff:setup.diff});
   G=newMatch(defs,setup.limit,'bot',setup.numDecks);
@@ -2548,7 +2548,7 @@ function joinRoom(){
         .then(()=>attachRoom(code));
       return;
     }
-    if(!already&&Object.keys(r.players||{}).length>=8)return toast('Room is full (max 8)');
+    if(!already&&Object.keys(r.players||{}).length>=10)return toast('Room is full (max 10)');
     ref.child('players/'+myUid)
       .set({name,order:already?r.players[myUid].order:Date.now()})
       .then(()=>attachRoom(code));
