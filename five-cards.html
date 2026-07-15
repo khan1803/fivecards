@@ -419,8 +419,12 @@ body.dealing .card-count{visibility:hidden}
 .emoji-btn:active{transform:scale(1.25)}
 #chat-input-row{display:flex;gap:8px;padding:10px 16px calc(12px + env(safe-area-inset-bottom))}
 #chat-input-row input{flex:1}
-#chat-badge,#chat-badge-lobby{position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:800;
+#chat-badge,#chat-badge-lobby,#spec-badge{position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:800;
   border-radius:999px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px;line-height:1}
+/* spectator count is informational, not urgent like an unread chat count
+   — same pill shape, but the calmer gold rather than red so it doesn't
+   compete for attention */
+#spec-badge{background:var(--gold);color:var(--inkdark)}
 
 /* ---------- floating chat bubbles (appear near the sender's own
    name/avatar and auto-dismiss — independent of whether the full
@@ -618,13 +622,19 @@ body.dealing .card-count{visibility:hidden}
 #btn-voice.voice-live{background:rgba(201,168,76,.22);border-color:var(--gold);color:var(--gold)}
 #btn-voice.voice-muted{background:rgba(184,50,50,.15);border-color:rgba(184,50,50,.5);color:var(--red)}
 [data-theme="neon"] #btn-voice.voice-live{background:rgba(240,84,60,.22);border-color:var(--gold)}
+#btn-voice,#btn-voice-lobby{display:inline-flex;align-items:center;justify-content:center;gap:8px}
 .voice-mic{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;
   background:var(--panel);border:1.5px solid rgba(201,168,76,.3);display:flex;align-items:center;justify-content:center;
   font-size:9px;line-height:1;z-index:2;transition:box-shadow .15s,border-color .15s}
 .voice-mic.muted{opacity:.55}
-.opp.speaking .avatar{box-shadow:0 0 0 3px var(--gold),0 2px 8px rgba(0,0,0,.35)}
-.opp.speaking .voice-mic{border-color:var(--gold);box-shadow:0 0 10px rgba(201,168,76,.6)}
-#my-area.speaking{box-shadow:0 -6px 30px rgba(201,168,76,.35)}
+/* speaking = an actual flicker, not just a static ring, so it reads at a
+   glance as "live right now" rather than a fixed highlight that could be
+   mistaken for e.g. the current-turn glow */
+@keyframes speakFlicker{0%,100%{box-shadow:0 0 0 3px var(--gold),0 2px 8px rgba(0,0,0,.35)}50%{box-shadow:0 0 0 6px var(--goldlt),0 2px 16px rgba(201,168,76,.65)}}
+.opp.speaking .avatar{animation:speakFlicker .7s ease-in-out infinite}
+.opp.speaking .voice-mic{border-color:var(--gold);box-shadow:0 0 10px rgba(201,168,76,.6);animation:speakFlicker .7s ease-in-out infinite}
+@keyframes speakFlickerBar{0%,100%{box-shadow:0 -6px 30px rgba(201,168,76,.35)}50%{box-shadow:0 -6px 40px rgba(201,168,76,.65)}}
+#my-area.speaking{animation:speakFlickerBar .7s ease-in-out infinite}
 
 /* ---------- turn timer (multiplayer only) ---------- */
 #turn-timer{font-family:'DM Mono',monospace;font-size:13px;font-weight:800;color:var(--gold);
@@ -776,6 +786,7 @@ body.dealing .card-count{visibility:hidden}
       <button class="icon-btn" id="theme-btn" title="Switch theme">🌃</button>
       <button class="icon-btn hidden" id="btn-voice" title="Voice chat">🎤</button>
       <button class="icon-btn hidden" id="btn-chat" style="position:relative">💬<span id="chat-badge" class="hidden"></span></button>
+      <button class="icon-btn hidden" id="btn-spectators" title="Spectators" style="position:relative">👁<span id="spec-badge" class="hidden"></span></button>
       <button class="icon-btn" id="btn-log">📜</button>
       <button class="icon-btn" id="btn-score">🏆</button>
       <button class="icon-btn" id="btn-help2">?</button>
@@ -1783,6 +1794,7 @@ function render(){
   $('#round-info').textContent=`ROUND ${G.round} · LIMIT ${G.limit}`;
   $('#btn-chat').classList.toggle('hidden',G.mode!=='mp');
   $('#btn-voice').classList.toggle('hidden',G.mode!=='mp');
+  $('#btn-spectators').classList.toggle('hidden',G.mode!=='mp');
   updateTurnTimer();
   /* whose OPEN CARD it is lives right on their seat chip (see below),
      and stays there for the whole round — not just during their own
@@ -2283,6 +2295,25 @@ function showLogModal(){
   openModal('log',`<h2>Game log</h2><div class="logbox">${G.log.slice().reverse().map(esc).join('<br>')}</div>
     <div class="mbtns"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
 }
+/* players could only ever learn a spectator had joined via a one-shot
+   toast at the moment they joined (see mp.specRef's child_added listener)
+   — nothing persistent showed who's actually watching right now. The
+   room's own root listener already keeps mp.room.spectators live and
+   current, so this just needs to surface it, not track anything new. */
+function updateSpectatorBadge(){
+  const b=$('#spec-badge');if(!b)return;
+  const n=mp.room&&mp.room.spectators?Object.keys(mp.room.spectators).length:0;
+  if(n>0){b.textContent=n>9?'9+':n;b.classList.remove('hidden');}
+  else b.classList.add('hidden');
+}
+function showSpectatorsModal(){
+  const specs=Object.values((mp.room&&mp.room.spectators)||{}).sort((a,b)=>a.order-b.order);
+  const list=specs.length
+    ?specs.map(s=>`<div class="lp">👁 ${esc(s.name)}</div>`).join('')
+    :`<p class="tag">No one's watching right now.</p>`;
+  openModal('spectators',`<h2>Spectators${specs.length?` (${specs.length})`:''}</h2>${list}
+    <div class="mbtns"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+}
 function showHelpModal(){
   openModal('help',`<h2>How to play</h2><div class="help-list">
     <div><b>Goal:</b> keep the total value of your hand as low as possible. A=1, 2=2 … 7=7, <b>8=0</b>, 9=9, 10=10, J=11, Q=12, K=13, <b>Joker=0</b>.</div>
@@ -2628,6 +2659,7 @@ function attachRoom(code){
     if(!meInPlayers&&!meInSpectators){leaveRoom(true);return;}
     mp.isSpectator=!meInPlayers&&!!meInSpectators;
     if(mp.isSpectator&&!mp.odArmed){mp.ref.child('spectators/'+myUid).onDisconnect().remove();mp.odArmed=true;}
+    updateSpectatorBadge();
     if(r.status==='lobby'){
       if(!mp.isSpectator&&!mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().remove();mp.odArmed=true;}
       G=null;renderLobby();goScr('scr-lobby');closeModal();
@@ -2912,6 +2944,11 @@ function playReactionEffect(uid,type){
 const RTC_CONFIG={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
 let voice={joined:false,muted:false,localStream:null,peers:{},presenceRef:null,sigRef:null,speakTimer:null};
 let voicePresent=new Set();  // uids currently in the voice channel, per Firebase presence — drives the mic badge in render()
+/* real mic / mic-with-strike glyphs (every other platform's mute icon is
+   a struck-through mic, never a speaker) — inline SVG using currentColor
+   so the existing gold/red button state colors keep working for free */
+const MIC_SVG='<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>';
+const MIC_MUTED_SVG='<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/><line x1="3" y1="3" x2="21" y2="21" stroke="var(--red)" stroke-width="2.6"/></svg>';
 
 /* drives both the in-game topbar mic (#btn-voice, icon-only) and the
    lobby's Voice button (#btn-voice-lobby, icon + label) — voice chat
@@ -2919,15 +2956,15 @@ let voicePresent=new Set();  // uids currently in the voice channel, per Firebas
    whether a match has actually started, so the same join/mute/leave
    state applies in both places without any extra plumbing. */
 function updateVoiceUI(){
-  const icon=!voice.joined?'🎤':(voice.muted?'🔇':'🎙️');
+  const icon=(voice.joined&&voice.muted)?MIC_MUTED_SVG:MIC_SVG;
   const title=!voice.joined?'Join voice chat':(voice.muted?'Unmute':'Mute');
   const stateClass=voice.joined?(voice.muted?'voice-muted':'voice-live'):null;
   const b=$('#btn-voice');
-  if(b){b.classList.remove('voice-live','voice-muted');b.textContent=icon;b.title=title;if(stateClass)b.classList.add(stateClass);}
+  if(b){b.classList.remove('voice-live','voice-muted');b.innerHTML=icon;b.title=title;if(stateClass)b.classList.add(stateClass);}
   const bl=$('#btn-voice-lobby');
   if(bl){
     bl.classList.remove('voice-live','voice-muted');
-    const ic=$('#voice-lobby-icon');if(ic)ic.textContent=icon;
+    const ic=$('#voice-lobby-icon');if(ic)ic.innerHTML=icon;
     bl.title=title;
     if(stateClass)bl.classList.add(stateClass);
   }
@@ -3159,6 +3196,7 @@ $('#btn-sound').onclick=toggleSound;
 $('#btn-sound').textContent=soundOn?'🔊':'🔇';
 $('#btn-score').onclick=showScoreModal;
 $('#btn-log').onclick=showLogModal;
+$('#btn-spectators').onclick=showSpectatorsModal;
 $('#log-line').onclick=showLogModal;
 $('#btn-chat').onclick=openChat;
 $('#btn-chat-lobby').onclick=openChat;
