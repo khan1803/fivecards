@@ -1151,8 +1151,8 @@ function resolveShow(g,pi,openShow){
   const rows=[];
   act.forEach(i=>{
     const p=g.players[i];let pts;
-    if(ok)pts=(sums[i]===my)?0:sums[i];   // anyone tied with the shower's winning sum also wins
-    else pts=(i===pi)?60:(sums[i]===minO?0:sums[i]);
+    if(ok)pts=(sums[i]===my)?0:Math.min(sums[i],60);   // anyone tied with the shower's winning sum also wins
+    else pts=(i===pi)?60:(sums[i]===minO?0:Math.min(sums[i],60));
     p.score+=pts;
     p.roundPts.push(pts);
     rows.push({i,name:p.name,cards:sortHand(p.hand).map(lbl).join(' '),sum:sums[i],pts,total:p.score});
@@ -2381,7 +2381,7 @@ function showHelpModal(){
     <div><b>Your turn:</b> discard, then draw one card — from the <b>deck</b> or from the previous player's <b>open cards</b> (yes, you can grab their joker).</div>
     <div><b>Discards:</b> one card, 2+ cards of the <b>same rank</b> (two Kings), or a <b>run of 3+</b> in the same suit (4-5-6♥). Jokers are wild in runs.</div>
     <div><b>Attack:</b> a 2 or a Joker played alone (or as a pair) makes the next player <b>pick up 2 per card</b> — unless they stack their own 2/Joker to pass it on, bigger. Picking up ends your turn.</div>
-    <div><b>Show:</b> on your turn, declare! If you truly have the lowest hand you score <b>0</b> and everyone else scores their hand. If anyone is equal or lower — <b>+60 penalty</b> for you, and the real lowest scores 0.</div>
+    <div><b>Show:</b> on your turn, declare! If you truly have the lowest hand you score <b>0</b> and everyone else scores their hand (capped at <b>60</b>). If anyone is equal or lower — <b>+60 penalty</b> for you, and the real lowest scores 0.</div>
     <div><b>Elimination:</b> reach the point limit (240/360) and you're out. Last player standing wins.</div>
   </div><div class="mbtns"><button class="btn primary" onclick="closeModal()">Got it</button></div>`);
 }
