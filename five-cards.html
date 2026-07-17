@@ -394,6 +394,20 @@ body.dealing .card-count{visibility:hidden}
   width:min(470px,95vw);max-height:86dvh;overflow:auto;display:flex;flex-direction:column;gap:13px;box-shadow:0 30px 90px rgba(0,0,0,.6)}
 #modal h2{color:var(--gold);font-size:20px;font-family:'Cinzel',serif;text-shadow:0 2px 14px rgba(255,184,77,.3)}
 #modal .mbtns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:4px}
+/* ---------- volume panel ---------- */
+.vol-row{display:flex;flex-direction:column;gap:8px;margin:6px 0}
+.vol-row label{display:flex;justify-content:space-between;font-size:12px;color:var(--labelmuted);
+  font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:1px}
+.vol-row label span{color:var(--gold);font-weight:700}
+.vol-row input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:999px;
+  background:rgba(255,184,77,.16);outline:none;cursor:pointer;margin:2px 0}
+.vol-row input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:999px;background:transparent}
+.vol-row input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:transparent}
+.vol-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;
+  border-radius:50%;margin-top:-7px;background:linear-gradient(180deg,var(--goldlt),var(--gold2));cursor:pointer;
+  box-shadow:0 2px 6px rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.18)}
+.vol-row input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.18);
+  background:linear-gradient(180deg,var(--goldlt),var(--gold2));cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.45)}
 .rt{width:100%;border-collapse:collapse;font-size:12.5px}
 .rt th{color:var(--labelmuted);font-size:9px;text-transform:uppercase;letter-spacing:1.5px;text-align:left;padding:5px 6px;font-family:'DM Mono',monospace;font-weight:400}
 .rt td{padding:8px 6px;border-top:1px solid rgba(255,184,77,.1);color:rgba(253,246,232,.75);font-family:'DM Mono',monospace;font-size:11px}
@@ -1309,6 +1323,21 @@ let sel=new Set(),modalKind=null,toastTimer=null;
 
 /* ---- sound (WebAudio synth — no external assets/network needed) ---- */
 let soundOn=localStorage.fcSound!=='off',actx=null,lastSeenSeq=-1,pendingDealAnim=false,showAnnouncePending=false,announcedRound=-1,announcePendingUntil=0;
+/* three independently adjustable channels — game effects (tone()/noise()/
+   sndFahh()) and every reaction sound route through their own shared
+   GainNode instead of straight to actx.destination, so a slider here
+   scales a whole category at once; voice chat isn't a Web Audio node at
+   all (it's a raw WebRTC <audio> element per peer, see attachRemoteAudio)
+   so its "gain" is just that element's own native .volume. Named
+   masterVol, not vol — tone()'s own params already use `vol` for a single
+   note's own volume, and shadowing that inside every tone() call would
+   be a landmine. */
+let masterVol={
+  game:localStorage.fcVolGame!=null?+localStorage.fcVolGame:70,
+  voice:localStorage.fcVolVoice!=null?+localStorage.fcVolVoice:100,
+  emoji:localStorage.fcVolEmoji!=null?+localStorage.fcVolEmoji:70
+};
+let gameGain=null,emojiGain=null;
 /* Open Show reveal bookkeeping — the authoritative "how many cards has
    each player been shown" now lives on G itself (G.openShowRevealed),
    synced like any other move, so it's identical on every client. These
@@ -1320,7 +1349,11 @@ let soundOn=localStorage.fcSound!=='off',actx=null,lastSeenSeq=-1,pendingDealAni
 let openShowIntroRound=-1,openShowBannerPending=false,lastRevealSnapshot=null,lastRevealRound=-1,openShowPendingUntil=0;
 function ensureAudio(){
   if(!soundOn)return null;
-  if(!actx){try{actx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){soundOn=false;return null;}}
+  if(!actx){
+    try{actx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){soundOn=false;return null;}
+    gameGain=actx.createGain();gameGain.gain.value=masterVol.game/100;gameGain.connect(actx.destination);
+    emojiGain=actx.createGain();emojiGain.gain.value=masterVol.emoji/100;emojiGain.connect(actx.destination);
+  }
   if(actx.state==='suspended')actx.resume();
   return actx;
 }
@@ -1378,7 +1411,7 @@ function tone(freq,start,dur,type,vol){
   g.gain.setValueAtTime(0,t0);
   g.gain.linearRampToValueAtTime(vol||0.18,t0+0.012);
   g.gain.exponentialRampToValueAtTime(0.001,t0+dur);
-  o.connect(g);g.connect(ac.destination);
+  o.connect(g);g.connect(gameGain);
   o.start(t0);o.stop(t0+dur+0.03);
 }
 /* filtered white noise burst — sounds like a riffle-shuffle "shh" far
@@ -1396,7 +1429,7 @@ function noise(start,dur,vol,filterFreq){
   g.gain.setValueAtTime(0,t0);
   g.gain.linearRampToValueAtTime(vol,t0+dur*.15);
   g.gain.exponentialRampToValueAtTime(.001,t0+dur);
-  src.connect(filt);filt.connect(g);g.connect(ac.destination);
+  src.connect(filt);filt.connect(g);g.connect(gameGain);
   src.start(t0);src.stop(t0+dur+.02);
 }
 const sndDiscard=()=>tone(520,0,.09,'triangle',.16);
@@ -1448,7 +1481,7 @@ let fahhBuffer=null,fahhLoading=false;
 function b64ToBuf(b64){const bin=atob(b64.split(',')[1]);const bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);return bytes.buffer;}
 function sndFahh(){
   const ac=ensureAudio();if(!ac)return;
-  if(fahhBuffer){const src=ac.createBufferSource();src.buffer=fahhBuffer;const g=ac.createGain();g.gain.value=.55;src.connect(g);g.connect(ac.destination);src.start();return;}
+  if(fahhBuffer){const src=ac.createBufferSource();src.buffer=fahhBuffer;const g=ac.createGain();g.gain.value=.55;src.connect(g);g.connect(gameGain);src.start();return;}
   if(fahhLoading)return;fahhLoading=true;
   ac.decodeAudioData(b64ToBuf(FAHH_B64),buf=>{fahhBuffer=buf;fahhLoading=false;sndFahh();},()=>{fahhLoading=false;});
 }
@@ -1460,7 +1493,7 @@ const sndDirectionChange=()=>{tone(500,0,.12,'triangle',.15);tone(650,.13,.12,'t
 let coughBuffer=null,coughLoading=false;
 function sndCough(){
   const ac=ensureAudio();if(!ac)return;
-  if(coughBuffer){const src=ac.createBufferSource();src.buffer=coughBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(ac.destination);src.start();return;}
+  if(coughBuffer){const src=ac.createBufferSource();src.buffer=coughBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(emojiGain);src.start();return;}
   if(coughLoading)return;coughLoading=true;
   ac.decodeAudioData(b64ToBuf(COUGH_SND_B64),buf=>{coughBuffer=buf;coughLoading=false;sndCough();},()=>{coughLoading=false;});
 }
@@ -1468,7 +1501,7 @@ function sndCough(){
 let ranawayBuffer=null,ranawayLoading=false;
 function sndRanaway(){
   const ac=ensureAudio();if(!ac)return;
-  if(ranawayBuffer){const src=ac.createBufferSource();src.buffer=ranawayBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(ac.destination);src.start();return;}
+  if(ranawayBuffer){const src=ac.createBufferSource();src.buffer=ranawayBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(emojiGain);src.start();return;}
   if(ranawayLoading)return;ranawayLoading=true;
   ac.decodeAudioData(b64ToBuf(RANAWAY_SND_B64),buf=>{ranawayBuffer=buf;ranawayLoading=false;sndRanaway();},()=>{ranawayLoading=false;});
 }
@@ -1476,7 +1509,7 @@ function sndRanaway(){
 let gormintBuffer=null,gormintLoading=false;
 function sndGormint(){
   const ac=ensureAudio();if(!ac)return;
-  if(gormintBuffer){const src=ac.createBufferSource();src.buffer=gormintBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(ac.destination);src.start();return;}
+  if(gormintBuffer){const src=ac.createBufferSource();src.buffer=gormintBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(emojiGain);src.start();return;}
   if(gormintLoading)return;gormintLoading=true;
   ac.decodeAudioData(b64ToBuf(GORMINT_SND_B64),buf=>{gormintBuffer=buf;gormintLoading=false;sndGormint();},()=>{gormintLoading=false;});
 }
@@ -1484,7 +1517,7 @@ function sndGormint(){
 let panvelBuffer=null,panvelLoading=false;
 function sndPanvel(){
   const ac=ensureAudio();if(!ac)return;
-  if(panvelBuffer){const src=ac.createBufferSource();src.buffer=panvelBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(ac.destination);src.start();return;}
+  if(panvelBuffer){const src=ac.createBufferSource();src.buffer=panvelBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(emojiGain);src.start();return;}
   if(panvelLoading)return;panvelLoading=true;
   ac.decodeAudioData(b64ToBuf(PANVEL_SND_B64),buf=>{panvelBuffer=buf;panvelLoading=false;sndPanvel();},()=>{panvelLoading=false;});
 }
@@ -1492,7 +1525,7 @@ function sndPanvel(){
 let kheerBuffer=null,kheerLoading=false;
 function sndKheer(){
   const ac=ensureAudio();if(!ac)return;
-  if(kheerBuffer){const src=ac.createBufferSource();src.buffer=kheerBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(ac.destination);src.start();return;}
+  if(kheerBuffer){const src=ac.createBufferSource();src.buffer=kheerBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(emojiGain);src.start();return;}
   if(kheerLoading)return;kheerLoading=true;
   ac.decodeAudioData(b64ToBuf(KHEER_SND_B64),buf=>{kheerBuffer=buf;kheerLoading=false;sndKheer();},()=>{kheerLoading=false;});
 }
@@ -1500,7 +1533,7 @@ function sndKheer(){
 let croreBuffer=null,croreLoading=false;
 function sndCrore(){
   const ac=ensureAudio();if(!ac)return;
-  if(croreBuffer){const src=ac.createBufferSource();src.buffer=croreBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(ac.destination);src.start();return;}
+  if(croreBuffer){const src=ac.createBufferSource();src.buffer=croreBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(emojiGain);src.start();return;}
   if(croreLoading)return;croreLoading=true;
   ac.decodeAudioData(b64ToBuf(CRORE_SND_B64),buf=>{croreBuffer=buf;croreLoading=false;sndCrore();},()=>{croreLoading=false;});
 }
@@ -1508,7 +1541,7 @@ function sndCrore(){
 let bandkaroBuffer=null,bandkaroLoading=false;
 function sndBandkaro(){
   const ac=ensureAudio();if(!ac)return;
-  if(bandkaroBuffer){const src=ac.createBufferSource();src.buffer=bandkaroBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(ac.destination);src.start();return;}
+  if(bandkaroBuffer){const src=ac.createBufferSource();src.buffer=bandkaroBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(emojiGain);src.start();return;}
   if(bandkaroLoading)return;bandkaroLoading=true;
   ac.decodeAudioData(b64ToBuf(BANDKARO_SND_B64),buf=>{bandkaroBuffer=buf;bandkaroLoading=false;sndBandkaro();},()=>{bandkaroLoading=false;});
 }
@@ -1516,7 +1549,7 @@ function sndBandkaro(){
 let buoyBuffer=null,buoyLoading=false;
 function sndBuoy(){
   const ac=ensureAudio();if(!ac)return;
-  if(buoyBuffer){const src=ac.createBufferSource();src.buffer=buoyBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(ac.destination);src.start();return;}
+  if(buoyBuffer){const src=ac.createBufferSource();src.buffer=buoyBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(emojiGain);src.start();return;}
   if(buoyLoading)return;buoyLoading=true;
   ac.decodeAudioData(b64ToBuf(BUOY_SND_B64),buf=>{buoyBuffer=buf;buoyLoading=false;sndBuoy();},()=>{buoyLoading=false;});
 }
@@ -1524,7 +1557,7 @@ function sndBuoy(){
 let rosenBuffer=null,rosenLoading=false;
 function sndRosen(){
   const ac=ensureAudio();if(!ac)return;
-  if(rosenBuffer){const src=ac.createBufferSource();src.buffer=rosenBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(ac.destination);src.start();return;}
+  if(rosenBuffer){const src=ac.createBufferSource();src.buffer=rosenBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(emojiGain);src.start();return;}
   if(rosenLoading)return;rosenLoading=true;
   ac.decodeAudioData(b64ToBuf(ROSEN_SND_B64),buf=>{rosenBuffer=buf;rosenLoading=false;sndRosen();},()=>{rosenLoading=false;});
 }
@@ -1532,7 +1565,7 @@ function sndRosen(){
 let mutaharBuffer=null,mutaharLoading=false;
 function sndMutahar(){
   const ac=ensureAudio();if(!ac)return;
-  if(mutaharBuffer){const src=ac.createBufferSource();src.buffer=mutaharBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(ac.destination);src.start();return;}
+  if(mutaharBuffer){const src=ac.createBufferSource();src.buffer=mutaharBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(emojiGain);src.start();return;}
   if(mutaharLoading)return;mutaharLoading=true;
   ac.decodeAudioData(b64ToBuf(MUTAHAR_SND_B64),buf=>{mutaharBuffer=buf;mutaharLoading=false;sndMutahar();},()=>{mutaharLoading=false;});
 }
@@ -1540,7 +1573,7 @@ function sndMutahar(){
 let akshayBuffer=null,akshayLoading=false;
 function sndAkshay(){
   const ac=ensureAudio();if(!ac)return;
-  if(akshayBuffer){const src=ac.createBufferSource();src.buffer=akshayBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(ac.destination);src.start();return;}
+  if(akshayBuffer){const src=ac.createBufferSource();src.buffer=akshayBuffer;const g=ac.createGain();g.gain.value=.7;src.connect(g);g.connect(emojiGain);src.start();return;}
   if(akshayLoading)return;akshayLoading=true;
   ac.decodeAudioData(b64ToBuf(AKSHAY_SND_B64),buf=>{akshayBuffer=buf;akshayLoading=false;sndAkshay();},()=>{akshayLoading=false;});
 }
@@ -1584,11 +1617,44 @@ function syncLogAudio(){
   if(n>0)G.log.slice(G.log.length-n).forEach(playSoundForLog);
   lastSeenSeq=seq;
 }
-function toggleSound(){
-  soundOn=!soundOn;
-  localStorage.fcSound=soundOn?'on':'off';
-  if(soundOn)ensureAudio();
-  $('#btn-sound').textContent=soundOn?'🔊':'🔇';
+/* pushes the live slider values out to whichever gain nodes/elements
+   actually exist right now — gameGain/emojiGain are null until the first
+   sound ever plays (ensureAudio() creates them lazily), so a slider drag
+   before that just updates masterVol/localStorage and applyMasterVol()
+   silently no-ops on the two null checks; the freshly-created nodes pick
+   up masterVol's current value themselves the moment they're born. */
+function applyMasterVol(){
+  if(gameGain)gameGain.gain.value=masterVol.game/100;
+  if(emojiGain)emojiGain.gain.value=masterVol.emoji/100;
+  document.querySelectorAll('audio[id^="voice-audio-"]').forEach(el=>{el.volume=masterVol.voice/100;});
+  updateSoundIcon();
+}
+function updateSoundIcon(){
+  const b=$('#btn-sound');if(!b)return;
+  const silent=masterVol.game===0&&masterVol.voice===0&&masterVol.emoji===0;
+  b.textContent=silent?'🔇':'🔊';
+}
+function setVol(key,value){
+  masterVol[key]=+value;
+  localStorage['fcVol'+key[0].toUpperCase()+key.slice(1)]=value;
+  const valEl=$('#vol-'+key+'-val');if(valEl)valEl.textContent=value+'%';
+  applyMasterVol();
+}
+/* opening the panel is the new front door for audio control — it
+   replaces the old plain on/off tap, so it also folds in what that used
+   to do: a client that had sound fully switched off in an earlier
+   session (soundOn===false, from before this feature existed) gets
+   pulled back to "on" the moment they open this, since the sliders
+   underneath are now the only way to actually silence anything. */
+function showVolumeModal(){
+  soundOn=true;localStorage.fcSound='on';ensureAudio();
+  const row=(key,label)=>`<div class="vol-row"><label>${label} <span id="vol-${key}-val">${masterVol[key]}%</span></label>
+    <input type="range" min="0" max="100" value="${masterVol[key]}" oninput="setVol('${key}',this.value)"></div>`;
+  openModal('volume',`<h2>Volume</h2>
+    ${row('game','Game Sounds')}
+    ${row('voice','Voice Chat')}
+    ${row('emoji','Reactions')}
+    <div class="mbtns"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
 }
 
 /* ---- deal animation: flying card-backs from the deck to each hand ---- */
@@ -3219,6 +3285,7 @@ function attachRemoteAudio(uid,stream){
   let el=document.getElementById('voice-audio-'+uid);
   if(!el){el=document.createElement('audio');el.id='voice-audio-'+uid;el.autoplay=true;document.body.appendChild(el);}
   el.srcObject=stream;
+  el.volume=masterVol.voice/100;
   const entry=voice.peers[uid];if(entry)entry.stream=stream;
 }
 function teardownPeer(uid){
@@ -3354,8 +3421,8 @@ $('#lobby-players').addEventListener('click',e=>{
 $('#btn-copy').onclick=()=>{
   if(navigator.clipboard&&mp.code)navigator.clipboard.writeText(mp.code).then(()=>toast('Code copied!'));
 };
-$('#btn-sound').onclick=toggleSound;
-$('#btn-sound').textContent=soundOn?'🔊':'🔇';
+$('#btn-sound').onclick=showVolumeModal;
+updateSoundIcon();
 $('#btn-score').onclick=showScoreModal;
 $('#btn-log').onclick=showLogModal;
 $('#btn-spectators').onclick=showSpectatorsModal;
