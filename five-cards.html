@@ -152,7 +152,26 @@ input:focus{border-color:var(--gold)}
 .rank-badge{display:inline-flex;align-items:center;justify-content:center;
   background:linear-gradient(135deg,var(--gold),var(--gold2));color:var(--inkdark);
   font-size:10px;font-weight:800;line-height:1;padding:3px 7px;border-radius:6px;font-family:'DM Mono',monospace}
-.avatar .rank-badge{position:absolute;top:-4px;left:-7px;z-index:2;font-size:9px;padding:2px 5px;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.avatar .rank-badge{position:absolute;top:-4px;left:-7px;z-index:2;font-size:9px;padding:2px 5px;box-shadow:0 1px 4px rgba(0,0,0,.4);transform-origin:top left}
+/* top-3 get progressively more visual weight — readable as "who's
+   winning" from across the table at a glance, the same way the turn-ring
+   already makes "whose turn" readable without reading text. scale()
+   rather than a bigger font-size so this stays correctly proportioned
+   under every existing responsive tier (mobile/n-many/desktop all set
+   their own base font-size for .avatar .rank-badge already) instead of
+   flattening them all to one fixed size. Silver/bronze only apply to
+   .rank-2/.rank-3 — rank 1 keeps the same gold gradient every other
+   badge already uses, just bigger, glowing, and a crown instead of a
+   number, so gold stays meaning "1st place" specifically, not just
+   "top 3", the same convention the rest of the page's gold already means. */
+.rank-badge.rank-2{transform:scale(1.15);background:linear-gradient(135deg,#F0F0F8,#ABABBC);color:#2A2A38}
+.rank-badge.rank-3{transform:scale(1.15);background:linear-gradient(135deg,#E3A166,#9C5F2E);color:#2E1A08}
+.rank-badge.rank-1{transform:scale(1.4);box-shadow:0 1px 4px rgba(0,0,0,.4),0 0 10px rgba(255,184,77,.75);
+  animation:rankCrownGlow 1.8s ease-in-out infinite}
+@keyframes rankCrownGlow{
+  0%,100%{box-shadow:0 1px 4px rgba(0,0,0,.4),0 0 8px rgba(255,184,77,.55)}
+  50%{box-shadow:0 1px 4px rgba(0,0,0,.4),0 0 18px rgba(255,184,77,.95)}
+}
 .seat-card{position:relative;margin-top:-7px;width:100%;background:rgba(23,10,46,.85);border:1px solid rgba(255,184,77,.2);border-radius:9px;
   padding:9px 6px 4px;box-shadow:0 3px 10px rgba(0,0,0,.35);transition:border-color .2s,box-shadow .2s}
 .opp.turn .seat-card{border-color:rgba(255,184,77,.6);box-shadow:0 0 16px rgba(255,184,77,.28)}
@@ -1366,6 +1385,7 @@ function ensureAudio(){
    context continuously running so those deferred sounds don't go silent. */
 document.addEventListener('pointerdown',()=>{
   if(soundOn&&actx&&actx.state==='suspended')actx.resume();
+  retryVoiceAudio();
 },{passive:true});
 /* Backgrounding the tab (switching apps, an incoming call, screen lock)
    is where two separate persistent complaints actually meet: mobile
@@ -1391,6 +1411,7 @@ document.addEventListener('visibilitychange',()=>{
   if(document.body.classList.contains('dealing')&&!isDealing()){
     document.body.classList.remove('dealing');
   }
+  retryVoiceAudio();
   if(G)render();
 });
 /* standard popover UX: a tap anywhere outside the reaction picker (or
@@ -2009,6 +2030,17 @@ function render(){
   /* rank badges next to every username, always visible */
   const ranked=rankRows(G.players.map((p,i)=>({i,total:p.score})),'total');
   const rankOf=i=>{const r=ranked.find(x=>x.i===i);return r?r.rank:1;};
+  /* top-3 badges get their own modifier class (bigger + medal-colored,
+     see the CSS) and rank 1 gets a crown instead of a number — visible
+     on every seat, not just your own, since this reads off the same
+     shared `ranked` competition-ranking used for the table everywhere
+     else, ties included (two players tied for the lead both come back
+     as rank 1 here and both correctly get a crown). */
+  const rankBadgeHtml=i=>{
+    const r=rankOf(i);
+    const cls=r<=3?` rank-${r}`:'';
+    return `<span class="rank-badge${cls}">${r===1?'👑':'#'+r}</span>`;
+  };
 
   /* opponents — a real player sees everyone but themself, seated relative
      to their own seat; a spectator (myIdx<0) isn't seated anywhere, so
@@ -2047,7 +2079,7 @@ function render(){
        may never respond again. Never shown for an opponent who's
        already out — nothing left to kick. */
     const canKick=G.mode==='mp'&&mp.isHost&&!p.elim;
-    d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}<span class="rank-badge">#${rankOf(i)}</span>${inVoice?'<span class="voice-mic">🎙️</span>':''}${canKick?`<button class="kick-btn" title="Kick ${esc(p.name)}">✕</button>`:''}</div>
+    d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}${rankBadgeHtml(i)}${inVoice?'<span class="voice-mic">🎙️</span>':''}${canKick?`<button class="kick-btn" title="Kick ${esc(p.name)}">✕</button>`:''}</div>
       <div class="seat-card">
         <div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span>${(showOpenBadge&&i===G.starter)?'<span class="tagchip open-tag">Open card</span>'
           :(showOpenBadge&&i===nextStarterI)?'<span class="tagchip next-open-tag">Next Open Card</span>'
@@ -2082,7 +2114,7 @@ function render(){
        so its icon shouldn't look like it belongs to just one of them. */
     const reactionHtml=dispElimMe?'':`<button class="cough-btn" title="React">😊</button>
       <div class="reaction-picker${reactionPickerOpen?'':' hidden'}">${reactionWheelHtml()}</div>`;
-    d.innerHTML=`<div class="avatar">${esc((me.name[0]||'?').toUpperCase())}<span class="rank-badge">#${rankOf(myIdx)}</span>${inVoice?'<span class="voice-mic">🎙️</span>':''}${reactionHtml}</div>
+    d.innerHTML=`<div class="avatar">${esc((me.name[0]||'?').toUpperCase())}${rankBadgeHtml(myIdx)}${inVoice?'<span class="voice-mic">🎙️</span>':''}${reactionHtml}</div>
       <div class="seat-card">
         <div class="opp-name"><span class="opp-name-text">${esc(me.name)} (you)</span>${(showOpenBadge&&myIdx===G.starter)?'<span class="tagchip open-tag">Open card</span>'
           :(showOpenBadge&&myIdx===nextStarterI)?'<span class="tagchip next-open-tag">Next Open Card</span>':''}</div>
@@ -3248,7 +3280,36 @@ function createPeerConnection(uid){
   voice.localStream.getTracks().forEach(t=>pc.addTrack(t,voice.localStream));
   pc.onicecandidate=e=>{if(e.candidate)sendSignal(uid,{type:'ice',candidate:e.candidate.toJSON()});};
   pc.ontrack=e=>attachRemoteAudio(uid,e.streams[0]);
+  /* mobile backgrounding (screen lock, an incoming call, switching apps)
+     can kill the underlying ICE connection outright with nothing left to
+     ever notice — ontrack already fired once, so from this app's own
+     state everything still looks fine even though the audio has gone
+     dead silent; this is almost certainly the real cause behind "can't
+     hear anyone, fixed by refreshing" reports, since a refresh is the
+     only thing that currently ever rebuilds these connections.
+     'disconnected' is often just a brief network blip that self-recovers
+     within a few seconds on its own, so it gets a grace window before
+     being treated as dead; 'failed' never recovers by itself and is
+     acted on immediately. Only the side that originally placed the call
+     re-offers on reconnect, mirroring the exact same deterministic
+     tie-break already used to decide who calls whom in the first place —
+     both sides trying to renegotiate at once would just collide. */
+  pc.oniceconnectionstatechange=()=>{
+    const st=pc.iceConnectionState;
+    if(st==='failed')reconnectPeer(uid);
+    else if(st==='disconnected'){
+      setTimeout(()=>{
+        const entry=voice.peers[uid];
+        if(entry&&entry.pc===pc&&pc.iceConnectionState==='disconnected')reconnectPeer(uid);
+      },4000);
+    }
+  };
   return {pc,pending:[]};
+}
+function reconnectPeer(uid){
+  if(!voice.joined||!voice.peers[uid])return;
+  teardownPeer(uid);
+  if(myUid<uid)callPeer(uid);
 }
 function callPeer(uid){
   const entry=createPeerConnection(uid);voice.peers[uid]=entry;
@@ -3286,7 +3347,24 @@ function attachRemoteAudio(uid,stream){
   if(!el){el=document.createElement('audio');el.id='voice-audio-'+uid;el.autoplay=true;document.body.appendChild(el);}
   el.srcObject=stream;
   el.volume=masterVol.voice/100;
+  /* the autoplay attribute alone isn't reliable for a MediaStream-sourced
+     element on every mobile browser, especially once ontrack fires from
+     deep inside an async ICE-negotiation callback chain rather than
+     directly inside a click handler — an explicit .play() call is the
+     more reliable path, and retryVoiceAudio() (wired to the next tap or
+     tab-foreground event) mops up the rare case it still gets blocked. */
+  el.play().catch(()=>{});
   const entry=voice.peers[uid];if(entry)entry.stream=stream;
+}
+/* recovers any remote voice-chat audio element that's silently sitting
+   paused — either autoplay got blocked outright, or the element was
+   simply never resumed after the tab came back from being backgrounded.
+   Cheap enough to run on every tap; every other element is already
+   playing and .play() on an already-playing element is a safe no-op. */
+function retryVoiceAudio(){
+  document.querySelectorAll('audio[id^="voice-audio-"]').forEach(el=>{
+    if(el.paused)el.play().catch(()=>{});
+  });
 }
 function teardownPeer(uid){
   const entry=voice.peers[uid];
