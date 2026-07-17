@@ -106,6 +106,10 @@ input:focus{border-color:var(--gold)}
 #lobby-players{display:flex;flex-direction:column;gap:8px}
 #lobby-voicebar{display:flex;gap:10px;width:100%}
 #lobby-voicebar .btn{flex:1}
+#cl-lobby-voicebar{display:flex;gap:10px;width:100%}
+#cl-lobby-voicebar .btn{flex:1}
+#btn-cl-voice-lobby,#btn-cl-voice{display:inline-flex;align-items:center;justify-content:center;gap:8px}
+#cl-voice-count{font-family:'DM Mono',monospace;font-size:11px;color:var(--gold);white-space:nowrap}
 #lobby-code{color:var(--goldlt);letter-spacing:9px;font-size:30px;font-family:'DM Mono',monospace;text-shadow:0 0 30px rgba(255,184,77,.35)}
 
 /* ---------- game screen ---------- */
@@ -1042,6 +1046,9 @@ table.cl-table .rk{color:var(--gold);font-weight:700}
         <button data-v="1">1</button><button data-v="2">2</button>
       </div>
     </div>
+    <div id="cl-lobby-voicebar">
+      <button class="btn ghost" id="btn-cl-voice-lobby"><span id="cl-voice-lobby-icon">🎤</span>&ensp;Voice</button>
+    </div>
     <div class="cl-lobby-list" id="cl-lobby-players"></div>
     <p class="tag" id="cl-lobby-hint">Waiting for players…</p>
     <button class="btn primary big hidden" id="btn-cl-lobby-start">Start Tournament</button>
@@ -1055,7 +1062,11 @@ table.cl-table .rk{color:var(--gold);font-weight:700}
   <header id="cl-hub-top">
     <button class="icon-btn" id="btn-cl-hub-exit">✕</button>
     <div id="cl-hub-title">Champions League</div>
-    <button class="icon-btn" id="btn-cl-hub-help">?</button>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span id="cl-voice-count" class="hidden"></span>
+      <button class="icon-btn" id="btn-cl-voice" title="Voice chat">🎤</button>
+      <button class="icon-btn" id="btn-cl-hub-help">?</button>
+    </div>
   </header>
   <div id="cl-hub-body">
     <div id="cl-hub-phasebar"></div>
@@ -2248,12 +2259,16 @@ function render(){
   const me=G.players[myIdx];
   const myTurn=me&&!me.elim&&G.turn===myIdx&&!isEnd();
   $('#round-info').textContent=`ROUND ${G.round} · LIMIT ${G.limit}`;
-  /* chat/voice/spectator buttons are for regular online rooms — a
-     Champions League 1v1 (G.clKey set) uses a lean per-match sync that
-     doesn't wire those listeners, so hide them there. */
+  /* chat/spectator buttons are for regular online rooms — a Champions
+     League 1v1 (G.clKey set) uses a lean per-match sync that doesn't wire
+     those listeners, so hide them there. Voice is different: it's meant
+     to be one persistent tournament-wide room for the whole CL session
+     (see currentVoiceRoomRef), not per-match, so it stays visible for a
+     CL match too — same button, just resolving to clmp.ref instead of
+     mp.ref underneath. */
   const mpFeat=G.mode==='mp'&&!G.clKey;
   $('#btn-chat').classList.toggle('hidden',!mpFeat);
-  $('#btn-voice').classList.toggle('hidden',!mpFeat);
+  $('#btn-voice').classList.toggle('hidden',G.mode!=='mp');
   $('#btn-spectators').classList.toggle('hidden',!mpFeat);
   updateTurnTimer();
   /* whose OPEN CARD it is lives right on their seat chip (see below),
@@ -3449,7 +3464,22 @@ function playReactionEffect(uid,type){
    so a pair stuck behind strict/symmetric NATs may fail to connect to each other —
    a real limitation of not running a relay server, not a bug. */
 const RTC_CONFIG={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
-let voice={joined:false,muted:false,localStream:null,peers:{},presenceRef:null,sigRef:null,speakTimer:null};
+let voice={joined:false,muted:false,localStream:null,peers:{},presenceRef:null,sigRef:null,speakTimer:null,roomRef:null};
+/* Which Firebase room voice chat actually runs against. Regular online
+   multiplayer ties voice to the single game room (mp.ref) — fine, since
+   that's the only room that ever exists there. Champions League is
+   different: mp.ref gets repointed to a fresh per-match node every time
+   you enter/leave one of your own 1v1s (see clMpEnterMatch/clGoHub), but
+   voice is meant to stay one persistent tournament-wide room everyone in
+   it can hear regardless of whose match is live — so it has to bind to
+   clmp.ref (the tournament room itself), not whatever mp.ref happens to
+   point at in the moment. Resolved once at join time and cached on
+   voice.roomRef so every other voice function (signal/leave/presence)
+   keeps using the *same* room even as mp.ref moves around underneath. */
+function currentVoiceRoomRef(){
+  if(CL&&CL.mode==='mp'&&clmp.ref)return clmp.ref;
+  return mp.ref;
+}
 let voicePresent=new Set();  // uids currently in the voice channel, per Firebase presence — drives the mic badge in render()
 /* real mic / mic-with-strike glyphs (every other platform's mute icon is
    a struck-through mic, never a speaker) — inline SVG using currentColor
@@ -3475,36 +3505,65 @@ function updateVoiceUI(){
     bl.title=title;
     if(stateClass)bl.classList.add(stateClass);
   }
+  /* Champions League's own voice buttons — lobby (icon+label) and hub
+     topbar (icon-only) — mirror the same two shapes as the base game's,
+     just with their own ids since they live on different screens. */
+  const clbl=$('#btn-cl-voice-lobby');
+  if(clbl){
+    clbl.classList.remove('voice-live','voice-muted');
+    const ic=$('#cl-voice-lobby-icon');if(ic)ic.innerHTML=icon;
+    clbl.title=title;
+    if(stateClass)clbl.classList.add(stateClass);
+  }
+  const clb=$('#btn-cl-voice');
+  if(clb){clb.classList.remove('voice-live','voice-muted');clb.innerHTML=icon;clb.title=title;if(stateClass)clb.classList.add(stateClass);}
+  updateClVoiceCount();
+}
+/* Small "🎙️ N" readout next to the CL hub's voice button — the hub has
+   no per-seat avatars to hang a mic badge off of (fixtures/standings are
+   just text rows), so a simple headcount is the lightweight equivalent. */
+function updateClVoiceCount(){
+  const el=$('#cl-voice-count');if(!el)return;
+  const n=voicePresent.size;
+  if(n>0){el.textContent='🎙️ '+n;el.classList.remove('hidden');}
+  else el.classList.add('hidden');
 }
 function voiceBtnClick(){
   if(!voice.joined)joinVoice();
   else toggleMute();
 }
 async function joinVoice(){
-  if(!mp.ref||voice.joined)return;
+  const ref=currentVoiceRoomRef();
+  if(!ref||voice.joined)return;
   let stream;
   try{stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
   catch(e){toast('Microphone access denied');return;}
+  voice.roomRef=ref;
   voice.localStream=stream;voice.joined=true;voice.muted=false;
   updateVoiceUI();
-  const vRef=mp.ref.child('voice/'+myUid);
+  const vRef=ref.child('voice/'+myUid);
   vRef.set(true);vRef.onDisconnect().remove();
   voicePresent.add(myUid);
-  voice.presenceRef=mp.ref.child('voice');
+  voice.presenceRef=ref.child('voice');
   /* voice presence (and the mic badges it drives) needs to refresh
      whichever screen is actually showing right now — the lobby, before
-     a match has even started, or the in-game seats once it has. render()
-     safely no-ops when there's no G yet (lobby), and renderLobby() no-ops
-     once there's no mp.room being shown (in-game), so calling both is
-     always safe regardless of which one currently applies. */
+     a match has even started, the in-game seats once it has, or (for
+     Champions League specifically) the CL lobby list / hub headcount.
+     Every one of these render calls safely no-ops when its own screen
+     isn't the relevant one, so firing all of them on every presence
+     change is always safe regardless of which screen is currently up. */
   voice.presenceRef.on('child_added',s=>{
     const uid=s.key;
-    voicePresent.add(uid);render();renderLobby();
+    voicePresent.add(uid);render();renderLobby();updateClVoiceCount();
+    if(CL&&CL.mode==='mp'&&onScreen('scr-cl-lobby'))clRenderMpLobby();
     if(uid===myUid||voice.peers[uid])return;
     if(myUid<uid)callPeer(uid);        // deterministic tie-break so only one side offers
   });
-  voice.presenceRef.on('child_removed',s=>{voicePresent.delete(s.key);teardownPeer(s.key);render();renderLobby();});
-  voice.sigRef=mp.ref.child('rtc/'+myUid);
+  voice.presenceRef.on('child_removed',s=>{
+    voicePresent.delete(s.key);teardownPeer(s.key);render();renderLobby();updateClVoiceCount();
+    if(CL&&CL.mode==='mp'&&onScreen('scr-cl-lobby'))clRenderMpLobby();
+  });
+  voice.sigRef=ref.child('rtc/'+myUid);
   voice.sigRef.on('child_added',s=>{
     const msg=s.val();if(msg)handleSignal(msg.from,msg);
     s.ref.remove();
@@ -3519,19 +3578,20 @@ function toggleMute(){
 }
 function leaveVoice(){
   if(!voice.joined)return;
-  if(mp.ref)mp.ref.child('voice/'+myUid).remove();
+  if(voice.roomRef)voice.roomRef.child('voice/'+myUid).remove();
   if(voice.presenceRef)voice.presenceRef.off();
   if(voice.sigRef)voice.sigRef.off();
   Object.keys(voice.peers).forEach(teardownPeer);
   if(voice.localStream)voice.localStream.getTracks().forEach(t=>t.stop());
   clearInterval(voice.speakTimer);
-  voice={joined:false,muted:false,localStream:null,peers:{},presenceRef:null,sigRef:null,speakTimer:null};
+  voice={joined:false,muted:false,localStream:null,peers:{},presenceRef:null,sigRef:null,speakTimer:null,roomRef:null};
   voicePresent.clear();
   updateVoiceUI();renderLobby();
+  if(CL&&CL.mode==='mp'&&onScreen('scr-cl-lobby'))clRenderMpLobby();
   document.querySelectorAll('.opp.speaking').forEach(el=>el.classList.remove('speaking'));
   $('#my-area').classList.remove('speaking');
 }
-function sendSignal(toUid,msg){mp.ref.child('rtc/'+toUid).push({from:myUid,...msg});}
+function sendSignal(toUid,msg){if(voice.roomRef)voice.roomRef.child('rtc/'+toUid).push({from:myUid,...msg});}
 function createPeerConnection(uid){
   const pc=new RTCPeerConnection(RTC_CONFIG);
   voice.localStream.getTracks().forEach(t=>pc.addTrack(t,voice.localStream));
@@ -3640,7 +3700,8 @@ function startSpeakingLoop(){
   voice.speakTimer=setInterval(()=>{
     if(voice.localStream){
       const level=streamLevel(voice.localStream,'_self');
-      $('#my-area').classList.toggle('speaking',!voice.muted&&level>0.06);
+      const myArea=$('#my-area');   // only exists on scr-game — voice can be joined from the CL lobby/hub too, where it's absent
+      if(myArea)myArea.classList.toggle('speaking',!voice.muted&&level>0.06);
     }
     for(const uid in voice.peers){
       const entry=voice.peers[uid];if(!entry.stream)continue;
@@ -3789,6 +3850,8 @@ $('#btn-chat').onclick=openChat;
 $('#btn-chat-lobby').onclick=openChat;
 $('#btn-voice').onclick=voiceBtnClick;
 $('#btn-voice-lobby').onclick=voiceBtnClick;
+$('#btn-cl-voice').onclick=voiceBtnClick;
+$('#btn-cl-voice-lobby').onclick=voiceBtnClick;
 $('#btn-chat-close').onclick=closeChat;
 /* send-then-close, everywhere a message can leave: typing+Enter,
    typing+Send, or a quick emoji tap — the whole point is cutting the
@@ -4569,8 +4632,9 @@ function clRenderMpLobby(){
   const ps=Object.entries(r.players||{}).sort((a,b)=>(a[1].order||0)-(b[1].order||0));
   $('#cl-lobby-players').innerHTML=ps.map(([uid,p])=>{
     const isHost=uid===hostUid,me=uid===myUid;
+    const inVoice=voicePresent.has(uid);
     const kick=(clmp.isHost&&!me)?`<button class="cl-lp-kick" data-cl-kick="${uid}">✕</button>`:'';
-    return `<div class="cl-lp"><span>${esc(p.name)}${me?' <span style="color:var(--teal);font-size:11px">(you)</span>':''}</span>
+    return `<div class="cl-lp"><span>${esc(p.name)}${me?' <span style="color:var(--teal);font-size:11px">(you)</span>':''}${inVoice?' <span class="lp-mic">🎙️</span>':''}</span>
       <span>${isHost?'<span class="cl-lp-host">HOST</span> ':''}${kick}</span></div>`;
   }).join('');
   const n=ps.length,even=n%2===0;
@@ -4599,6 +4663,7 @@ function clMpTakeover(){
 function clMpLeave(silent){
   if(!silent&&CL&&!confirm('Leave the tournament?'))return;
   const ref=clmp.ref;
+  leaveVoice();   // voice is bound to clmp.ref (see currentVoiceRoomRef) — must tear down before that ref goes away
   clmpDetachAll();CL=null;clMyMatchKey=null;G=null;myIdx=-1;
   const strip=$('#cl-live-strip');if(strip)strip.classList.add('hidden');
   if(ref)ref.child('players/'+myUid).remove().catch(()=>{});
