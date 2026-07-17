@@ -724,6 +724,139 @@ body.dealing .card-count{visibility:hidden}
   #opponents.n-many .opp-name-text{font-size:9.5px}
   #opponents.n-many .opp-sub{font-size:7.5px}
 }
+/* ================= CHAMPIONS LEAGUE ================= */
+.btn.cl-tile{background:linear-gradient(120deg,var(--magenta2),var(--gold2));color:var(--ink);
+  border:1px solid var(--gold);box-shadow:0 6px 22px rgba(255,158,207,.24);font-family:'Cinzel',serif;font-weight:700;letter-spacing:.5px}
+.btn.cl-tile:hover{filter:brightness(1.08)}
+.cl-crest{font-size:56px;filter:drop-shadow(0 4px 14px rgba(255,184,77,.5));animation:clCrest 3.2s ease-in-out infinite}
+@keyframes clCrest{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-6px) rotate(3deg)}}
+.cl-lobby-list{display:flex;flex-direction:column;gap:6px;width:100%;margin:10px 0}
+.cl-lp{display:flex;align-items:center;gap:8px;justify-content:space-between;background:rgba(255,255,255,.05);
+  border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-family:'Manrope';font-weight:600}
+.cl-lp .cl-lp-host{font-size:11px;color:var(--gold);font-family:'DM Mono',monospace}
+.cl-lp .cl-lp-kick{background:none;border:0;color:var(--red);font-size:15px;cursor:pointer;padding:2px 6px}
+
+/* Hub screen */
+#scr-cl-hub{display:none;flex-direction:column;height:100%;padding:0}
+#scr-cl-hub.on{display:flex}
+#cl-hub-top{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;
+  border-bottom:1px solid var(--line);background:rgba(10,5,24,.6);flex:0 0 auto}
+#cl-hub-title{font-family:'Cinzel',serif;font-weight:700;font-size:16px;color:var(--goldlt);letter-spacing:.5px}
+/* .screen (the shared base class every screen section uses) sets
+   align-items:center, not stretch — so without an explicit width, this
+   flex item centers at its own content's intrinsic width instead of
+   filling the screen, which is what let the bracket's wide content push
+   it (and everything inside it) out to content size in the first place.
+   min-width:0 alone can't fix that; it only removes a floor, it doesn't
+   supply the missing "fill the available width" behavior. */
+#cl-hub-body{flex:1 1 auto;width:100%;min-width:0;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:14px}
+#cl-hub-foot{flex:0 0 auto;padding:12px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);background:rgba(10,5,24,.6)}
+#cl-hub-foot .btn{width:100%}
+#cl-hub-phasebar{text-align:center;font-family:'Cinzel',serif;color:var(--goldlt);font-size:14px;letter-spacing:.5px}
+#cl-hub-phasebar .cl-sub{display:block;font-family:'DM Mono',monospace;font-size:11px;color:var(--lavdim);margin-top:3px;letter-spacing:0}
+/* every direct child of #cl-hub-body is a flex item in a column flex —
+   flex items default to min-width:auto (can't shrink below their content's
+   intrinsic width), which silently defeats any overflow-x:auto scroller
+   nested inside them (the standings table, the bracket flow) by letting
+   the item itself grow to content width instead of clipping. min-width:0
+   is the standard fix. */
+#cl-hub-fixtures,#cl-hub-standings{min-width:0}
+
+.cl-sec-h{font-family:'Cinzel',serif;font-size:13px;color:var(--gold);letter-spacing:.5px;margin:2px 0 6px;text-transform:uppercase}
+/* Fixtures list */
+.cl-fixture{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.cl-fixture.mine{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset,0 4px 16px rgba(255,184,77,.18)}
+.cl-fixture.done{opacity:.72}
+.cl-fx-side{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:1px}
+.cl-fx-side.right{text-align:right;align-items:flex-end}
+.cl-fx-name{font-family:'Manrope';font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.cl-fx-name.win{color:var(--gold)}
+.cl-fx-score{font-family:'DM Mono',monospace;font-size:13px;color:var(--lav)}
+.cl-fx-mid{flex:0 0 auto;text-align:center;min-width:52px}
+.cl-fx-vs{font-family:'Cinzel',serif;font-size:11px;color:var(--lavdim)}
+.cl-fx-status{font-family:'DM Mono',monospace;font-size:10px;margin-top:2px;padding:2px 6px;border-radius:8px;display:inline-block}
+.cl-fx-status.live{background:rgba(214,69,107,.2);color:#FF8FB0}
+.cl-fx-status.live::before{content:'● ';animation:clBlink 1s steps(1) infinite}
+@keyframes clBlink{50%{opacity:.25}}
+.cl-fx-status.waiting{background:rgba(255,255,255,.06);color:var(--lavdim)}
+.cl-fx-status.result{background:rgba(255,184,77,.16);color:var(--goldlt)}
+.cl-fx-you{font-size:9px;color:var(--gold);font-family:'DM Mono',monospace;letter-spacing:1px}
+.cl-fx-watch{background:none;border:1px solid var(--teal);color:var(--teal);border-radius:8px;
+  font-size:10px;font-family:'DM Mono',monospace;padding:3px 7px;cursor:pointer;white-space:nowrap}
+
+/* Standings table */
+.cl-table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table.cl-table{border-collapse:collapse;width:100%;font-family:'DM Mono',monospace;font-size:12px;min-width:330px}
+table.cl-table th{font-family:'Cinzel',serif;font-size:10.5px;color:var(--gold);text-transform:uppercase;
+  letter-spacing:.4px;padding:7px 6px;text-align:center;background:rgba(255,184,77,.07);border-bottom:1px solid var(--line);white-space:nowrap}
+table.cl-table td{padding:7px 6px;text-align:center;border-bottom:1px solid rgba(255,255,255,.05);color:var(--lav);white-space:nowrap}
+table.cl-table td.name{text-align:left;font-family:'Manrope';font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
+table.cl-table td.pts{color:var(--goldlt);font-weight:700}
+table.cl-table tr.you td{background:rgba(255,184,77,.09)}
+table.cl-table tr.q4 td{border-bottom:2px dashed var(--teal)}
+table.cl-table .rk{color:var(--gold);font-weight:700}
+.cl-nrr-pos{color:#8FE3B0}.cl-nrr-neg{color:#FF8FA6}
+.cl-q-badge{font-size:8.5px;color:var(--teal);font-family:'DM Mono';letter-spacing:.5px}
+
+/* Bracket — a real connected flow chart (columns + SVG connector lines),
+   horizontally scrollable since 4 columns never fit a phone width, same
+   pattern every tournament-bracket site/graphic uses on mobile. */
+#cl-hub-bracket{display:block;min-width:0}
+#cl-bracket-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+  margin:0 -12px;padding:4px 12px 10px;mask-image:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 14px),transparent);
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 14px),transparent)}
+#cl-bracket-flow{position:relative;display:inline-flex;gap:34px;min-width:100%}
+#cl-bracket-svg{position:absolute;inset:0;pointer-events:none;overflow:visible}
+.cl-br-col{flex:0 0 auto;width:180px;display:flex;flex-direction:column;gap:10px;position:relative;z-index:1}
+.cl-br-col.champ-col{width:230px}
+.cl-br-col-h{font-family:'Cinzel',serif;font-size:12px;color:var(--gold);letter-spacing:.5px;text-transform:uppercase}
+.cl-br-match{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;position:relative}
+.cl-br-match.mine{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.cl-br-match.final{border-color:var(--goldlt);background:linear-gradient(120deg,rgba(255,184,77,.1),rgba(255,158,207,.08))}
+.cl-br-tag{font-family:'DM Mono',monospace;font-size:10px;color:var(--lavdim);letter-spacing:.5px;margin-bottom:5px}
+.cl-br-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-family:'Manrope';font-weight:600;font-size:14px}
+.cl-br-row.win{color:var(--gold)}
+.cl-br-row.cl-br-tbd{color:var(--lavdim);font-style:italic;font-weight:500;font-size:12px}
+.cl-br-row .cl-br-sc{font-family:'DM Mono',monospace;font-size:12px;color:var(--lav)}
+.cl-br-outcome{font-family:'DM Mono',monospace;font-size:10px;color:var(--lavdim);margin-top:5px}
+.cl-out-chip{display:flex;align-items:center;gap:7px;background:rgba(214,69,107,.08);
+  border:1px dashed rgba(214,69,107,.4);border-radius:10px;padding:7px 10px;font-family:'Manrope';font-weight:600;font-size:12px;color:var(--lav)}
+.cl-out-place{font-family:'DM Mono',monospace;font-size:9px;color:var(--red);letter-spacing:.5px}
+#cl-hub-bracket .cl-champ{width:100%}
+.cl-champ{text-align:center;padding:16px;border:1px solid var(--gold);border-radius:16px;
+  background:linear-gradient(120deg,rgba(255,184,77,.16),rgba(255,158,207,.12));margin-top:4px}
+.cl-champ .cl-champ-crown{font-size:40px}
+.cl-champ .cl-champ-name{font-family:'Cinzel',serif;font-weight:900;font-size:24px;color:var(--goldlt);margin-top:4px}
+.cl-champ .cl-champ-sub{font-family:'DM Mono',monospace;font-size:11px;color:var(--lavdim);margin-top:3px}
+
+/* Live score strip inside a match */
+#cl-live-strip{flex:0 0 auto;display:flex;gap:6px;overflow-x:auto;padding:6px 10px;
+  background:rgba(10,5,24,.55);border-bottom:1px solid var(--line);scrollbar-width:none}
+#cl-live-strip::-webkit-scrollbar{display:none}
+.cl-mini{flex:0 0 auto;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:4px 9px;
+  font-family:'DM Mono',monospace;font-size:11px;line-height:1.35;white-space:nowrap}
+.cl-mini .cl-mini-t{color:var(--lavdim);font-size:9px;letter-spacing:.5px}
+.cl-mini b{color:var(--ink);font-weight:700}
+.cl-mini .lead{color:var(--gold)}
+.cl-mini.done{opacity:.6}
+/* Spectate screen */
+#scr-cl-watch{display:none;flex-direction:column;height:100%;padding:0}
+#scr-cl-watch.on{display:flex}
+#cl-watch-body{flex:1 1 auto;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+.cl-watch-scoreboard{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 14px}
+.cl-watch-side{flex:1 1 0;min-width:0;text-align:center}
+.cl-watch-side.lead .cl-watch-sc{color:var(--gold)}
+.cl-watch-name{font-family:'Manrope';font-weight:700;font-size:16px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-watch-sc{font-family:'DM Mono',monospace;font-size:34px;font-weight:700;color:var(--lav);margin-top:6px}
+.cl-watch-vs{flex:0 0 auto;font-family:'DM Mono',monospace;font-size:11px;color:var(--lavdim);text-align:center;line-height:1.5}
+.cl-watch-log{font-family:'DM Mono',monospace;font-size:12px;color:var(--lav);line-height:1.9;background:rgba(0,0,0,.2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+@media(max-width:480px){
+  #cl-hub-title{font-size:14px}
+  table.cl-table{font-size:11px}
+  table.cl-table td.name{max-width:78px}
+  .cl-fx-name{font-size:13px}
+}
 </style>
 </head>
 <body>
@@ -771,6 +904,7 @@ body.dealing .card-count{visibility:hidden}
     <div style="display:flex;flex-direction:column;gap:12px;width:min(320px,82vw);margin-top:4px">
       <button class="btn primary big" id="btn-gobot">♟&ensp;Single Player</button>
       <button class="btn ghost big" id="btn-gomp">⬡&ensp;Online Multiplayer</button>
+      <button class="btn cl-tile big" id="btn-gocl">🏆&ensp;Champions League</button>
       <button class="btn ghost" id="btn-help" style="border:0;background:none">How to play</button>
     </div>
   </div>
@@ -796,7 +930,7 @@ body.dealing .card-count{visibility:hidden}
     </div>
     <span class="lbl">Elimination at</span>
     <div class="seg" id="seg-limit">
-      <button data-v="240" class="sel">240 pts</button><button data-v="360">360 pts</button>
+      <button data-v="180">180 pts</button><button data-v="240" class="sel">240 pts</button><button data-v="360">360 pts</button>
     </div>
     <button class="btn primary big" id="btn-start-bot" style="align-self:center;margin-top:6px">Deal Cards</button>
     <button class="btn ghost" data-back>← Back</button>
@@ -827,6 +961,124 @@ body.dealing .card-count{visibility:hidden}
   </div>
 </section>
 
+<!-- ============ CHAMPIONS LEAGUE: MODE PICKER ============ -->
+<section class="screen" id="scr-cl-mode">
+  <div class="panel" style="text-align:center;align-items:center">
+    <div class="cl-crest">🏆</div>
+    <h2>Champions League</h2>
+    <p class="tag">A 1v1 knockout tournament. Everyone plays everyone, then the top 4 fight through the playoffs to be crowned champion.</p>
+    <div style="display:flex;flex-direction:column;gap:12px;width:min(320px,82vw);margin-top:8px">
+      <button class="btn primary big" id="btn-cl-solo">♟&ensp;Single Player</button>
+      <button class="btn ghost big" id="btn-cl-mp">⬡&ensp;Multiplayer</button>
+    </div>
+    <button class="btn ghost" data-back>← Back</button>
+  </div>
+</section>
+
+<!-- ============ CHAMPIONS LEAGUE: SOLO SETUP ============ -->
+<section class="screen" id="scr-cl-solo">
+  <div class="panel">
+    <h2>🏆 Champions League · Solo</h2>
+    <span class="lbl">Your name</span>
+    <input id="inp-cl-name" maxlength="14" placeholder="Enter your name" autocomplete="off">
+    <span class="lbl">Total players (even)</span>
+    <div class="seg" id="seg-cl-players">
+      <button data-v="4" class="sel">4</button><button data-v="6">6</button><button data-v="8">8</button><button data-v="10">10</button>
+    </div>
+    <span class="lbl">Bot difficulty</span>
+    <div class="seg" id="seg-cl-diff">
+      <button data-v="easy">Easy</button><button data-v="medium" class="sel">Medium</button><button data-v="hard">Hard</button>
+    </div>
+    <span class="lbl">Number of decks (per match)</span>
+    <div class="seg" id="seg-cl-decks">
+      <button data-v="1" class="sel">1 deck</button><button data-v="2">2 decks</button>
+    </div>
+    <span class="lbl">A match is lost at</span>
+    <div class="seg" id="seg-cl-limit">
+      <button data-v="180">180 pts</button><button data-v="240" class="sel">240 pts</button><button data-v="360">360 pts</button>
+    </div>
+    <button class="btn primary big" id="btn-cl-start-solo" style="align-self:center;margin-top:6px">Start Tournament</button>
+    <button class="btn ghost" data-back>← Back</button>
+  </div>
+</section>
+
+<!-- ============ CHAMPIONS LEAGUE: MULTIPLAYER SETUP ============ -->
+<section class="screen" id="scr-cl-mp">
+  <div class="panel">
+    <h2>🏆 Champions League · Multiplayer</h2>
+    <span class="lbl">Your name</span>
+    <input id="inp-cl-mpname" maxlength="14" placeholder="Enter your name" autocomplete="off">
+    <div class="mp-split">
+      <div class="mp-box">
+        <h3>Create room</h3>
+        <p class="tag">Difficulty of play, decks and the losing limit are set in the room. Needs an even number of players (4+).</p>
+        <button class="btn primary" id="btn-cl-create">Create</button>
+      </div>
+      <div class="mp-box">
+        <h3>Join room</h3>
+        <span class="lbl">Room code</span>
+        <input id="inp-cl-code" maxlength="4" placeholder="CODE" autocomplete="off" style="text-transform:uppercase;letter-spacing:4px;text-align:center">
+        <button class="btn primary" id="btn-cl-join">Join</button>
+      </div>
+    </div>
+    <p class="tag">4–10 players (even) · share the room code with friends</p>
+    <button class="btn ghost" data-back>← Back</button>
+  </div>
+</section>
+
+<!-- ============ CHAMPIONS LEAGUE: LOBBY ============ -->
+<section class="screen" id="scr-cl-lobby">
+  <div class="panel" style="text-align:center;align-items:center">
+    <h2>🏆 Room&ensp;<span id="cl-lobby-code"></span></h2>
+    <button class="btn ghost small" id="btn-cl-copy">📋 Copy code</button>
+    <p class="tag" id="cl-lobby-settings-view">Lost at <span id="cl-lobby-limit"></span> pts · <span id="cl-lobby-decks"></span></p>
+    <div id="cl-lobby-settings-edit" class="hidden" style="width:100%">
+      <span class="lbl">A match is lost at</span>
+      <div class="seg" id="seg-cl-lobby-limit">
+        <button data-v="180">180</button><button data-v="240">240</button><button data-v="360">360</button>
+      </div>
+      <span class="lbl">Decks</span>
+      <div class="seg" id="seg-cl-lobby-decks">
+        <button data-v="1">1</button><button data-v="2">2</button>
+      </div>
+    </div>
+    <div class="cl-lobby-list" id="cl-lobby-players"></div>
+    <p class="tag" id="cl-lobby-hint">Waiting for players…</p>
+    <button class="btn primary big hidden" id="btn-cl-lobby-start">Start Tournament</button>
+    <button class="btn ghost small hidden" id="btn-cl-takeover">Take over as host</button>
+    <button class="btn ghost" id="btn-cl-leave-lobby">← Leave room</button>
+  </div>
+</section>
+
+<!-- ============ CHAMPIONS LEAGUE: HUB (standings / fixtures / bracket) ============ -->
+<section class="screen" id="scr-cl-hub">
+  <header id="cl-hub-top">
+    <button class="icon-btn" id="btn-cl-hub-exit">✕</button>
+    <div id="cl-hub-title">Champions League</div>
+    <button class="icon-btn" id="btn-cl-hub-help">?</button>
+  </header>
+  <div id="cl-hub-body">
+    <div id="cl-hub-phasebar"></div>
+    <div id="cl-hub-fixtures"></div>
+    <div id="cl-hub-standings"></div>
+    <div id="cl-hub-bracket" class="hidden"></div>
+  </div>
+  <footer id="cl-hub-foot">
+    <button class="btn primary big hidden" id="btn-cl-play">Play my match</button>
+    <button class="btn ghost hidden" id="btn-cl-advance">Next round →</button>
+  </footer>
+</section>
+
+<!-- ============ CHAMPIONS LEAGUE: SPECTATE ============ -->
+<section class="screen" id="scr-cl-watch">
+  <header id="cl-hub-top">
+    <button class="icon-btn" id="btn-cl-watch-back">←</button>
+    <div id="cl-hub-title">Spectating</div>
+    <span style="width:38px"></span>
+  </header>
+  <div id="cl-watch-body"></div>
+</section>
+
 <!-- ============ LOBBY ============ -->
 <section class="screen" id="scr-lobby">
   <div class="panel" style="text-align:center;align-items:center">
@@ -836,7 +1088,7 @@ body.dealing .card-count{visibility:hidden}
     <div id="lobby-settings-edit" class="hidden" style="width:100%">
       <span class="lbl">Elimination at</span>
       <div class="seg" id="seg-lobby-limit">
-        <button data-v="240">240</button><button data-v="360">360</button>
+        <button data-v="180">180</button><button data-v="240">240</button><button data-v="360">360</button>
       </div>
       <span class="lbl">Decks</span>
       <div class="seg" id="seg-lobby-decks">
@@ -871,6 +1123,7 @@ body.dealing .card-count{visibility:hidden}
       <button class="icon-btn" id="btn-help2">?</button>
     </div>
   </header>
+  <div id="cl-live-strip" class="hidden"></div>
   <div id="arena">
     <div id="opponents"></div>
     <div id="table">
@@ -1995,9 +2248,13 @@ function render(){
   const me=G.players[myIdx];
   const myTurn=me&&!me.elim&&G.turn===myIdx&&!isEnd();
   $('#round-info').textContent=`ROUND ${G.round} · LIMIT ${G.limit}`;
-  $('#btn-chat').classList.toggle('hidden',G.mode!=='mp');
-  $('#btn-voice').classList.toggle('hidden',G.mode!=='mp');
-  $('#btn-spectators').classList.toggle('hidden',G.mode!=='mp');
+  /* chat/voice/spectator buttons are for regular online rooms — a
+     Champions League 1v1 (G.clKey set) uses a lean per-match sync that
+     doesn't wire those listeners, so hide them there. */
+  const mpFeat=G.mode==='mp'&&!G.clKey;
+  $('#btn-chat').classList.toggle('hidden',!mpFeat);
+  $('#btn-voice').classList.toggle('hidden',!mpFeat);
+  $('#btn-spectators').classList.toggle('hidden',!mpFeat);
   updateTurnTimer();
   /* whose OPEN CARD it is lives right on their seat chip (see below),
      and stays there for the whole round — not just during their own
@@ -2078,7 +2335,7 @@ function render(){
        takes) so the game carries on without waiting on a client that
        may never respond again. Never shown for an opponent who's
        already out — nothing left to kick. */
-    const canKick=G.mode==='mp'&&mp.isHost&&!p.elim;
+    const canKick=G.mode==='mp'&&mp.isHost&&!p.elim&&!G.clKey;   // no kicking your opponent in a 1v1 CL match
     d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}${rankBadgeHtml(i)}${inVoice?'<span class="voice-mic">🎙️</span>':''}${canKick?`<button class="kick-btn" title="Kick ${esc(p.name)}">✕</button>`:''}</div>
       <div class="seat-card">
         <div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span>${(showOpenBadge&&i===G.starter)?'<span class="tagchip open-tag">Open card</span>'
@@ -2530,7 +2787,7 @@ function showHelpModal(){
     <div><b>Discards:</b> one card, 2+ cards of the <b>same rank</b> (two Kings), or a <b>run of 3+</b> in the same suit (4-5-6♥). Jokers are wild in runs.</div>
     <div><b>Attack:</b> a 2 or a Joker played alone (or as a pair) makes the next player <b>pick up 2 per card</b> — unless they stack their own 2/Joker to pass it on, bigger. Picking up ends your turn.</div>
     <div><b>Show:</b> on your turn, declare! If you truly have the lowest hand you score <b>0</b> and everyone else scores their hand (capped at <b>60</b>). If anyone is equal or lower — <b>+60 penalty</b> for you, and the real lowest scores 0.</div>
-    <div><b>Elimination:</b> reach the point limit (240/360) and you're out. Last player standing wins.</div>
+    <div><b>Elimination:</b> reach the point limit (180/240/360) and you're out. Last player standing wins.</div>
   </div><div class="mbtns"><button class="btn primary" onclick="closeModal()">Got it</button></div>`);
 }
 
@@ -3479,13 +3736,36 @@ $('#btn-gobot').onclick=()=>goScr('scr-bot');
 $('#btn-gomp').onclick=()=>goScr('scr-mp');
 $('#btn-help').onclick=showHelpModal;
 $('#btn-help2').onclick=showHelpModal;
-document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>goScr('scr-home'));
+document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>goScr(b.dataset.back||'scr-home'));
 $('#btn-start-bot').onclick=startBotGame;
 $('#btn-create').onclick=createRoom;
 $('#btn-join').onclick=joinRoom;
 $('#btn-start-mp').onclick=mpStart;
 $('#btn-takeover-host').onclick=uiTakeOverHost;
 $('#btn-leave-lobby').onclick=()=>leaveRoom(false);
+
+/* ---- Champions League wiring ---- */
+segInit('seg-cl-players',v=>clSetup.players=+v);
+segInit('seg-cl-diff',v=>clSetup.diff=v);
+segInit('seg-cl-decks',v=>clSetup.numDecks=+v);
+segInit('seg-cl-limit',v=>clSetup.limit=+v);
+$('#btn-gocl').onclick=()=>goScr('scr-cl-mode');
+$('#btn-cl-solo').onclick=()=>goScr('scr-cl-solo');
+$('#btn-cl-mp').onclick=()=>goScr('scr-cl-mp');
+$('#btn-cl-start-solo').onclick=clStartSolo;
+$('#btn-cl-play').onclick=clPlayMyMatch;
+$('#btn-cl-advance').onclick=()=>(CL&&CL.mode==='mp')?clMpAdvance():clAdvance();
+$('#btn-cl-hub-exit').onclick=clHubExit;
+$('#btn-cl-hub-help').onclick=showHelpModal;
+$('#btn-cl-watch-back').onclick=()=>{clSpectateKey=null;goScr('scr-cl-hub');clRenderHub();};
+/* MP entry points (defined in the CL-multiplayer block) */
+$('#btn-cl-create').onclick=()=>clMpCreate();
+$('#btn-cl-join').onclick=()=>clMpJoin();
+$('#btn-cl-copy').onclick=()=>clMpCopyCode();
+$('#btn-cl-lobby-start').onclick=()=>clMpStart();
+$('#btn-cl-takeover').onclick=()=>clMpTakeover();
+$('#btn-cl-leave-lobby').onclick=()=>clMpLeave();
+function clHubExit(){if(CL&&CL.mode==='mp')clMpLeave();else clQuit();}
 /* delegated — #lobby-players is fully rebuilt by renderLobby() on every
    update, so a per-button .onclick would need re-wiring every time too;
    data-attributes read fresh off whichever button was actually clicked
@@ -3655,6 +3935,756 @@ showMatchModal=function(){
   setTimeout(burstWin,200);
   setTimeout(burstWin,600);
 };
+
+/* ==================================================================
+   CHAMPIONS LEAGUE — a 1v1 tournament layer on top of the existing
+   2-player match engine. League stage is a single round-robin (even N,
+   N-1 rounds, N/2 matches per round); then an IPL-style top-4 playoff
+   (Qualifier 1, Eliminator, Qualifier 2, Final). Each 1v1 is just a
+   normal newMatch() played to the elimination limit — the loser is the
+   one who crosses it, win margin = loser score − winner score. A win is
+   2 points, +1 bonus for a margin ≥120; standings sort by points then
+   NRR (Σ win margins − Σ loss margins). Solo: you play your match each
+   round vs a bot while the other tables auto-simulate live; MP: one room
+   holds every match, each pair writes only their own match's state.
+   ================================================================== */
+let CL=null, clSimTimer=null;
+const clSetup={players:4,diff:'medium',numDecks:1,limit:240};
+const clMpSetup={diff:'medium',numDecks:1,limit:240};
+const CL_BOTNAMES=['Ace','Ruby','Jax','Queenie','Kingsley','Maverick','Diesel','Scout','Nash','Piper'];
+
+/* round-robin (circle method): player 0 stays fixed, the rest rotate. */
+function clMakeSchedule(ids){
+  const arr=ids.slice(),n=arr.length,rounds=[];
+  for(let r=0;r<n-1;r++){
+    const pairs=[];
+    for(let i=0;i<n/2;i++)pairs.push({a:arr[i],b:arr[n-1-i]});
+    rounds.push(pairs);
+    arr.splice(1,0,arr.pop());
+  }
+  return rounds;
+}
+const clPlayer=id=>CL.players.find(p=>p.id===id)||{name:'?',diff:CL.diff};
+const clName=id=>clPlayer(id).name;
+function clScoreById(g,id){const p=g.players.find(x=>x.id===id);return p?p.score:0;}
+
+/* Turn a finished 2-player game into a tournament result record. */
+/* allowDraw: league matches can end in a genuine draw (both players cross
+   the limit in the same round on the exact same score) — 1 point each,
+   no winner. Playoff matches always need a decisive winner to advance the
+   bracket, so an exact tie there falls back to the old default (side A). */
+function clResultFromGame(g,aId,bId,allowDraw){
+  const aScore=clScoreById(g,aId),bScore=clScoreById(g,bId);
+  const aP=g.players.find(x=>x.id===aId),bP=g.players.find(x=>x.id===bId);
+  if(allowDraw&&aScore===bScore)
+    return {a:aId,b:bId,aScore,bScore,winner:null,loser:null,draw:true,margin:0,done:true};
+  let winner;
+  if(aP.elim&&!bP.elim)winner=bId;
+  else if(bP.elim&&!aP.elim)winner=aId;
+  else winner=aScore<=bScore?aId:bId;   // lowest total wins
+  const loser=winner===aId?bId:aId;
+  return {a:aId,b:bId,aScore,bScore,winner,loser,draw:false,margin:Math.abs(aScore-bScore),done:true};
+}
+const clRes=key=>CL.results[key];
+function clFixtureScore(m,side){ // side 'a'|'b', reads result or live sim / synced state / my game
+  const id=side==='a'?m.a:m.b, res=clRes(m.key);
+  if(res)return res.a===id?res.aScore:res.bScore;
+  if(CL.sims&&CL.sims[m.key])return clScoreById(CL.sims[m.key].g,id);
+  if(G&&G.clKey===m.key)return clScoreById(G,id);
+  if(CL.liveScores&&CL.liveScores[m.key]&&CL.liveScores[m.key][id]!=null)return CL.liveScores[m.key][id];
+  return 0;
+}
+/* Is this match currently being played (has progress, no result yet)? */
+function clIsLive(key){
+  if(clRes(key))return false;
+  if(CL.sims&&CL.sims[key])return true;              // solo bot sim running
+  if(G&&G.clKey===key)return true;                   // my own live match
+  if(CL.liveScores&&CL.liveScores[key])return true;  // MP: a synced state exists
+  return false;
+}
+
+/* Standings: win=2pts, draw=1pt each, loss=0 (no margin bonus).
+   NRR = Σwin margins − Σloss margins (draws contribute 0 either way).
+   Sort by points, then NRR (the confirmed tiebreak), then wins, then name. */
+function clStandings(){
+  const st={};
+  CL.players.forEach(p=>st[p.id]={id:p.id,name:p.name,W:0,D:0,L:0,GP:0,pts:0,sf:0,sa:0});
+  Object.keys(CL.results).forEach(k=>{
+    if(k[0]!=='L')return;                 // league matches only
+    const r=CL.results[k];if(!r||!r.done)return;
+    if(r.draw){
+      const a=st[r.a],b=st[r.b];if(!a||!b)return;
+      a.D++;b.D++;a.GP++;b.GP++;a.pts++;b.pts++;
+      return;
+    }
+    const w=st[r.winner],l=st[r.loser];if(!w||!l)return;
+    w.W++;l.L++;w.GP++;l.GP++;w.pts+=2;
+    w.sf+=r.margin;l.sa+=r.margin;
+  });
+  const rows=Object.values(st).map(s=>({...s,nrr:s.sf-s.sa}));
+  rows.sort((a,b)=>b.pts-a.pts||b.nrr-a.nrr||b.W-a.W||a.name.localeCompare(b.name));
+  rows.forEach((r,i)=>r.rank=i+1);
+  return rows;
+}
+const clLeagueTotal=()=>CL.players.length*(CL.players.length-1)/2;
+const clLeagueDone=()=>Object.keys(CL.results).filter(k=>k[0]==='L'&&CL.results[k].done).length;
+
+/* Matches that must be played in the current phase/stage. */
+function clActiveMatches(){
+  if(!CL)return[];
+  if(CL.phase==='league')
+    return CL.schedule[CL.round].map((pr,i)=>({key:'L'+CL.round+':'+i,a:pr.a,b:pr.b,label:'Match '+(i+1)}));
+  if(CL.phase==='playoffs'){
+    const po=CL.playoff,out=[];
+    if(po.stage==='r1'){out.push({key:'P:q1',a:po.q1.a,b:po.q1.b,label:'Qualifier 1'});
+                        out.push({key:'P:elim',a:po.elim.a,b:po.elim.b,label:'Eliminator'});}
+    else if(po.stage==='q2'&&po.q2)out.push({key:'P:q2',a:po.q2.a,b:po.q2.b,label:'Qualifier 2'});
+    else if(po.stage==='final'&&po.final)out.push({key:'P:final',a:po.final.a,b:po.final.b,label:'Final'});
+    return out;
+  }
+  return[];
+}
+const clMyActive=()=>clActiveMatches().find(m=>(m.a===CL.myId||m.b===CL.myId)&&!(clRes(m.key)&&clRes(m.key).done));
+const clAllActiveDone=()=>{const a=clActiveMatches();return a.length&&a.every(m=>clRes(m.key)&&clRes(m.key).done);};
+
+/* ---- solo: set up the auto-simulated bot-vs-bot tables for this round ---- */
+function clSetupActiveSims(){
+  CL.sims={};CL.myMatchDone=false;
+  clActiveMatches().forEach(m=>{
+    if(clRes(m.key)&&clRes(m.key).done)return;
+    if(m.a===CL.myId||m.b===CL.myId)return;      // I play this one myself
+    const A=clPlayer(m.a),B=clPlayer(m.b);
+    const g=newMatch([{id:m.a,name:A.name,isBot:true,diff:A.diff||CL.diff},
+                      {id:m.b,name:B.name,isBot:true,diff:B.diff||CL.diff}],CL.limit,'sim',CL.numDecks);
+    deal(g);CL.sims[m.key]={g};
+  });
+  if(Object.keys(CL.sims).length)clStartSimTimer();
+}
+function clStartSimTimer(){clStopSimTimer();clSimTimer=setInterval(clSimTick,200);}
+function clStopSimTimer(){if(clSimTimer){clearInterval(clSimTimer);clSimTimer=null;}}
+function clSimTick(){
+  if(!CL||!CL.sims){clStopSimTimer();return;}
+  const per=CL.myMatchDone?80:5;   // accelerate once my own match is finished
+  const keys=Object.keys(CL.sims);
+  if(!keys.length){clStopSimTimer();clAfterSimSettle();return;}
+  keys.forEach(key=>{
+    const g=CL.sims[key].g;let n=per;
+    while(n-->0&&g.phase!=='matchEnd'){
+      if(g.phase==='roundEnd'){deal(g);continue;}
+      const err=rawApply(g,botMove(g));if(err){g.phase='matchEnd';break;}
+    }
+    if(g.phase==='matchEnd'){
+      CL.results[key]=clResultFromGame(g,g.players[0].id,g.players[1].id,key[0]==='L');
+      delete CL.sims[key];
+    }
+  });
+  clUpdateLiveStrip();
+  if($('#scr-cl-hub').classList.contains('on'))clRenderHub();
+  if($('#scr-cl-watch').classList.contains('on'))clRenderSpectate();
+  if(!Object.keys(CL.sims).length){clStopSimTimer();clAfterSimSettle();}
+}
+function clAfterSimSettle(){
+  if($('#scr-cl-hub').classList.contains('on'))clRenderHub();
+  if($('#scr-cl-watch').classList.contains('on'))clRenderSpectate();
+}
+
+/* ---- playing your own match ---- */
+function clPlayMyMatch(){
+  const m=clMyActive();
+  if(!m){toast('No match for you right now');return;}
+  const oppId=m.a===CL.myId?m.b:m.a;
+  const me=clPlayer(CL.myId),opp=clPlayer(oppId);
+  if(CL.mode==='mp'){clMpEnterMatch(m);return;}
+  G=newMatch([{id:CL.myId,name:me.name,isBot:false,diff:null},
+              {id:oppId,name:opp.name,isBot:true,diff:opp.diff||CL.diff}],CL.limit,'bot',CL.numDecks);
+  G.clKey=m.key;
+  myIdx=0;sel.clear();announcedRound=-1;deal(G);
+  goScr('scr-game');closeModal();clUpdateLiveStrip();pump();
+}
+/* wrap the match-end modal: a CL match records its result and returns to
+   the hub instead of the normal Play-Again / Back-to-Lobby modal. */
+const _clShowMatch=showMatchModal;
+showMatchModal=function(){
+  if(G&&G.clKey){
+    if(!G.clRecorded){G.clRecorded=true;clOnMyMatchEnd();}
+    return;
+  }
+  _clShowMatch();
+};
+function clOnMyMatchEnd(){
+  const key=G.clKey,res=clResultFromGame(G,G.players[0].id,G.players[1].id,key[0]==='L');
+  const myScore=res.a===CL.myId?res.aScore:res.bScore;
+  const oppScore=res.a===CL.myId?res.bScore:res.aScore;
+  const oppId=res.a===CL.myId?res.b:res.a;
+  if(CL.mode==='mp')clMpWriteResult(key,res);
+  else{CL.results[key]=res;CL.myMatchDone=true;}
+  const iWon=res.winner===CL.myId;
+  if(iWon){setTimeout(burstWin,150);setTimeout(burstWin,500);}
+  const title=res.draw?'🤝 Draw':(iWon?'🏆 You win!':'💔 You lose');
+  const sub=res.draw
+    ?`You <b style="color:var(--gold)">${myScore}</b> · ${esc(clName(oppId))} <b>${oppScore}</b><br>Same score — 1 point each`
+    :`You <b style="color:var(--gold)">${myScore}</b> · ${esc(clName(oppId))} <b>${oppScore}</b><br>Win margin ${res.margin}`;
+  openModal('clmatch',`<h2>${title}</h2>
+    <p class="tag" style="font-size:14px">${sub}</p>
+    ${clStandingsHtml(true)}
+    <div class="mbtns"><button class="btn primary" onclick="clGoHub()">Back to tournament</button></div>`);
+}
+function clGoHub(){
+  clearTimeout(botTimer);
+  if(CL&&CL.mode==='mp')clmpDetachMyMatch();   // stop syncing my match; re-enterable later
+  G=null;myIdx=-1;sel.clear();closeModal();
+  const strip=$('#cl-live-strip');if(strip)strip.classList.add('hidden');
+  goScr('scr-cl-hub');clRenderHub();
+}
+
+/* ---- advancing rounds / playoff stages ---- */
+function clEnterPlayoffs(){
+  CL.phase='playoffs';
+  const s=clStandings(),t=s.slice(0,4).map(r=>r.id);
+  CL.playoff={seeds:t,stage:'r1',q1:{a:t[0],b:t[1]},elim:{a:t[2],b:t[3]},
+    q2:null,final:null,champion:null,runnerUp:null,third:null,fourth:null};
+}
+/* Pure state advance — mutates CL.round/phase/playoff only, no sims/render.
+   Shared by solo (clAdvance) and MP (host writes the result to Firebase). */
+function clAdvanceState(){
+  if(CL.phase==='league'){
+    if(CL.round<CL.schedule.length-1)CL.round++;
+    else clEnterPlayoffs();
+    return;
+  }
+  const po=CL.playoff;
+  if(po.stage==='r1'){
+    const q1=clRes('P:q1'),el=clRes('P:elim');
+    po.fourth=el.loser;                       // Eliminator loser is knocked out (4th)
+    po.q2={a:q1.loser,b:el.winner};po.stage='q2';
+  }else if(po.stage==='q2'){
+    const q1=clRes('P:q1'),q2=clRes('P:q2');
+    po.third=q2.loser;                        // Qualifier 2 loser finishes 3rd
+    po.final={a:q1.winner,b:q2.winner};po.stage='final';
+  }else if(po.stage==='final'){
+    const f=clRes('P:final');
+    po.champion=f.winner;po.runnerUp=f.loser;po.stage='done';CL.phase='done';
+  }
+}
+function clAdvance(){   // SOLO
+  if(!clAllActiveDone()){toast('Matches still in progress');return;}
+  clAdvanceState();
+  if(CL.phase==='done'){clStopSimTimer();clRenderHub();setTimeout(burstWin,200);setTimeout(burstWin,600);setTimeout(burstWin,1000);return;}
+  clSetupActiveSims();clRenderHub();
+}
+
+/* ---- spectating another table (solo sim or MP synced state) ---- */
+let clSpectateKey=null;
+function clWatch(key){
+  if(!clIsLive(key)){toast('That match has finished');clRenderHub();return;}
+  clSpectateKey=key;clSpectateMp=(CL.mode==='mp');
+  goScr('scr-cl-watch');clRenderSpectate();
+}
+/* returns the live game object for the spectated key, or null */
+function clSpectateGame(){
+  if(!clSpectateKey)return null;
+  if(CL.mode==='mp'){
+    const fbk=clFbKey(clSpectateKey);
+    const m=(clmp.matches||{})[fbk];
+    if(m&&m.state){try{return JSON.parse(m.state);}catch(e){return null;}}
+    return null;
+  }
+  const s=CL.sims&&CL.sims[clSpectateKey];return s?s.g:null;
+}
+function clRenderSpectate(){
+  const wrap=$('#cl-watch-body');if(!wrap)return;
+  const g=clSpectateGame();
+  const res=clSpectateKey&&clRes(clSpectateKey);
+  if(!g){
+    wrap.innerHTML=res
+      ?`<p class="tag" style="text-align:center;padding-top:30px">Match finished — ${esc(clName(res.winner))} won by ${res.margin}.</p>`
+      :`<p class="tag" style="text-align:center;padding-top:30px">Waiting for this match to start…</p>`;
+    return;
+  }
+  const a=g.players[0],b=g.players[1];
+  const log=(g.log||[]).slice(-7).reverse().map(esc).join('<br>');
+  wrap.innerHTML=`<div class="cl-watch-scoreboard">
+    <div class="cl-watch-side ${a.score<=b.score?'lead':''}"><div class="cl-watch-name">${esc(a.name)}</div><div class="cl-watch-sc">${a.score}</div></div>
+    <div class="cl-watch-vs">Round ${g.round}<br>lost at ${g.limit}</div>
+    <div class="cl-watch-side ${b.score<=a.score?'lead':''}"><div class="cl-watch-name">${esc(b.name)}</div><div class="cl-watch-sc">${b.score}</div></div>
+  </div><div class="cl-watch-log">${log||'—'}</div>`;
+}
+
+/* ================= CL — HTML BUILDERS ================= */
+function clStandingsHtml(compact){
+  const rows=clStandings(),n=CL.players.length;
+  const cut=CL.phase==='league'?4:-1;
+  const body=rows.map(r=>{
+    const you=r.id===CL.myId?' you':'';
+    const q4=(r.rank===cut)?' q4':'';
+    const nrrCls=r.nrr>0?'cl-nrr-pos':(r.nrr<0?'cl-nrr-neg':'');
+    const nrr=(r.nrr>0?'+':'')+r.nrr;
+    const qb=(CL.phase==='league'&&r.rank<=4)?` <span class="cl-q-badge">Q</span>`:'';
+    return `<tr class="${you}${q4}">
+      <td class="rk">${r.rank}</td>
+      <td class="name">${esc(r.name)}${qb}</td>
+      <td>${r.GP}</td><td>${r.W}</td><td>${r.D}</td><td>${r.L}</td>
+      <td class="pts">${r.pts}</td>
+      <td class="${nrrCls}">${nrr}</td></tr>`;
+  }).join('');
+  return `<div class="cl-table-wrap"><table class="cl-table">
+    <thead><tr><th>#</th><th style="text-align:left">Player</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead>
+    <tbody>${body}</tbody></table></div>`;
+}
+function clFixturesHtml(){
+  const act=clActiveMatches();
+  return act.map(m=>{
+    const res=clRes(m.key),live=clIsLive(m.key);
+    const mine=m.a===CL.myId||m.b===CL.myId;
+    const aSc=clFixtureScore(m,'a'),bSc=clFixtureScore(m,'b');
+    let status;
+    if(res&&res.draw)status=`<span class="cl-fx-status result">Draw · ${aSc}-${bSc}</span>`;
+    else if(res)status=`<span class="cl-fx-status result">${esc(clName(res.winner))} won · +${res.margin}</span>`;
+    else if(live)status=`<span class="cl-fx-status live">LIVE</span>`;
+    else status=`<span class="cl-fx-status waiting">waiting</span>`;
+    const aWin=res&&res.winner===m.a,bWin=res&&res.winner===m.b;
+    const watch=(live&&!(G&&G.clKey===m.key)&&!mine)?`<button class="cl-fx-watch" onclick="clWatch('${m.key}')">Watch ▸</button>`:'';
+    const youTag=mine?`<div class="cl-fx-you">YOUR MATCH</div>`:'';
+    return `<div class="cl-fixture ${mine?'mine':''} ${res?'done':''}">
+      <div class="cl-fx-side"><div class="cl-fx-name ${aWin?'win':''}">${esc(clName(m.a))}</div><div class="cl-fx-score">${aSc}</div></div>
+      <div class="cl-fx-mid"><div class="cl-fx-vs">${m.label||'vs'}</div>${status}${youTag}${watch}</div>
+      <div class="cl-fx-side right"><div class="cl-fx-name ${bWin?'win':''}">${esc(clName(m.b))}</div><div class="cl-fx-score">${bSc}</div></div>
+    </div>`;
+  }).join('');
+}
+/* pair.a/pair.b may individually be null (a slot not decided yet) — shown
+   as "TBD" so a box can appear (and connector lines can anchor to its
+   known slot) before both feeder matches have finished. Row order is
+   always [slot a, slot b] — clDrawBracketConnectors() relies on that. */
+function clBrMatchHtml(id,key,label,pair,extraCls){
+  const box=inner=>`<div id="${id}" class="cl-br-match ${extraCls||''}">${inner}</div>`;
+  if(!pair||(pair.a==null&&pair.b==null))
+    return box(`<div class="cl-br-tag">${label}</div><div class="cl-br-row cl-br-tbd">Awaiting qualifiers…</div>`);
+  const res=clRes(key),live=clIsLive(key);
+  const mine=pair.a===CL.myId||pair.b===CL.myId;
+  const aSc=pair.a!=null?clFixtureScore({key,a:pair.a,b:pair.b},'a'):null;
+  const bSc=pair.b!=null?clFixtureScore({key,a:pair.a,b:pair.b},'b'):null;
+  const aWin=res&&res.winner===pair.a,bWin=res&&res.winner===pair.b;
+  let outcome='';
+  if(res)outcome=`<div class="cl-br-outcome">${esc(clName(res.winner))} won by ${res.margin}</div>`;
+  else if(live)outcome=`<div class="cl-br-outcome" style="color:#FF8FB0">● live</div>`;
+  const watch=(live&&!(G&&G.clKey===key)&&!mine)?` <button class="cl-fx-watch" onclick="clWatch('${key}')">Watch ▸</button>`:'';
+  const rowHtml=(pid,sc,win)=>pid!=null
+    ?`<div class="cl-br-row ${win?'win':''}"><span>${esc(clName(pid))}</span><span class="cl-br-sc">${sc}</span></div>`
+    :`<div class="cl-br-row cl-br-tbd"><span>TBD</span></div>`;
+  return box(`<div class="cl-br-tag">${label}${mine?' · <span style="color:var(--gold)">you</span>':''}${watch}</div>
+    ${rowHtml(pair.a,aSc,aWin)}
+    ${rowHtml(pair.b,bSc,bWin)}
+    ${outcome}`);
+}
+/* Slots are shown as soon as they're *known* (a match's own result fixes
+   its winner/loser), even before the receiving box's own match has
+   started — e.g. Qualifier 1's winner appears locked into the Final
+   column immediately, well before Qualifier 2 is even played. This is
+   purely a display computation; clActiveMatches() still gates when a
+   match is actually *playable* on po.q2/po.final existing for real. */
+function clBracketHtml(){
+  const po=CL.playoff;
+  const q1r=clRes('P:q1'),elimR=clRes('P:elim'),q2r=clRes('P:q2');
+  const dispQ2=po.q2||((q1r||elimR)?{a:q1r?q1r.loser:null,b:elimR?elimR.winner:null}:null);
+  const dispFinal=po.final||((q1r||q2r)?{a:q1r?q1r.winner:null,b:q2r?q2r.winner:null}:null);
+  let h=`<div id="cl-bracket-scroll"><div id="cl-bracket-flow">
+    <svg id="cl-bracket-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="cl-br-col"><div class="cl-br-col-h">Round 1</div>
+      ${clBrMatchHtml('cl-box-q1','P:q1','Qualifier 1',po.q1)}
+      ${clBrMatchHtml('cl-box-elim','P:elim','Eliminator',po.elim)}
+      ${elimR?`<div id="cl-box-out4" class="cl-out-chip"><span class="cl-out-place">4TH</span><span>${esc(clName(elimR.loser))}</span></div>`:''}
+    </div>
+    <div class="cl-br-col"><div class="cl-br-col-h">Qualifier 2</div>
+      ${clBrMatchHtml('cl-box-q2','P:q2','Q1 loser vs Eliminator winner',dispQ2)}
+      ${q2r?`<div id="cl-box-out3" class="cl-out-chip"><span class="cl-out-place">3RD</span><span>${esc(clName(q2r.loser))}</span></div>`:''}
+    </div>
+    <div class="cl-br-col"><div class="cl-br-col-h">Final</div>
+      ${clBrMatchHtml('cl-box-final','P:final','Q1 winner vs Q2 winner',dispFinal,'final')}
+    </div>`;
+  if(po.champion){
+    h+=`<div class="cl-br-col champ-col"><div class="cl-br-col-h">Champion</div>
+      <div id="cl-box-champ" class="cl-champ"><div class="cl-champ-crown">👑</div>
+        <div class="cl-champ-name">${esc(clName(po.champion))}</div>
+        <div class="cl-champ-sub">Champions League Winner${po.champion===CL.myId?' — you won it!':''}</div>
+        <div class="cl-champ-sub" style="margin-top:8px">🥈 ${esc(clName(po.runnerUp))} · 🥉 ${esc(clName(po.third))} · 4th ${esc(clName(po.fourth))}</div>
+      </div></div>`;
+  }
+  h+=`</div></div>`;
+  return h;
+}
+/* Draws the actual connector lines between boxes — the "flow chart" part.
+   Anchors to a specific *row* (slot a = row 0, slot b = row 1) rather
+   than a whole box, using each match's own recorded winner/loser against
+   its fixed {a,b} pairing to know exactly which row continues where —
+   e.g. Kingsley's own row in the Qualifier 1 box connects straight to
+   his row in the Final box, not just "box to box". Lines are added
+   *behind* the match boxes (svg sits first in DOM, boxes have z-index:1
+   from their own CSS) so any incidental visual crossing behind a box —
+   the Qualifier-1-winner line has to cross the Qualifier-2 column's
+   horizontal band to reach the Final column — reads as passing behind
+   it, the same way real bracket-chart graphics look. */
+function clDrawBracketConnectors(){
+  const flow=document.getElementById('cl-bracket-flow');
+  const svg=document.getElementById('cl-bracket-svg');
+  if(!flow||!svg||!CL||!CL.playoff)return;
+  const w=flow.scrollWidth,h=flow.scrollHeight;
+  if(!w||!h){setTimeout(clDrawBracketConnectors,40);return;}   // layout not settled yet — same retry pattern used elsewhere for freshly-shown screens
+  svg.setAttribute('width',w);svg.setAttribute('height',h);
+  svg.setAttribute('viewBox','0 0 '+w+' '+h);
+  const flowRect=flow.getBoundingClientRect();
+  const rowAt=(boxId,idx)=>{const b=document.getElementById(boxId);if(!b)return null;return b.querySelectorAll('.cl-br-row')[idx]||null;};
+  const anchor=(el,side)=>{const r=el.getBoundingClientRect();
+    return {x:(side==='right'?r.right:r.left)-flowRect.left,y:r.top+r.height/2-flowRect.top};};
+  const paths=[];
+  function link(fromEl,toEl,strong){
+    if(!fromEl||!toEl)return;
+    const p1=anchor(fromEl,'right'),p2=anchor(toEl,'left'),midX=(p1.x+p2.x)/2;
+    paths.push('<path d="M'+p1.x.toFixed(1)+','+p1.y.toFixed(1)+' C'+midX.toFixed(1)+','+p1.y.toFixed(1)+' '+
+      midX.toFixed(1)+','+p2.y.toFixed(1)+' '+p2.x.toFixed(1)+','+p2.y.toFixed(1)+
+      '" fill="none" stroke="'+(strong?'var(--gold)':'rgba(154,215,255,.5)')+'" stroke-width="2"/>');
+  }
+  const po=CL.playoff,q1r=clRes('P:q1'),elimR=clRes('P:elim'),q2r=clRes('P:q2'),finalR=clRes('P:final');
+  if(q1r&&po.q1){
+    const wIdx=q1r.winner===po.q1.a?0:1;
+    link(rowAt('cl-box-q1',wIdx),rowAt('cl-box-final',0),true);      // Q1 winner → Final slot a
+    link(rowAt('cl-box-q1',1-wIdx),rowAt('cl-box-q2',0),false);      // Q1 loser → Qualifier 2 slot a
+  }
+  if(elimR&&po.elim){
+    const wIdx=elimR.winner===po.elim.a?0:1;
+    link(rowAt('cl-box-elim',wIdx),rowAt('cl-box-q2',1),false);              // Eliminator winner → Qualifier 2 slot b
+    link(rowAt('cl-box-elim',1-wIdx),document.getElementById('cl-box-out4'),false); // Eliminator loser → 4th place, out
+  }
+  if(q2r&&po.q2){
+    const wIdx=q2r.winner===po.q2.a?0:1;
+    link(rowAt('cl-box-q2',wIdx),rowAt('cl-box-final',1),true);              // Qualifier 2 winner → Final slot b
+    link(rowAt('cl-box-q2',1-wIdx),document.getElementById('cl-box-out3'),false);   // Qualifier 2 loser → 3rd place, out
+  }
+  if(finalR&&po.final&&po.champion){
+    const wIdx=finalR.winner===po.final.a?0:1;
+    link(rowAt('cl-box-final',wIdx),document.getElementById('cl-box-champ'),true);  // Final winner → Champion
+  }
+  svg.innerHTML=paths.join('');
+}
+let clBracketResizeTimer=null;
+window.addEventListener('resize',()=>{
+  clearTimeout(clBracketResizeTimer);
+  clBracketResizeTimer=setTimeout(()=>{if(CL&&CL.playoff&&onScreen('scr-cl-hub'))clDrawBracketConnectors();},80);
+});
+function clStageLabel(){
+  const po=CL.playoff;
+  return po.stage==='r1'?'Qualifier 1 & Eliminator':po.stage==='q2'?'Qualifier 2':po.stage==='final'?'The Final':'';
+}
+
+/* ================= CL — HUB RENDER ================= */
+function clRenderHub(){
+  if(!CL)return;
+  const pb=$('#cl-hub-phasebar'),fx=$('#cl-hub-fixtures'),std=$('#cl-hub-standings'),
+        br=$('#cl-hub-bracket'),playBtn=$('#btn-cl-play'),advBtn=$('#btn-cl-advance');
+  const myM=clMyActive(),allDone=clAllActiveDone();
+  if(playBtn){if(myM){playBtn.classList.remove('hidden');playBtn.textContent=CL.phase==='league'?'▶ Play my match':'▶ Play my playoff match';}else playBtn.classList.add('hidden');}
+  /* the leaderboard is always on screen, regardless of phase — league
+     fixtures or the playoff bracket toggle above/below it instead of
+     ever hiding it. */
+  std.classList.remove('hidden');
+  const stdHint=CL.phase==='league'?` <span style="font-family:'DM Mono';font-size:9px;color:var(--teal)">Q = playoff spot</span>`:'';
+  std.innerHTML=`<div class="cl-sec-h">Standings${stdHint}</div>`+clStandingsHtml();
+  if(CL.phase==='league'){
+    br.classList.add('hidden');fx.classList.remove('hidden');
+    pb.innerHTML=`League Stage<span class="cl-sub">Round ${CL.round+1} of ${CL.schedule.length} · ${clLeagueDone()}/${clLeagueTotal()} matches played</span>`;
+    fx.innerHTML=`<div class="cl-sec-h">This round's fixtures</div>`+clFixturesHtml();
+    if(advBtn){if(allDone){advBtn.classList.remove('hidden');advBtn.textContent=CL.round<CL.schedule.length-1?'Next round →':'🏆 Enter playoffs →';}else advBtn.classList.add('hidden');}
+  }else{
+    fx.classList.add('hidden');br.classList.remove('hidden');
+    pb.innerHTML=CL.phase==='done'?`🏆 Champion Crowned`:`Playoffs<span class="cl-sub">${clStageLabel()}</span>`;
+    br.innerHTML=clBracketHtml();
+    setTimeout(clDrawBracketConnectors,30);
+    if(advBtn){
+      if(CL.phase==='done'){advBtn.classList.add('hidden');}
+      else if(allDone){advBtn.classList.remove('hidden');advBtn.textContent=CL.playoff.stage==='final'?'👑 Crown the champion →':'Next stage →';}
+      else advBtn.classList.add('hidden');
+    }
+  }
+  if(CL.mode==='mp')clMpHubButtons();   // MP overrides some button gating (host-only advance etc.)
+}
+
+/* ================= CL — LIVE STRIP (during your own match) ================= */
+function clUpdateLiveStrip(){
+  const strip=$('#cl-live-strip');if(!strip)return;
+  if(!CL||!G||!G.clKey){strip.classList.add('hidden');return;}
+  const others=clActiveMatches().filter(m=>m.key!==G.clKey);
+  if(!others.length){strip.classList.add('hidden');return;}
+  strip.classList.remove('hidden');
+  strip.innerHTML=`<div class="cl-mini" style="border-color:var(--gold)"><span class="cl-mini-t">OTHER TABLES</span></div>`+
+    others.map(m=>{
+      const res=clRes(m.key),aSc=clFixtureScore(m,'a'),bSc=clFixtureScore(m,'b');
+      const aLead=aSc<=bSc,tag=res?`✓ ${esc(clName(res.winner).slice(0,6))}`:(clIsLive(m.key)?'● live':'waiting');
+      return `<div class="cl-mini ${res?'done':''}">
+        <span class="cl-mini-t">${res?'DONE':tag}</span><br>
+        <b class="${aLead?'lead':''}">${esc(clName(m.a).slice(0,7))} ${aSc}</b> · <b class="${!aLead?'lead':''}">${esc(clName(m.b).slice(0,7))} ${bSc}</b></div>`;
+    }).join('');
+}
+
+/* ================= CL — SOLO ENTRY ================= */
+function clStartSolo(){
+  const name=getName('#inp-cl-name');if(!name)return;
+  const n=clSetup.players;
+  const bots=shuffle(CL_BOTNAMES.slice());
+  const players=[{id:'me',name,isBot:false,diff:null}];
+  for(let i=0;i<n-1;i++)players.push({id:'b'+i,name:bots[i],isBot:true,diff:clSetup.diff});
+  CL={mode:'solo',players,myId:'me',limit:clSetup.limit,numDecks:clSetup.numDecks,diff:clSetup.diff,
+      schedule:clMakeSchedule(players.map(p=>p.id)),round:0,phase:'league',results:{},sims:{},playoff:null,myMatchDone:false};
+  clStopSimTimer();
+  goScr('scr-cl-hub');
+  clSetupActiveSims();
+  clRenderHub();
+}
+function clQuit(){
+  if(!confirm('Leave the tournament? Progress will be lost.'))return;
+  clStopSimTimer();CL=null;clSpectateKey=null;G=null;myIdx=-1;
+  const strip=$('#cl-live-strip');if(strip)strip.classList.add('hidden');
+  goScr('scr-home');
+}
+
+/* ================= CHAMPIONS LEAGUE — MULTIPLAYER =================
+   One room holds the whole tournament. Room-level fields (players,
+   schedule, round, phase, playoff, settings) are host-controlled; each
+   1v1 lives at matches/{key} with its own game `state` written only by
+   that match's two players (turn-holder writes, exactly like a normal
+   online match) and a `result` written when it ends. Every client
+   subscribes to the room root + all matches, rebuilds CL locally from
+   that synced data (deterministic), and only ever *plays* its own match.
+   The standings, live scores of other tables, and the bracket all fall
+   out of the shared results — no extra sync needed. */
+const CLROOMS='championsLeague/rooms/';
+let clmp={code:null,ref:null,matchesRef:null,room:null,matches:null,isHost:false};
+let clMyMatchKey=null;
+const clFbKey=k=>k.replace(':','_');       // 'L0:1'->'L0_1', 'P:q1'->'P_q1'
+const clUnFbKey=k=>k.replace('_',':');
+const onScreen=id=>{const c=document.querySelector('.screen.on');return c&&c.id===id;};
+
+function clMpCreate(){
+  const name=getName('#inp-cl-mpname');if(!name||!fbInit())return;
+  const code=roomCode(),ref=db.ref(CLROOMS+code);
+  ref.get().then(s=>{
+    if(s.exists())return clMpCreate();
+    ref.set({host:myUid,status:'lobby',limit:240,numDecks:1,
+      created:firebase.database.ServerValue.TIMESTAMP,
+      players:{[myUid]:{name,order:Date.now()}}},
+      err=>{if(err)toast('Could not create room');else clmpAttach(code);});
+  }).catch(()=>toast('Connection error — check internet'));
+}
+function clMpJoin(){
+  const name=getName('#inp-cl-mpname');if(!name)return;
+  const code=($('#inp-cl-code').value||'').trim().toUpperCase();
+  if(code.length!==4)return toast('Enter the 4-letter room code');
+  if(!fbInit())return;
+  const ref=db.ref(CLROOMS+code);
+  ref.get().then(s=>{
+    const r=s.val();
+    if(!r)return toast('Room not found');
+    if(r.status!=='lobby'&&!(r.players&&r.players[myUid]))
+      return toast('That tournament has already started');
+    if(!(r.players&&r.players[myUid])&&Object.keys(r.players||{}).length>=10)
+      return toast('Room is full (10 max)');
+    ref.child('players/'+myUid).set({name,order:Date.now()},err=>{
+      if(err)toast('Could not join');else clmpAttach(code);
+    });
+  }).catch(()=>toast('Connection error'));
+}
+function clMpCopyCode(){
+  if(!clmp.code)return;
+  navigator.clipboard&&navigator.clipboard.writeText(clmp.code).then(()=>toast('Code copied'),()=>{});
+}
+function clmpAttach(code){
+  clmpDetachAll();
+  clmp.code=code;clmp.ref=db.ref(CLROOMS+code);clmp.matchesRef=clmp.ref.child('matches');
+  clmp.room=null;clmp.matches=null;clmp.everLoaded=false;
+  /* the two listeners live on different paths and can fire in either
+     order — only the root listener may declare the room "closed" (null),
+     and only after it has actually loaded once; the matches listener just
+     stashes its data and defers to a sync once the room is known. */
+  clmp.ref.on('value',s=>{
+    clmp.room=s.val();
+    if(!clmp.room){if(clmp.everLoaded){toast('Tournament room closed');clMpLeave(true);}return;}
+    clmp.everLoaded=true;clmpSync();
+  });
+  clmp.matchesRef.on('value',s=>{clmp.matches=s.val();if(clmp.room)clmpSync();});
+  goScr('scr-cl-lobby');
+}
+function clmpDetachMyMatch(){
+  if(mp.stateRef){mp.stateRef.off();}
+  mp.ref=null;mp.stateRef=null;mp.lastV=-1;mp.isHost=false;clMyMatchKey=null;
+}
+function clmpDetachAll(){
+  clmpDetachMyMatch();
+  if(clmp.ref)clmp.ref.off();
+  if(clmp.matchesRef)clmp.matchesRef.off();
+  clmp.ref=null;clmp.matchesRef=null;clmp.room=null;clmp.matches=null;clmp.isHost=false;
+}
+/* Rebuild the local CL entirely from synced room + matches data, then
+   route to the right screen. Runs on every root/matches change. */
+function clmpSync(){
+  const room=clmp.room;
+  if(!room)return;   // root listener owns closure detection; nothing to sync yet
+  if(!room.players||!room.players[myUid]){   // I was removed/kicked
+    clmpDetachAll();CL=null;goScr('scr-home');toast('You left the tournament');return;}
+  clmp.isHost=effHost(room)===myUid;
+  const players=Object.entries(room.players).sort((a,b)=>(a[1].order||0)-(b[1].order||0))
+    .map(([uid,p])=>({id:uid,name:p.name,isBot:false,diff:null}));
+  const results={},liveScores={};
+  const matches=clmp.matches||room.matches||{};
+  Object.entries(matches).forEach(([fbk,m])=>{
+    const key=clUnFbKey(fbk);
+    if(m.result)results[key]=m.result;
+    if(m.state){try{const g=JSON.parse(m.state);const sc={};g.players.forEach(p=>sc[p.id]=p.score);liveScores[key]=sc;}catch(e){}}
+  });
+  CL={mode:'mp',players,myId:myUid,limit:room.limit||240,numDecks:room.numDecks||1,diff:'mp',
+    schedule:room.schedule?JSON.parse(room.schedule):[],round:room.round||0,
+    phase:room.status==='lobby'?'league':(room.phase||room.status||'league'),
+    results,liveScores,sims:{},playoff:room.playoff?JSON.parse(room.playoff):null};
+  if(room.status==='lobby'){
+    clRenderMpLobby();
+    if(!onScreen('scr-cl-lobby'))goScr('scr-cl-lobby');
+    return;
+  }
+  // league / playoffs / done
+  if(G&&G.clKey){clUpdateLiveStrip();return;}   // I'm inside my match — don't yank me out
+  if(onScreen('scr-cl-watch')){clRenderSpectate();return;}
+  if(!onScreen('scr-cl-hub'))goScr('scr-cl-hub');
+  clRenderHub();
+}
+function clRenderMpLobby(){
+  const r=clmp.room;if(!r)return;
+  $('#cl-lobby-code').textContent=clmp.code;
+  $('#cl-lobby-limit').textContent=r.limit||240;
+  $('#cl-lobby-decks').textContent=(r.numDecks||1)===2?'2 decks':'1 deck';
+  $('#cl-lobby-settings-view').classList.toggle('hidden',clmp.isHost);
+  $('#cl-lobby-settings-edit').classList.toggle('hidden',!clmp.isHost);
+  if(clmp.isHost){
+    $('#seg-cl-lobby-limit').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',+b.dataset.v===(r.limit||240)));
+    $('#seg-cl-lobby-decks').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',+b.dataset.v===(r.numDecks||1)));
+  }
+  const hostUid=effHost(r);
+  const ps=Object.entries(r.players||{}).sort((a,b)=>(a[1].order||0)-(b[1].order||0));
+  $('#cl-lobby-players').innerHTML=ps.map(([uid,p])=>{
+    const isHost=uid===hostUid,me=uid===myUid;
+    const kick=(clmp.isHost&&!me)?`<button class="cl-lp-kick" data-cl-kick="${uid}">✕</button>`:'';
+    return `<div class="cl-lp"><span>${esc(p.name)}${me?' <span style="color:var(--teal);font-size:11px">(you)</span>':''}</span>
+      <span>${isHost?'<span class="cl-lp-host">HOST</span> ':''}${kick}</span></div>`;
+  }).join('');
+  const n=ps.length,even=n%2===0;
+  const hint=$('#cl-lobby-hint');
+  if(n<4)hint.textContent=`Need at least 4 players (even number) · ${n} joined`;
+  else if(!even)hint.textContent=`Need an even number of players · ${n} joined — one more to go`;
+  else hint.textContent=`${n} players · ${n-1} rounds · everyone plays everyone once`;
+  const canStart=clmp.isHost&&n>=4&&even;
+  $('#btn-cl-lobby-start').classList.toggle('hidden',!canStart);
+  $('#btn-cl-takeover').classList.toggle('hidden',clmp.isHost);
+}
+function clMpStart(){
+  const r=clmp.room;if(!r||!clmp.isHost)return;
+  const ps=Object.keys(r.players||{});
+  if(ps.length<4)return toast('Need at least 4 players');
+  if(ps.length%2!==0)return toast('Need an even number of players');
+  const ordered=Object.entries(r.players).sort((a,b)=>(a[1].order||0)-(b[1].order||0)).map(([uid])=>uid);
+  const schedule=clMakeSchedule(ordered);
+  clmp.ref.update({status:'league',phase:'league',round:0,
+    schedule:JSON.stringify(schedule),playoff:null,matches:null});
+}
+function clMpTakeover(){
+  if(!clmp.ref||clmp.isHost)return;
+  clmp.ref.child('host').set(myUid);toast('You are now the host');
+}
+function clMpLeave(silent){
+  if(!silent&&CL&&!confirm('Leave the tournament?'))return;
+  const ref=clmp.ref;
+  clmpDetachAll();CL=null;clMyMatchKey=null;G=null;myIdx=-1;
+  const strip=$('#cl-live-strip');if(strip)strip.classList.add('hidden');
+  if(ref)ref.child('players/'+myUid).remove().catch(()=>{});
+  goScr('scr-home');
+}
+$('#seg-cl-lobby-limit')&&$('#seg-cl-lobby-limit').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b||!clmp.isHost||!clmp.ref)return;clmp.ref.update({limit:+b.dataset.v});});
+$('#seg-cl-lobby-decks')&&$('#seg-cl-lobby-decks').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b||!clmp.isHost||!clmp.ref)return;clmp.ref.update({numDecks:+b.dataset.v});});
+$('#cl-lobby-players')&&$('#cl-lobby-players').addEventListener('click',e=>{
+  const b=e.target.closest('[data-cl-kick]');if(!b||!clmp.isHost||!clmp.ref)return;
+  if(confirm('Remove this player from the room?'))clmp.ref.child('players/'+b.dataset.clKick).remove();});
+
+/* ---- entering / playing my own match ---- */
+function clMpEnterMatch(m){
+  const aId=m.a,bId=m.b,fbk=clFbKey(m.key);
+  clmpDetachMyMatch();
+  mp.code=clmp.code;mp.ref=clmp.matchesRef.child(fbk);mp.stateRef=mp.ref.child('state');
+  /* side A is the ongoing round-dealer (host-only-deal safety, exactly
+     like a normal online match), but *either* player may create round 1
+     — a transaction makes that first deal race-safe (second writer sees a
+     non-null value and aborts, so there's never a double-deal). */
+  mp.lastV=-1;mp.isHost=(myUid===aId);mp.isSpectator=false;mp.room=null;
+  G=null;myIdx=-1;announcedRound=-1;sel.clear();clMyMatchKey=m.key;
+  const oppId=aId===myUid?bId:aId;
+  goScr('scr-game');
+  const strip=$('#cl-live-strip');if(strip)strip.classList.add('hidden');
+  openModal('clwait',`<h2>⏳ Getting ready…</h2><p class="tag">Setting up your match vs ${esc(clName(oppId))}…</p>
+    <div class="mbtns"><button class="btn ghost" onclick="clGoHub()">Back to tournament</button></div>`);
+  mp.stateRef.on('value',clMpMatchStateHandler);
+  mp.stateRef.transaction(cur=>{
+    if(cur)return;                         // already created by the other player — abort
+    const A=clPlayer(aId),B=clPlayer(bId);
+    const g=newMatch([{id:aId,name:A.name,isBot:false,diff:null},
+                      {id:bId,name:B.name,isBot:false,diff:null}],CL.limit,'mp',CL.numDecks);
+    g.clKey=m.key;deal(g);
+    return JSON.stringify(g);
+  });
+}
+function clMpMatchStateHandler(s){
+  const raw=s.val();
+  if(!raw){mp.lastV=-1;return;}
+  let g;try{g=JSON.parse(raw);}catch(e){return;}
+  if(typeof g.v==='number'&&g.v<mp.lastV)return;   // stale echo
+  mp.lastV=g.v||0;
+  if(G===null)announcedRound=-1;
+  G=g;G.mode='mp';G.clKey=clMyMatchKey;
+  myIdx=G.players.findIndex(p=>p.id===myUid);
+  const me=G.players[myIdx];
+  sel=new Set(me?[...sel].filter(id=>me.hand.some(c=>c.id===id)):[]);
+  closeModalIf('clwait');
+  goScr('scr-game');clUpdateLiveStrip();render();
+}
+function clMpWriteResult(key,res){
+  if(clmp.matchesRef)clmp.matchesRef.child(clFbKey(key)).child('result').set(res);
+}
+/* host-only round/stage advancement — writes the new room-level state,
+   every client then rebuilds CL from it via clmpSync(). */
+function clMpAdvance(){
+  if(!clmp.isHost)return toast('Only the host can advance');
+  if(!clAllActiveDone())return toast('Matches still in progress');
+  clAdvanceState();
+  clmp.ref.update({round:CL.round,phase:CL.phase,
+    status:CL.phase==='done'?'done':CL.phase,
+    playoff:CL.playoff?JSON.stringify(CL.playoff):null});
+  if(CL.phase==='done'){setTimeout(burstWin,200);setTimeout(burstWin,600);setTimeout(burstWin,1000);}
+}
+/* Button gating for MP: advance is host-only; a non-host waiting on the
+   host sees a hint instead. Play button already generic (clMyActive). */
+function clMpHubButtons(){
+  const advBtn=$('#btn-cl-advance');if(!advBtn)return;
+  const allDone=clAllActiveDone();
+  if(CL.phase==='done'||!allDone){advBtn.classList.add('hidden');return;}
+  if(clmp.isHost){
+    advBtn.classList.remove('hidden');
+    advBtn.textContent=CL.phase==='league'
+      ?(CL.round<CL.schedule.length-1?'Next round →':'🏆 Enter playoffs →')
+      :(CL.playoff.stage==='final'?'👑 Crown champion →':'Next stage →');
+  }else advBtn.classList.add('hidden');
+}
+let clSpectateMp=false;
+
+/* Exiting the game screen mid-CL-match returns to the hub (not home). */
+const _clUiLeave=uiLeave,_clUiHome=uiHome;
+uiLeave=function(){if(G&&G.clKey){clGoHub();return;}_clUiLeave();};
+uiHome=function(){if(G&&G.clKey){clGoHub();return;}_clUiHome();};
 
 /* ================= HEADLESS TEST HARNESS ================= */
 window.__test={
