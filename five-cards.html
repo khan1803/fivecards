@@ -3118,51 +3118,93 @@ function fbInit(){
 /* ================= PLAYER PROFILES (lifetime leaderboard) =================
    myUid above is per-device/per-browser — exactly the thing that must NOT
    carry your lifetime stats, since the whole point here is that they
-   survive a device change. This is a separate, optional identity layer,
-   backed by real Firebase Authentication (Google Sign-In) rather than a
-   self-rolled name+PIN scheme — the Google account's own uid IS the
-   profile id, so cross-device continuity is just "sign in with the same
-   Google account", no recovery code to lose. firebase.auth() persists
-   the session itself (IndexedDB), restored via onAuthStateChanged below
-   — no localStorage bookkeeping needed on this end at all.
-   Playing without a profile is fully supported — every profile* function
-   below no-ops if nobody's signed in, so this is additive, not a login
-   wall in front of the game. */
+   survive a device change. This is a separate identity layer, backed by
+   real Firebase Authentication (Google Sign-In) rather than a self-rolled
+   name+PIN scheme — the Google account's own uid IS the profile id, so
+   cross-device continuity is just "sign in with the same Google account",
+   no recovery code to lose. firebase.auth() persists the session itself
+   (IndexedDB), restored via onAuthStateChanged below — no localStorage
+   bookkeeping needed on this end at all.
+   Sign-in is now mandatory to actually play (see requirePlaySignIn,
+   wired into the three home-screen mode buttons) — this was previously
+   an optional layer but Saif asked for it to gate play outright. The
+   public leaderboard itself still doesn't require signing in to *view*,
+   only to *play* — those are different asks. */
 let profile={id:null,name:null};
 let authReady=false;   // true once the initial onAuthStateChanged callback has fired — see updateProfileBadge()
+let needsNameSetup=false;   // true for a brand-new profile that hasn't picked a (unique) display name yet
 function authInit(){
   if(!fbInit())return false;
   if(!firebase.auth){toast('Auth not available — check the Firebase SDK scripts');return false;}
   if(authInit._done)return true;
   authInit._done=true;
-  firebase.auth().onAuthStateChanged(user=>{
+  firebase.auth().onAuthStateChanged(async user=>{
     authReady=true;
     if(user){
       profile={id:user.uid,name:user.displayName||'Player'};
-      profileEnsureDoc();
+      await profileEnsureDoc();
+      if(needsNameSetup)showNameSetupModal();
     }else{
-      profile={id:null,name:null};
+      profile={id:null,name:null};needsNameSetup=false;
     }
     updateProfileBadge();
   });
   return true;
 }
+/* Case-insensitive uniqueness check across every profile except (optionally)
+   one — used both for a brand-new profile's first name and for a later
+   rename. No separate name->id index is kept for this (there used to be
+   one, for the old PIN system's username lookup, removed along with it) —
+   at the scale a private friend-group game actually runs at, one full
+   read of profiles/ and a local scan is simpler and doesn't need a second
+   piece of denormalized state to ever fall out of sync with the real data. */
+async function profileNameTaken(name,excludeId){
+  if(!db)return false;
+  const norm=name.trim().toLowerCase();
+  const snap=await db.ref('profiles').get();
+  const all=snap.val()||{};
+  return Object.entries(all).some(([id,p])=>id!==excludeId&&p.name&&p.name.trim().toLowerCase()===norm);
+}
 /* Creates profiles/{uid} with default stats the first time this Google
-   account ever signs in; a returning user's existing name/stats are left
-   completely untouched (only fills in fields that are actually missing,
-   via update() not set()) — this must never clobber real history just
-   because Google's displayName happened to come back differently. */
+   account ever signs in — but does NOT just take Google's displayName
+   as-is; a genuinely new profile always needs to go through
+   showNameSetupModal() (below) to actually claim a name, since Google
+   provides no guarantee it's unique among players here. A *returning*
+   user's existing name/stats are left completely untouched — this must
+   never clobber real history just because Google's displayName happened
+   to come back differently on this particular sign-in. */
 async function profileEnsureDoc(){
   if(!profile.id||!db)return;
   const ref=db.ref('profiles/'+profile.id);
   const snap=await ref.get();
   if(!snap.exists()){
-    await ref.set({name:profile.name,createdAt:firebase.database.ServerValue.TIMESTAMP,
-      stats:{played:0,won:0,lost:0,forfeited:0,wrongShows:0}});
+    needsNameSetup=true;   // caller (authInit) shows the picker; nothing is written until a unique name is confirmed
   }else if(snap.val().name){
     profile.name=snap.val().name;   // an edited display name (see profileRename) always wins over Google's
-    updateProfileBadge();
+    needsNameSetup=false;
   }
+}
+function showNameSetupModal(){
+  openModal('namesetup',`<h2>👤 Choose your display name</h2>
+    <p class="tag">This is what other players see on the leaderboard — it has to be unique. Yours doesn't have to match your real Google name.</p>
+    <input id="prof-namesetup" maxlength="16" placeholder="Your name" autocomplete="off" value="${esc(profile.name||'')}">
+    <div class="mbtns" style="flex-direction:column;align-items:stretch">
+      <button class="btn primary" onclick="profileNameSetupSubmit()">Continue</button>
+      <button class="btn ghost" onclick="profileSignOutUi()">Wrong account — sign out</button>
+    </div>`);
+}
+async function profileNameSetupSubmit(){
+  const input=$('#prof-namesetup');if(!input)return;
+  const name=input.value.trim();
+  if(!name)return toast('Enter a name');
+  if(name.length>16)return toast('Name is too long (16 characters max)');
+  if(await profileNameTaken(name,profile.id))return toast('That name is already taken — try another');
+  await db.ref('profiles/'+profile.id).set({name,createdAt:firebase.database.ServerValue.TIMESTAMP,
+    stats:{played:0,won:0,lost:0,forfeited:0,wrongShows:0}});
+  profile.name=name;needsNameSetup=false;
+  updateProfileBadge();
+  closeModal();
+  toast('Welcome, '+name+'!');
 }
 async function profileGoogleSignIn(){
   if(!authInit())return{error:'Could not connect to server'};
@@ -3181,15 +3223,30 @@ function profileGoogleSignOut(){
 /* Lets a player use a game-specific display name instead of whatever
    their Google account's real name is — not everyone wants their full
    real name on a public leaderboard just because that's what Google
-   knows them as. */
+   knows them as. Same uniqueness rule as a brand-new profile's first
+   name — excludes the player's own current profile, so renaming to the
+   name you already have (a no-op) isn't rejected as "taken". */
 async function profileRename(newName){
   newName=(newName||'').trim();
   if(!newName)return{error:'Enter a name'};
   if(newName.length>16)return{error:'Name is too long (16 characters max)'};
   if(!profile.id||!db)return{error:'Not signed in'};
+  if(await profileNameTaken(newName,profile.id))return{error:'That name is already taken'};
   await db.ref('profiles/'+profile.id+'/name').set(newName);
   profile.name=newName;
   return{ok:true};
+}
+/* Gate for the three home-screen mode buttons — Saif asked that nobody
+   be able to play at all without signing in first (this used to be an
+   optional layer; the leaderboard can still be *viewed* without signing
+   in, but starting a game now requires it). A pending name-setup counts
+   as "not ready yet" too, since a profile with no confirmed unique name
+   shouldn't be able to start racking up stats under it. */
+function requirePlaySignIn(){
+  if(profile.id&&!needsNameSetup)return true;
+  toast('Sign in with Google to play');
+  showProfileModal();
+  return false;
 }
 /* outcome: 'won'|'lost'|'forfeited'|'draw'. A draw only counts toward
    "played" (matches real-world convention — it's neither a win nor a
@@ -3232,7 +3289,7 @@ function showProfileModal(){
     return;
   }
   openModal('profile',`<h2>👤 Player Profile</h2>
-    <p class="tag">Sign in with Google to track your lifetime wins, losses and more across any device. Playing without one is completely fine too — this is optional.</p>
+    <p class="tag">Sign in with Google to play — this tracks your lifetime wins, losses and more across any device you sign in from. You can still browse the public leaderboard without signing in.</p>
     <div class="mbtns" style="flex-direction:column;align-items:stretch">
       <button class="btn primary" onclick="profileGoogleSignInUi()">🔵 Sign in with Google</button>
       <button class="btn ghost" onclick="closeModal()">Not now</button>
@@ -4212,8 +4269,8 @@ $('#seg-lobby-decks').addEventListener('click',e=>{
   mp.ref.update({numDecks:+b.dataset.v});
 });
 
-$('#btn-gobot').onclick=()=>goScr('scr-bot');
-$('#btn-gomp').onclick=()=>goScr('scr-mp');
+$('#btn-gobot').onclick=()=>{if(requirePlaySignIn())goScr('scr-bot');};
+$('#btn-gomp').onclick=()=>{if(requirePlaySignIn())goScr('scr-mp');};
 $('#btn-help').onclick=showHelpModal;
 $('#btn-help2').onclick=showHelpModal;
 document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>goScr(b.dataset.back||'scr-home'));
@@ -4229,7 +4286,7 @@ segInit('seg-cl-players',v=>clSetup.players=+v);
 segInit('seg-cl-diff',v=>clSetup.diff=v);
 segInit('seg-cl-decks',v=>clSetup.numDecks=+v);
 segInit('seg-cl-limit',v=>clSetup.limit=+v);
-$('#btn-gocl').onclick=()=>goScr('scr-cl-mode');
+$('#btn-gocl').onclick=()=>{if(requirePlaySignIn())goScr('scr-cl-mode');};
 $('#btn-cl-solo').onclick=()=>goScr('scr-cl-solo');
 $('#btn-cl-mp').onclick=()=>goScr('scr-cl-mp');
 $('#btn-cl-start-solo').onclick=clStartSolo;
