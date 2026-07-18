@@ -473,6 +473,14 @@ body.dealing .card-count{visibility:hidden}
   box-shadow:0 -20px 50px rgba(0,0,0,.5)}
 #chat-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid rgba(255,184,77,.18)}
 #chat-header h2{color:var(--gold);font-size:16px;font-family:'Cinzel',serif}
+/* who this message goes to — only shown while a Champions League
+   tournament is active (openChat() toggles it); regular online play has
+   no second channel, so it stays hidden there. */
+#cl-chat-tabs{display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid rgba(255,184,77,.12)}
+.cl-chat-tab{flex:1;padding:7px 6px;border-radius:9px;border:1px solid var(--line);background:rgba(255,184,77,.04);
+  color:var(--labelmuted);font-family:'Manrope';font-weight:700;font-size:12px;cursor:pointer}
+.cl-chat-tab.sel{background:linear-gradient(180deg,var(--goldlt),var(--gold2));color:var(--inkdark);border-color:transparent}
+.cl-chat-tab:disabled{opacity:.4;cursor:not-allowed}
 #chat-log{flex:1;overflow-y:auto;padding:10px 14px;display:flex;flex-direction:column;gap:6px;min-height:80px}
 .chat-empty{color:var(--lavdim);font-size:13px;text-align:center;margin:auto}
 .chat-msg{max-width:78%;padding:8px 12px;border-radius:14px;font-size:14px;line-height:1.35;word-break:break-word;font-family:'Manrope',sans-serif;font-weight:600}
@@ -802,16 +810,23 @@ table.cl-table tr.q4 td{border-bottom:2px dashed var(--teal)}
 table.cl-table .rk{color:var(--gold);font-weight:700}
 .cl-nrr-pos{color:#8FE3B0}.cl-nrr-neg{color:#FF8FA6}
 .cl-q-badge{font-size:8.5px;color:var(--teal);font-family:'DM Mono';letter-spacing:.5px}
+tr.cl-withdrawn td{opacity:.5;text-decoration:line-through}
+tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
 
 /* Bracket — a real connected flow chart (columns + SVG connector lines),
    horizontally scrollable since 4 columns never fit a phone width, same
    pattern every tournament-bracket site/graphic uses on mobile. */
 #cl-hub-bracket{display:block;min-width:0}
-#cl-bracket-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+/* [id^=...] rather than a plain #id selector — clBracketHtml(scope)
+   renders a second bracket instance inside the match-end modal with
+   suffixed ids (cl-bracket-flow-modal etc.) so it doesn't collide with
+   the hub's own copy sitting hidden behind the modal; both need the same
+   styling, so match by prefix instead of duplicating every rule. */
+[id^="cl-bracket-scroll"]{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
   margin:0 -12px;padding:4px 12px 10px;mask-image:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 14px),transparent);
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 14px),transparent)}
-#cl-bracket-flow{position:relative;display:inline-flex;gap:34px;min-width:100%}
-#cl-bracket-svg{position:absolute;inset:0;pointer-events:none;overflow:visible}
+[id^="cl-bracket-flow"]{position:relative;display:inline-flex;gap:34px;min-width:100%}
+[id^="cl-bracket-svg"]{position:absolute;inset:0;pointer-events:none;overflow:visible}
 .cl-br-col{flex:0 0 auto;width:180px;display:flex;flex-direction:column;gap:10px;position:relative;z-index:1}
 .cl-br-col.champ-col{width:230px}
 .cl-br-col-h{font-family:'Cinzel',serif;font-size:12px;color:var(--gold);letter-spacing:.5px;text-transform:uppercase}
@@ -934,7 +949,7 @@ table.cl-table .rk{color:var(--gold);font-weight:700}
     </div>
     <span class="lbl">Elimination at</span>
     <div class="seg" id="seg-limit">
-      <button data-v="180">180 pts</button><button data-v="240" class="sel">240 pts</button><button data-v="360">360 pts</button>
+      <button data-v="120">120 pts</button><button data-v="180">180 pts</button><button data-v="240" class="sel">240 pts</button><button data-v="360">360 pts</button>
     </div>
     <button class="btn primary big" id="btn-start-bot" style="align-self:center;margin-top:6px">Deal Cards</button>
     <button class="btn ghost" data-back>← Back</button>
@@ -999,7 +1014,7 @@ table.cl-table .rk{color:var(--gold);font-weight:700}
     </div>
     <span class="lbl">A match is lost at</span>
     <div class="seg" id="seg-cl-limit">
-      <button data-v="180">180 pts</button><button data-v="240" class="sel">240 pts</button><button data-v="360">360 pts</button>
+      <button data-v="120">120 pts</button><button data-v="180">180 pts</button><button data-v="240" class="sel">240 pts</button><button data-v="360">360 pts</button>
     </div>
     <button class="btn primary big" id="btn-cl-start-solo" style="align-self:center;margin-top:6px">Start Tournament</button>
     <button class="btn ghost" data-back>← Back</button>
@@ -1039,7 +1054,7 @@ table.cl-table .rk{color:var(--gold);font-weight:700}
     <div id="cl-lobby-settings-edit" class="hidden" style="width:100%">
       <span class="lbl">A match is lost at</span>
       <div class="seg" id="seg-cl-lobby-limit">
-        <button data-v="180">180</button><button data-v="240">240</button><button data-v="360">360</button>
+        <button data-v="120">120</button><button data-v="180">180</button><button data-v="240">240</button><button data-v="360">360</button>
       </div>
       <span class="lbl">Decks</span>
       <div class="seg" id="seg-cl-lobby-decks">
@@ -1048,6 +1063,7 @@ table.cl-table .rk{color:var(--gold);font-weight:700}
     </div>
     <div id="cl-lobby-voicebar">
       <button class="btn ghost" id="btn-cl-voice-lobby"><span id="cl-voice-lobby-icon">🎤</span>&ensp;Voice</button>
+      <button class="btn ghost" id="btn-cl-chat-lobby" style="position:relative">💬&ensp;Chat<span id="cl-chat-badge-lobby" class="hidden"></span></button>
     </div>
     <div class="cl-lobby-list" id="cl-lobby-players"></div>
     <p class="tag" id="cl-lobby-hint">Waiting for players…</p>
@@ -1065,6 +1081,7 @@ table.cl-table .rk{color:var(--gold);font-weight:700}
     <div style="display:flex;align-items:center;gap:8px">
       <span id="cl-voice-count" class="hidden"></span>
       <button class="icon-btn" id="btn-cl-voice" title="Voice chat">🎤</button>
+      <button class="icon-btn" id="btn-cl-chat" style="position:relative" title="Chat">💬<span id="cl-chat-badge" class="hidden"></span></button>
       <button class="icon-btn" id="btn-cl-hub-help">?</button>
     </div>
   </header>
@@ -1099,7 +1116,7 @@ table.cl-table .rk{color:var(--gold);font-weight:700}
     <div id="lobby-settings-edit" class="hidden" style="width:100%">
       <span class="lbl">Elimination at</span>
       <div class="seg" id="seg-lobby-limit">
-        <button data-v="180">180</button><button data-v="240">240</button><button data-v="360">360</button>
+        <button data-v="120">120</button><button data-v="180">180</button><button data-v="240">240</button><button data-v="360">360</button>
       </div>
       <span class="lbl">Decks</span>
       <div class="seg" id="seg-lobby-decks">
@@ -1181,6 +1198,10 @@ table.cl-table .rk{color:var(--gold);font-weight:700}
 <div id="chat-back" class="hidden">
   <div id="chat-panel">
     <div id="chat-header"><h2>💬 Chat</h2><button class="icon-btn" id="btn-chat-close">✕</button></div>
+    <div id="cl-chat-tabs" class="hidden">
+      <button class="cl-chat-tab sel" data-ch="all">🌐 All players</button>
+      <button class="cl-chat-tab" data-ch="match">🎧 Your match</button>
+    </div>
     <div id="chat-log"></div>
     <div id="chat-emojis">
       <button class="emoji-btn" data-e="😂">😂</button>
@@ -2259,15 +2280,15 @@ function render(){
   const me=G.players[myIdx];
   const myTurn=me&&!me.elim&&G.turn===myIdx&&!isEnd();
   $('#round-info').textContent=`ROUND ${G.round} · LIMIT ${G.limit}`;
-  /* chat/spectator buttons are for regular online rooms — a Champions
-     League 1v1 (G.clKey set) uses a lean per-match sync that doesn't wire
-     those listeners, so hide them there. Voice is different: it's meant
-     to be one persistent tournament-wide room for the whole CL session
-     (see currentVoiceRoomRef), not per-match, so it stays visible for a
-     CL match too — same button, just resolving to clmp.ref instead of
-     mp.ref underneath. */
+  /* Spectators are a regular-online-room-only concept (Champions League
+     has no per-match spectator presence built) — stays hidden for a CL
+     match (G.clKey set). Chat and voice are both dual-channel-aware for
+     Champions League now (see clChatSwitchChannel/currentVoiceRoomRef —
+     'all' resolves to the tournament room clmp.ref, 'match' to the
+     current match node), so both stay visible there too — same buttons,
+     just resolving to a different ref underneath depending on mode. */
   const mpFeat=G.mode==='mp'&&!G.clKey;
-  $('#btn-chat').classList.toggle('hidden',!mpFeat);
+  $('#btn-chat').classList.toggle('hidden',G.mode!=='mp');
   $('#btn-voice').classList.toggle('hidden',G.mode!=='mp');
   $('#btn-spectators').classList.toggle('hidden',!mpFeat);
   updateTurnTimer();
@@ -2497,7 +2518,15 @@ function render(){
   else if(myTurn&&G.phase==='draw')st='Take a card: tap the deck or an open card';
   else st=`${G.players[G.turn].name} is playing…`;
   $('#status-bar').textContent=st;
-  $('#log-line').textContent=G.log.length?G.log[G.log.length-1]:'';
+  /* the true latest log line is the round's own outcome text — written
+     synchronously by resolveShow() the instant deal() calls it for an
+     Open Show, well before anyone has actually tapped a single card over
+     (see deal()'s own comment on this). Showing it here regardless of
+     openShowRevealing was a real spoiler leak — the exact same info the
+     status bar and every seat's score/elim display already correctly
+     hide during the reveal, just via a different element that wasn't
+     covered by that suppression. */
+  $('#log-line').textContent=openShowRevealing?'🎴 Revealing the cards…':(G.log.length?G.log[G.log.length-1]:'');
   if(me){
     $('#my-rank-badge').textContent='#'+rankOf(myIdx);
     const myShownSum=myRevealCnt!=null?handSum(sortHand(me.hand).slice(0,myRevealCnt)):handSum(me.hand);
@@ -2739,8 +2768,21 @@ function showRoundModal(){
 /* Metrics-as-rows, players-as-columns leaderboard — one column per
    player (sorted best→worst) so the full round-by-round history reads
    as a matrix instead of needing a wide per-round table. */
+/* Every field here is a straight read of G.players — for most of this
+   game that's fine, but during a live Open Show reveal it isn't: score/
+   elim/wins for the round currently being revealed all get written
+   synchronously the instant deal() calls resolveShow(), well before any
+   card is actually tapped over (see deal()'s own comment about this).
+   render() already has this exact suppression logic for the opponent
+   seats (suppressElim/dispScore) — recomputed locally here (pure
+   functions of G, no external state needed) since this table is also
+   opened from the score-button modal, not just inline in render(). */
 function leaderboardMatrix(){
-  const ranked=rankRows(G.players.map((p,i)=>({i,name:p.name,total:p.score,elim:p.elim,wins:p.wins,roundPts:p.roundPts})),'total');
+  const openShowRevealing=G.openShow!=null&&!G.openShowRevealDone;
+  const suppressElim=i=>openShowRevealing&&G.openShowParticipants&&G.openShowParticipants.includes(i);
+  const dispScore=(p,i)=>suppressElim(i)?p.score-(p.roundPts[p.roundPts.length-1]||0):p.score;
+  const dispWins=(p,i)=>suppressElim(i)&&p.roundPts.length&&p.roundPts[p.roundPts.length-1]===0?p.wins-1:p.wins;
+  const ranked=rankRows(G.players.map((p,i)=>({i,name:p.name,total:dispScore(p,i),elim:p.elim&&!suppressElim(i),wins:dispWins(p,i),roundPts:p.roundPts})),'total');
   const maxRounds=Math.max(0,...G.players.map(p=>p.roundPts.length));
   let rows=`<tr><th></th>${ranked.map(r=>`<th>${esc(r.name)}${r.i===myIdx?' <span style="color:var(--dim)">(you)</span>':''}</th>`).join('')}</tr>`;
   rows+=`<tr><td>Status</td>${ranked.map(r=>`<td>${r.elim?'<span class="out">Eliminated</span>':'Active'}</td>`).join('')}</tr>`;
@@ -2749,6 +2791,7 @@ function leaderboardMatrix(){
   rows+=`<tr><td>Overall</td>${ranked.map(r=>`<td><b>${r.total}</b></td>`).join('')}</tr>`;
   for(let rnd=0;rnd<maxRounds;rnd++){
     rows+=`<tr><td>Round ${rnd+1}</td>${ranked.map(r=>{
+      if(openShowRevealing&&rnd===maxRounds-1&&suppressElim(r.i))return '<td>🎴</td>';
       const v=r.roundPts[rnd];
       if(v==null)return '<td>—</td>';
       return `<td class="${v===0?'win':''}">${v===60?'+60 ⚠️':v}</td>`;
@@ -2773,7 +2816,16 @@ function showScoreModal(){
 }
 function showLogModal(){
   if(!G)return;
-  openModal('log',`<h2>Game log</h2><div class="logbox">${G.log.slice().reverse().map(esc).join('<br>')}</div>
+  /* deal() pushes the Open Show's real outcome as a log line synchronously,
+     the same instant it calls resolveShow() — well before any card is
+     actually tapped over. It's always the single most recent entry at
+     that point (immediately after the safe "calls an OPEN SHOW!" line
+     deal() pushes right before it), so just excluding the last entry
+     while the reveal is still live keeps the full log spoiler-free
+     without needing to touch how/when resolveShow() itself logs. */
+  const openShowRevealing=G.openShow!=null&&!G.openShowRevealDone;
+  const visibleLog=openShowRevealing?G.log.slice(0,-1):G.log;
+  openModal('log',`<h2>Game log</h2><div class="logbox">${visibleLog.slice().reverse().map(esc).join('<br>')}</div>
     <div class="mbtns"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
 }
 /* players could only ever learn a spectator had joined via a one-shot
@@ -2802,7 +2854,7 @@ function showHelpModal(){
     <div><b>Discards:</b> one card, 2+ cards of the <b>same rank</b> (two Kings), or a <b>run of 3+</b> in the same suit (4-5-6♥). Jokers are wild in runs.</div>
     <div><b>Attack:</b> a 2 or a Joker played alone (or as a pair) makes the next player <b>pick up 2 per card</b> — unless they stack their own 2/Joker to pass it on, bigger. Picking up ends your turn.</div>
     <div><b>Show:</b> on your turn, declare! If you truly have the lowest hand you score <b>0</b> and everyone else scores their hand (capped at <b>60</b>). If anyone is equal or lower — <b>+60 penalty</b> for you, and the real lowest scores 0.</div>
-    <div><b>Elimination:</b> reach the point limit (180/240/360) and you're out. Last player standing wins.</div>
+    <div><b>Elimination:</b> reach the point limit (120/180/240/360) and you're out. Last player standing wins.</div>
   </div><div class="mbtns"><button class="btn primary" onclick="closeModal()">Got it</button></div>`);
 }
 
@@ -3217,8 +3269,21 @@ function uiTakeOverHost(){
   /* mid-match only — G is null in the lobby, where there's no
      elimination concept yet and everyone's still eligible */
   if(G&&myIdx>=0&&G.players[myIdx]&&G.players[myIdx].elim)return;
+  /* Optimistic: flip mp.isHost and re-render right now rather than
+     waiting on the Firebase round-trip (write → server → our own
+     mp.ref.on('value') listener echoing it back) before the button state
+     changes — that round-trip is exactly what made this "take some time
+     to reflect". The listener still lands moments later and recomputes
+     mp.isHost via effHost() same as always; it'll just be confirming
+     what the UI already shows, not producing the only update. In the
+     rare case two players tap this within the same instant, the loser's
+     optimistic guess gets silently corrected back the moment that same
+     listener fires — normal, expected optimistic-UI behavior, not a new
+     inconsistency this introduces. */
+  mp.isHost=true;
   mp.ref.child('host').set(myUid);
   toast('You are now the host');
+  render();renderLobby();
 }
 /* Host-only escape hatch for a frozen/unresponsive player — used from
    both the lobby (full removal, no match to speak of yet — same as
@@ -3303,34 +3368,89 @@ function mpBackToLobby(){
 }
 
 /* ---- chat ---- */
+/* ---- Champions League: dual-channel chat state (parallels voice's
+   currentVoiceRoomRef design exactly) — 'all' talks to the whole
+   tournament room, 'match' talks only to your current 1v1 opponent.
+   Only one channel is actively listened to at a time; switching tears
+   down the old Firebase listener and attaches a fresh one, same
+   lifecycle pattern as joinVoice/leaveVoice use for the same reason
+   (mp.ref moves around under CL as you enter/exit matches, so nothing
+   here can assume a single stable ref the way regular online play
+   could). openChat()/closeChat()/sendChat()/renderChatLog()/
+   updateChatBadge() below all branch on chatIsCL() so every existing
+   call site (send button, Enter key, emoji taps, the close button, the
+   backdrop click) keeps working unchanged for both regular multiplayer
+   and Champions League. */
+let clChat={channel:'all',ref:null,log:[],unread:0,attachTs:0};
+const chatIsCL=()=>CL&&CL.mode==='mp';
+function clChatSwitchChannel(channel){
+  if(clChat.ref)clChat.ref.off();
+  clChat.channel=channel;clChat.log=[];clChat.unread=0;
+  const ref=(channel==='match'&&clMyMatchKey&&clmp.matchesRef)
+    ?clmp.matchesRef.child(clFbKey(clMyMatchKey)).child('chat')
+    :(clmp.ref?clmp.ref.child('chat'):null);
+  clChat.ref=ref;
+  updateChatBadge();
+  if(!ref)return;
+  clChat.attachTs=Date.now();
+  ref.limitToLast(150).on('child_added',s=>{
+    const m=s.val();if(!m)return;
+    clChat.log.push(m);if(clChat.log.length>150)clChat.log.shift();
+    if(mp.chatOpen)renderChatLog();else{clChat.unread++;updateChatBadge();}
+    const isFresh=m.ts&&m.ts>=clChat.attachTs-3000;
+    if(isFresh)showChatBubble(m.uid,m.name,m.text);
+  });
+}
+function updateClChatTabs(){
+  const wrap=$('#cl-chat-tabs');if(!wrap)return;
+  wrap.querySelectorAll('.cl-chat-tab').forEach(b=>b.classList.toggle('sel',b.dataset.ch===clChat.channel));
+  const matchBtn=wrap.querySelector('[data-ch="match"]');
+  if(matchBtn)matchBtn.disabled=!clMyMatchKey;
+}
 function sendChat(text){
-  text=(text||'').trim();
-  if(!text||!mp.ref)return;
+  text=(text||'').trim();if(!text)return;
+  if(chatIsCL()){if(!clChat.ref)return;clChat.ref.push({uid:myUid,name:localStorage.fcName||'Player',text:text.slice(0,200),ts:firebase.database.ServerValue.TIMESTAMP});return;}
+  if(!mp.ref)return;
   mp.ref.child('chat').push({uid:myUid,name:localStorage.fcName||'Player',text:text.slice(0,200),
     ts:firebase.database.ServerValue.TIMESTAMP});
 }
 function renderChatLog(){
   const log=$('#chat-log');if(!log)return;
-  log.innerHTML=mp.chatLog.length?mp.chatLog.map(m=>
+  const list=chatIsCL()?clChat.log:mp.chatLog;
+  log.innerHTML=list.length?list.map(m=>
     `<div class="chat-msg ${m.uid===myUid?'mine':'theirs'}"><div class="who">${esc(m.name)}</div>${esc(m.text)}</div>`
   ).join(''):'<div class="chat-empty">No messages yet — say hi 👋</div>';
   log.scrollTop=log.scrollHeight;
 }
 function updateChatBadge(){
-  /* two separate badges — #chat-badge lives on the in-game topbar icon,
-     #chat-badge-lobby on the lobby's own Chat button — same unread
-     count, kept in sync together since either one might be the only
-     one currently on screen depending on which screen you're on */
-  [$('#chat-badge'),$('#chat-badge-lobby')].forEach(b=>{
+  /* four badges now, not two — the base game's in-game/lobby pair plus
+     Champions League's own hub/lobby pair — same unread count (from
+     whichever source is currently relevant), kept in sync together
+     since only one or two of the four is ever visible at once depending
+     on which screen you're on. */
+  const n=chatIsCL()?clChat.unread:mp.chatUnread;
+  [$('#chat-badge'),$('#chat-badge-lobby'),$('#cl-chat-badge'),$('#cl-chat-badge-lobby')].forEach(b=>{
     if(!b)return;
-    if(mp.chatUnread>0){b.textContent=mp.chatUnread>9?'9+':mp.chatUnread;b.classList.remove('hidden');}
+    if(n>0){b.textContent=n>9?'9+':n;b.classList.remove('hidden');}
     else b.classList.add('hidden');
   });
 }
 function openChat(){
+  if(chatIsCL()){
+    if(!clChat.ref)clChatSwitchChannel(clChat.channel);
+    if(!clChat.ref)return;
+    mp.chatOpen=true;clChat.unread=0;updateChatBadge();
+    $('#chat-back').classList.remove('hidden');
+    $('#cl-chat-tabs').classList.remove('hidden');
+    updateClChatTabs();
+    renderChatLog();
+    $('#chat-input').focus();
+    return;
+  }
   if(!mp.ref)return;
   mp.chatOpen=true;mp.chatUnread=0;updateChatBadge();
   $('#chat-back').classList.remove('hidden');
+  $('#cl-chat-tabs').classList.add('hidden');
   renderChatLog();
   $('#chat-input').focus();
 }
@@ -3476,9 +3596,29 @@ let voice={joined:false,muted:false,localStream:null,peers:{},presenceRef:null,s
    point at in the moment. Resolved once at join time and cached on
    voice.roomRef so every other voice function (signal/leave/presence)
    keeps using the *same* room even as mp.ref moves around underneath. */
+/* Champions League only: which of the two channels a freshly-opened mic
+   talks/listens to. 'all' = the whole tournament room; 'match' = just
+   your current 1v1 opponent's match node. Regular online play has no
+   second channel and ignores this entirely (currentVoiceRoomRef only
+   consults it when CL is actually active). */
+let voiceChannelMode='all';
 function currentVoiceRoomRef(){
-  if(CL&&CL.mode==='mp'&&clmp.ref)return clmp.ref;
+  if(CL&&CL.mode==='mp'){
+    if(voiceChannelMode==='match'&&clMyMatchKey&&clmp.matchesRef)return clmp.matchesRef.child(clFbKey(clMyMatchKey));
+    return clmp.ref;
+  }
   return mp.ref;
+}
+/* Switch channel without a full manual leave+rejoin click sequence —
+   used both by the picker modal and by clGoHub()'s automatic fallback
+   when leaving a match makes 'match' stop making sense. No-ops cleanly
+   if not currently joined (just records the preference for next join). */
+async function clSwitchVoiceChannel(mode){
+  if(mode===voiceChannelMode)return;
+  const wasJoined=voice.joined;
+  if(wasJoined)leaveVoice();
+  voiceChannelMode=mode;
+  if(wasJoined)await joinVoice();
 }
 let voicePresent=new Set();  // uids currently in the voice channel, per Firebase presence — drives the mic badge in render()
 /* real mic / mic-with-strike glyphs (every other platform's mute icon is
@@ -3525,12 +3665,47 @@ function updateVoiceUI(){
 function updateClVoiceCount(){
   const el=$('#cl-voice-count');if(!el)return;
   const n=voicePresent.size;
-  if(n>0){el.textContent='🎙️ '+n;el.classList.remove('hidden');}
+  if(n>0){el.textContent='🎙️ '+n+(voice.joined?(voiceChannelMode==='match'?' · match':' · all'):'');el.classList.remove('hidden');}
   else el.classList.add('hidden');
 }
+/* Regular online play keeps the original fast single-tap mute toggle
+   (join on first tap, mute/unmute every tap after) — Champions League
+   needs a channel choice *at* the moment of switching the mic on, and a
+   way to switch/leave later, so every tap there opens one small "Voice
+   chat" panel that has all of join/switch/mute/leave together — the one
+   control surface the mic button owns, per how this was asked for,
+   rather than a second settings affordance living somewhere else. */
 function voiceBtnClick(){
+  if(CL&&CL.mode==='mp'){clVoiceOptionsModal();return;}
   if(!voice.joined)joinVoice();
   else toggleMute();
+}
+function clVoiceOptionsModal(){
+  const hasMatch=!!clMyMatchKey;
+  const rows=[];
+  if(!voice.joined){
+    rows.push(`<button class="btn primary" onclick="clJoinVoiceChannel('all')">🌐 Talk to everyone</button>`);
+    rows.push(`<button class="btn ghost" ${hasMatch?'':'disabled'} onclick="clJoinVoiceChannel('match')">🎧 Talk to your opponent${hasMatch?'':' (no active match)'}</button>`);
+  }else{
+    const cur=voiceChannelMode;
+    rows.push(`<p class="tag" style="text-align:center">Currently: <b style="color:var(--gold)">${cur==='match'?'🎧 your opponent':'🌐 everyone'}</b>${voice.muted?' · muted':''}</p>`);
+    if(cur!=='all')rows.push(`<button class="btn ghost" onclick="clJoinVoiceChannel('all')">🌐 Switch to everyone</button>`);
+    if(cur!=='match')rows.push(`<button class="btn ghost" ${hasMatch?'':'disabled'} onclick="clJoinVoiceChannel('match')">🎧 Switch to your opponent${hasMatch?'':' (no active match)'}</button>`);
+    rows.push(`<button class="btn ghost" onclick="toggleMute();clVoiceOptionsModal();">${voice.muted?'🔊 Unmute':'🔇 Mute'}</button>`);
+    rows.push(`<button class="btn ghost" style="color:var(--red)" onclick="leaveVoice();closeModal();">Leave voice</button>`);
+  }
+  rows.push(`<button class="btn ghost" onclick="closeModal()">Close</button>`);
+  openModal('clvoice',`<h2>🎤 Voice chat</h2>
+    <div class="mbtns" style="flex-direction:column;align-items:stretch">${rows.join('')}</div>`);
+}
+async function clJoinVoiceChannel(mode){
+  closeModal();
+  if(voice.joined){
+    if(voiceChannelMode===mode)return;
+    leaveVoice();
+  }
+  voiceChannelMode=mode;
+  await joinVoice();
 }
 async function joinVoice(){
   const ref=currentVoiceRoomRef();
@@ -3848,6 +4023,16 @@ $('#btn-spectators').onclick=showSpectatorsModal;
 $('#log-line').onclick=showLogModal;
 $('#btn-chat').onclick=openChat;
 $('#btn-chat-lobby').onclick=openChat;
+$('#btn-cl-chat-lobby').onclick=openChat;
+$('#btn-cl-chat').onclick=openChat;
+$('#cl-chat-tabs').addEventListener('click',e=>{
+  const b=e.target.closest('.cl-chat-tab');if(!b||b.disabled)return;
+  if(b.dataset.ch===clChat.channel)return;
+  if(b.dataset.ch==='match'&&!clMyMatchKey)return;
+  clChatSwitchChannel(b.dataset.ch);
+  updateClChatTabs();
+  renderChatLog();
+});
 $('#btn-voice').onclick=voiceBtnClick;
 $('#btn-voice-lobby').onclick=voiceBtnClick;
 $('#btn-cl-voice').onclick=voiceBtnClick;
@@ -3975,17 +4160,39 @@ function spawnParticle(x,y,color){
   document.body.appendChild(p);
   setTimeout(()=>p.remove(),900);
 }
-function burstWin(){
-  const piles=$('#piles');if(!piles)return;
-  const r=piles.getBoundingClientRect();
-  const cx=r.left+r.width/2,cy=r.top+r.height/2;
+/* the actual particle-burst primitive — takes an explicit origin so it
+   works from any screen, not just scr-game (see burstWin below, which is
+   the old #piles-anchored call every existing site still uses). scale
+   lets a bigger moment (the whole tournament, not just one match) throw
+   more particles across a wider spread without a second copy of this. */
+function burstWinAt(cx,cy,scale){
+  scale=scale||1;
   const noirCols=['#FFB84D','#FFE3A3','#FF9ECF','#9AD7FF','#FFFFFF','#C97A2E'];
   const neonCols=['#F0543C','#FF7A5C','#00D4FF','#FFD700','#FF9999','#FFB347'];
   const cols=_currentTheme==='neon'?neonCols:noirCols;
-  for(let i=0;i<24;i++)setTimeout(()=>spawnParticle(cx+(Math.random()-0.5)*60,cy+(Math.random()-0.5)*30,cols[i%cols.length]),i*18);
+  const n1=Math.round(24*scale);
+  for(let i=0;i<n1;i++)setTimeout(()=>spawnParticle(cx+(Math.random()-0.5)*60*scale,cy+(Math.random()-0.5)*30*scale,cols[i%cols.length]),i*18);
   setTimeout(()=>{
-    for(let j=0;j<12;j++)setTimeout(()=>spawnParticle(cx+(Math.random()-0.5)*80,cy-20+(Math.random()-0.5)*40,cols[j%cols.length]),j*22);
+    const n2=Math.round(12*scale);
+    for(let j=0;j<n2;j++)setTimeout(()=>spawnParticle(cx+(Math.random()-0.5)*80*scale,cy-20+(Math.random()-0.5)*40*scale,cols[j%cols.length]),j*22);
   },280);
+}
+function burstWin(){
+  const piles=$('#piles');if(!piles)return;
+  const r=piles.getBoundingClientRect();
+  burstWinAt(r.left+r.width/2,r.top+r.height/2);
+}
+/* A genuinely bigger moment than any single match win — staggered bursts
+   at several points across the whole viewport, not anchored to #piles
+   (which doesn't even exist on the CL hub screen where a spectating/
+   eliminated player would see this — the old plain burstWin() calls used
+   for this previously silently did nothing there, since burstWin() bails
+   out with no #piles to anchor to; that was the actual reason "no
+   fireworks" was ever reported for winning the whole tournament). */
+function burstChampionFireworks(){
+  const w=window.innerWidth,h=window.innerHeight;
+  const pts=[[w*0.22,h*0.32],[w*0.78,h*0.32],[w*0.5,h*0.2],[w*0.35,h*0.58],[w*0.65,h*0.58]];
+  pts.forEach((p,i)=>setTimeout(()=>burstWinAt(p[0],p[1],1.7),i*240));
 }
 const _showRoundOrig=showRoundModal;
 showRoundModal=function(){
@@ -4066,6 +4273,82 @@ function clIsLive(key){
   return false;
 }
 
+/* ================= CL — HOST ADMIN: kick / forfeit =================
+   Two related but distinct tools. Kicking a player withdraws them from
+   the *whole* tournament — every match of theirs that hasn't produced a
+   result yet (their current match, or any future round they're
+   scheduled for) auto-resolves as a forfeit-loss the moment it's their
+   turn to play, so the tournament keeps moving without them blocking it.
+   Forfeiting a single match is more surgical: pick one specific
+   live/waiting match and force a result without touching either
+   player's ability to play their *other* matches — useful when it's one
+   stuck game (a disconnect, an AFK moment) rather than a player who
+   needs to leave entirely. Solo mode has no separate "host" — the human
+   is always the one running the show there, so both tools are available
+   without a permission check; MP gates on clmp.isHost same as every
+   other host-only action. */
+const clIsHost=()=>CL&&(CL.mode==='solo'||(CL.mode==='mp'&&clmp.isHost));
+function clForfeitResult(a,b,loserUid){
+  const winner=loserUid===a?b:a;
+  return {a,b,aScore:winner===a?0:CL.limit,bScore:winner===b?0:CL.limit,
+    winner,loser:loserUid,draw:false,margin:CL.limit,forfeit:true,done:true};
+}
+/* Self-healing: called every hub render. Any active-stage match that
+   still has no result, but one (or both — the second lost their withdraw
+   race, so the first-recorded winner stands) side is withdrawn, gets
+   resolved immediately. Every client computes this locally so the UI
+   updates instantly everywhere; only the host actually persists it (MP),
+   avoiding a write pile-up from every viewer computing the same result. */
+function clAutoForfeitWithdrawn(){
+  if(!CL||!CL.withdrawn)return;
+  /* League: sweep *every* not-yet-played fixture in the whole pool, not
+     just clActiveMatches() — that now only returns live/eligible-for-me
+     matches, which would miss most of a withdrawn player's remaining
+     fixtures (the ones nobody's gotten around to yet). Playoffs keep
+     scanning clActiveMatches() since that's still the complete stage-
+     scoped list there. */
+  const pending=CL.phase==='league'?clAllLeagueFixtures():clActiveMatches();
+  pending.forEach(m=>{
+    if(clRes(m.key))return;
+    const aOut=!!CL.withdrawn[m.a],bOut=!!CL.withdrawn[m.b];
+    if(!aOut&&!bOut)return;
+    const res=clForfeitResult(m.a,m.b,aOut?m.a:m.b);
+    CL.results[m.key]=res;
+    if(CL.mode==='mp'&&clmp.isHost)clMpWriteResult(m.key,res);
+  });
+}
+function clHostKickPlayer(targetUid,targetName){
+  if(!clIsHost()||targetUid===CL.myId)return;
+  if(!confirm(`Kick ${targetName} from the tournament? Any of their matches that haven't finished will be forfeited to their opponent.`))return;
+  CL.withdrawn=CL.withdrawn||{};
+  CL.withdrawn[targetUid]=true;
+  if(CL.mode==='mp'){if(clmp.ref)clmp.ref.child('withdrawn/'+targetUid).set(true);}
+  clAutoForfeitWithdrawn();
+  clRenderHub();
+  toast(`${targetName} has been removed from the tournament`);
+}
+/* single-match forfeit — a small inline modal to pick which side loses,
+   since either player could be the stuck/AFK one. */
+function clHostForfeitPrompt(key,aId,bId){
+  if(!clIsHost())return;
+  openModal('clforfeit',`<h2>Forfeit this match</h2><p class="tag">Which player forfeits?</p>
+    <div class="mbtns" style="flex-direction:column;align-items:stretch">
+      <button class="btn ghost" onclick="clHostForfeitMatch('${key}','${aId}')">${esc(clName(aId))} forfeits</button>
+      <button class="btn ghost" onclick="clHostForfeitMatch('${key}','${bId}')">${esc(clName(bId))} forfeits</button>
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+    </div>`);
+}
+function clHostForfeitMatch(key,loserUid){
+  closeModal();
+  if(!clIsHost())return;
+  const m=clActiveMatches().find(x=>x.key===key);if(!m||clRes(key))return;
+  const res=clForfeitResult(m.a,m.b,loserUid);
+  CL.results[key]=res;
+  if(CL.mode==='mp')clMpWriteResult(key,res);
+  clRenderHub();
+  toast(`${clName(loserUid)} forfeits the match`);
+}
+
 /* Standings: win=2pts, draw=1pt each, loss=0 (no margin bonus).
    NRR = Σwin margins − Σloss margins (draws contribute 0 either way).
    Sort by points, then NRR (the confirmed tiebreak), then wins, then name. */
@@ -4092,11 +4375,116 @@ function clStandings(){
 const clLeagueTotal=()=>CL.players.length*(CL.players.length-1)/2;
 const clLeagueDone=()=>Object.keys(CL.results).filter(k=>k[0]==='L'&&CL.results[k].done).length;
 
-/* Matches that must be played in the current phase/stage. */
+/* ================= CL — DYNAMIC LEAGUE SCHEDULING =================
+   The league no longer advances in lockstep rounds. clMakeSchedule()'s
+   output is still generated up front and still guarantees the right
+   overall shape (everyone plays everyone exactly once, N-1 fixtures per
+   player) — but it's now just a flat *pool* of fixtures, each playable
+   the moment both its players are actually free, regardless of which
+   round it was originally slotted into. This directly fixes the
+   original complaint: two fast finishers used to have to sit idle until
+   the *entire* round caught up, even though their own next opponents
+   might already be free — now they're offered that opponent (or picked
+   automatically, in solo) the instant both sides are available, and a
+   fixture nominally scheduled for "round 4" can end up played long
+   before a slower "round 2" fixture elsewhere finishes. Round numbers
+   stop being meaningful once play goes out of order like this, so the
+   hub UI drops "Round N of M" for the league stage entirely in favor of
+   a plain X/Y-matches-played count — see clRenderHub(). */
+function clAllLeagueFixtures(){
+  const out=[];
+  CL.schedule.forEach((roundArr,r)=>roundArr.forEach((pr,i)=>out.push({key:'L'+r+':'+i,a:pr.a,b:pr.b})));
+  return out;
+}
+/* "Free" = not currently mid-game in any not-yet-resolved league fixture
+   (my own live game, a synced MP opponent's, or a solo bot-vs-bot sim —
+   clIsLive already unifies all three). League-scope only; playoffs keep
+   their own simpler stage-gated logic below, unchanged. */
+function clIsPlayerFree(uid){
+  return !clAllLeagueFixtures().some(m=>(m.a===uid||m.b===uid)&&clIsLive(m.key));
+}
+/* Every not-yet-played fixture of mine whose opponent is *also* free
+   right now — i.e. everything I could start immediately. Can be more
+   than one (that's the literal "give them an option of matching with
+   players who are free" ask) — clPlayMyMatch() shows a picker when it
+   is. Doesn't need to separately check whether *I'm* free: clMyActive()
+   below only ever falls through to this once it's confirmed I have no
+   live match of my own already. */
+function clMyEligibleFixtures(){
+  if(!CL||CL.phase!=='league')return[];
+  return clAllLeagueFixtures().filter(m=>{
+    if(clRes(m.key))return false;
+    if(m.a!==CL.myId&&m.b!==CL.myId)return false;
+    const opp=m.a===CL.myId?m.b:m.a;
+    return clIsPlayerFree(opp);
+  });
+}
+/* Solo only: a maximal set of bot-vs-bot fixtures that can all start
+   *simultaneously* right now, with no bot appearing twice. Walking the
+   flattened pool in schedule order and greedily claiming both players
+   the moment a fixture is chosen (not just checking "are they free"
+   independently per-fixture) is what keeps this from double-booking a
+   bot into two sims at once — e.g. if Bot1 is free and both "Bot1 v
+   Bot2" and "Bot1 v Bot3" look independently eligible, only the first
+   (schedule-earlier) one is kept; Bot3's fixture waits for Bot1's actual
+   next free moment. This also naturally preserves the original
+   schedule's ordering as a *preference*, without ever hard-blocking on
+   it — which is exactly "pull a later round's fixture forward" without
+   needing to track or renumber rounds at all. */
+function clEligibleBotFixtures(){
+  if(!CL||CL.phase!=='league')return[];
+  const busy=new Set();
+  clAllLeagueFixtures().forEach(m=>{if(clIsLive(m.key)){busy.add(m.a);busy.add(m.b);}});
+  const chosen=[];
+  clAllLeagueFixtures().forEach(m=>{
+    if(clRes(m.key))return;
+    if(m.a===CL.myId||m.b===CL.myId)return;   // I always play my own matches myself
+    if(busy.has(m.a)||busy.has(m.b))return;
+    chosen.push(m);busy.add(m.a);busy.add(m.b);
+  });
+  return chosen;
+}
+/* Players who are currently free but have nobody free to play — genuinely
+   waiting, not just "haven't been offered a match yet". Surfaced in the
+   hub for transparency ("correct optics") rather than leaving it a
+   mystery why someone's seat looks idle. */
+function clWaitingPlayers(){
+  if(!CL||CL.phase!=='league')return[];
+  const all=clAllLeagueFixtures();
+  return CL.players.filter(p=>{
+    if(!clIsPlayerFree(p.id))return false;
+    const remaining=all.filter(m=>!clRes(m.key)&&(m.a===p.id||m.b===p.id));
+    return remaining.length>0&&remaining.every(m=>!clIsPlayerFree(m.a===p.id?m.b:m.a));
+  });
+}
+/* Matches relevant to show right now — for league: every fixture with an
+   actual game in progress, plus whichever of my own fixtures I could
+   start next (shown as "your match" even before I've tapped Play, same
+   as the old per-round list did). For playoffs: unchanged, still
+   strictly stage-gated (Q1+Eliminator, then Q2, then the Final) since
+   those genuinely do depend on each other completing in order — there's
+   no "pull forward" equivalent once a stage has real dependencies. */
 function clActiveMatches(){
   if(!CL)return[];
-  if(CL.phase==='league')
-    return CL.schedule[CL.round].map((pr,i)=>({key:'L'+CL.round+':'+i,a:pr.a,b:pr.b,label:'Match '+(i+1)}));
+  if(CL.phase==='league'){
+    const live=clAllLeagueFixtures().filter(m=>clIsLive(m.key))
+      .map(m=>({...m,label:(m.a===CL.myId||m.b===CL.myId)?'Your match':'Live match'}));
+    const myLive=live.some(m=>m.a===CL.myId||m.b===CL.myId);
+    if(myLive)return live;   // I'm already playing — nothing else of mine to offer
+    /* Not live: I could have anywhere from 0 to several eligible-but-
+       unstarted opponents (see clMyEligibleFixtures). Showing each as its
+       own near-identical "0-0 · waiting" card would just be clutter —
+       one is shown normally (matches the old single-fixture card exactly),
+       several collapse into one "N opponents free, choose one" summary
+       card instead (clFixturesHtml renders `multi` specially). Actually
+       starting a match still goes through clPlayMyMatch()/the picker,
+       independent of what's shown here. */
+    const eligible=clMyEligibleFixtures();
+    if(eligible.length===1)live.push({...eligible[0],label:'Your match'});
+    else if(eligible.length>1)live.push({key:'L:multi',a:CL.myId,b:null,label:'Your match',
+      multi:true,opponents:eligible.map(m=>m.a===CL.myId?m.b:m.a)});
+    return live;
+  }
   if(CL.phase==='playoffs'){
     const po=CL.playoff,out=[];
     if(po.stage==='r1'){out.push({key:'P:q1',a:po.q1.a,b:po.q1.b,label:'Qualifier 1'});
@@ -4107,30 +4495,59 @@ function clActiveMatches(){
   }
   return[];
 }
-const clMyActive=()=>clActiveMatches().find(m=>(m.a===CL.myId||m.b===CL.myId)&&!(clRes(m.key)&&clRes(m.key).done));
-const clAllActiveDone=()=>{const a=clActiveMatches();return a.length&&a.every(m=>clRes(m.key)&&clRes(m.key).done);};
+function clMyActive(){
+  if(!CL)return undefined;
+  if(CL.phase==='league'){
+    const myLive=clAllLeagueFixtures().find(m=>(m.a===CL.myId||m.b===CL.myId)&&clIsLive(m.key));
+    return myLive||clMyEligibleFixtures()[0];
+  }
+  return clActiveMatches().find(m=>(m.a===CL.myId||m.b===CL.myId)&&!(clRes(m.key)&&clRes(m.key).done));
+}
+function clAllActiveDone(){
+  if(!CL)return false;
+  if(CL.phase==='league')return clLeagueDone()>=clLeagueTotal();
+  const a=clActiveMatches();return a.length&&a.every(m=>clRes(m.key)&&clRes(m.key).done);
+}
 
-/* ---- solo: set up the auto-simulated bot-vs-bot tables for this round ---- */
+/* ---- solo: keep every currently-eligible bot-vs-bot fixture running ----
+   For playoffs this starts whatever's active for the current stage
+   (unchanged from before — at most Q1+Eliminator, or one match, so it
+   naturally converges and the sim timer stops once that batch is done).
+   For league it starts clEligibleBotFixtures()'s whole matching *and*
+   gets re-invoked every tick (see clSimTick) so that the moment any bot
+   pair finishes, whichever bots that frees up immediately pick up their
+   own next eligible pairing — the automated equivalent of a real player
+   tapping "Play" the instant an opponent frees up. */
 function clSetupActiveSims(){
-  CL.sims={};CL.myMatchDone=false;
-  clActiveMatches().forEach(m=>{
-    if(clRes(m.key)&&clRes(m.key).done)return;
-    if(m.a===CL.myId||m.b===CL.myId)return;      // I play this one myself
+  if(!CL||CL.mode!=='solo')return;
+  CL.sims=CL.sims||{};
+  CL.myMatchDone=!clMyActive();
+  const pool=CL.phase==='league'?clEligibleBotFixtures()
+    :CL.phase==='playoffs'?clActiveMatches().filter(m=>m.a!==CL.myId&&m.b!==CL.myId&&!clRes(m.key))
+    :[];
+  pool.forEach(m=>{
+    if(CL.sims[m.key])return;
     const A=clPlayer(m.a),B=clPlayer(m.b);
     const g=newMatch([{id:m.a,name:A.name,isBot:true,diff:A.diff||CL.diff},
                       {id:m.b,name:B.name,isBot:true,diff:B.diff||CL.diff}],CL.limit,'sim',CL.numDecks);
     deal(g);CL.sims[m.key]={g};
   });
-  if(Object.keys(CL.sims).length)clStartSimTimer();
+  if(Object.keys(CL.sims).length&&!clSimTimer)clStartSimTimer();
 }
 function clStartSimTimer(){clStopSimTimer();clSimTimer=setInterval(clSimTick,200);}
 function clStopSimTimer(){if(clSimTimer){clearInterval(clSimTimer);clSimTimer=null;}}
 function clSimTick(){
-  if(!CL||!CL.sims){clStopSimTimer();return;}
-  const per=CL.myMatchDone?80:5;   // accelerate once my own match is finished
-  const keys=Object.keys(CL.sims);
-  if(!keys.length){clStopSimTimer();clAfterSimSettle();return;}
-  keys.forEach(key=>{
+  if(!CL||!CL.sims||CL.mode!=='solo'){clStopSimTimer();return;}
+  /* myMatchDone drives a 16x speed-up (5 steps/tick -> 80) once I'm not
+     the one anyone's waiting on — recomputed here every tick, not just
+     when a stage first starts, so it correctly flips true the moment my
+     OWN match resolves mid-stage too (a real bug: it used to only get
+     set once, from clSetupActiveSims()'s league-only re-invocation below,
+     so finishing your playoff match early left the remaining bot sim
+     stuck at the slow pace for the rest of the stage). */
+  CL.myMatchDone=!clMyActive();
+  const per=CL.myMatchDone?80:5;
+  Object.keys(CL.sims).forEach(key=>{
     const g=CL.sims[key].g;let n=per;
     while(n-->0&&g.phase!=='matchEnd'){
       if(g.phase==='roundEnd'){deal(g);continue;}
@@ -4141,10 +4558,25 @@ function clSimTick(){
       delete CL.sims[key];
     }
   });
+  /* league: always re-scan for freshly-eligible pairings, every tick —
+     this is what makes the scheduler continuous instead of a one-shot
+     per-round setup. Playoffs' *matches* don't need this re-scan (stage
+     transitions are handled explicitly elsewhere), but still benefit
+     from myMatchDone above being kept fresh regardless of phase. */
+  if(CL.phase==='league')clSetupActiveSims();
   clUpdateLiveStrip();
   if($('#scr-cl-hub').classList.contains('on'))clRenderHub();
   if($('#scr-cl-watch').classList.contains('on'))clRenderSpectate();
-  if(!Object.keys(CL.sims).length){clStopSimTimer();clAfterSimSettle();}
+  const nothingRunning=!Object.keys(CL.sims).length;
+  /* league only fully stops once every fixture has a result — a
+     momentary lull (nothing running right now, but the league isn't
+     done) keeps the timer alive so it can catch the next pairing the
+     instant it becomes eligible, rather than needing to be manually
+     restarted. Playoffs keep the original stop-as-soon-as-idle behavior,
+     since a stage's matches are a fixed, small, always-converging set. */
+  if(nothingRunning&&(CL.phase!=='league'||clLeagueDone()>=clLeagueTotal())){
+    clStopSimTimer();clAfterSimSettle();
+  }
 }
 function clAfterSimSettle(){
   if($('#scr-cl-hub').classList.contains('on'))clRenderHub();
@@ -4152,9 +4584,41 @@ function clAfterSimSettle(){
 }
 
 /* ---- playing your own match ---- */
+/* League with no live match of my own: could have more than one
+   currently-eligible opponent (see clMyEligibleFixtures) — this is the
+   literal "give them an option of matching with players who are free"
+   ask, so offer a picker instead of silently guessing one. Only one
+   option (the common case) skips straight to it, same as before. */
 function clPlayMyMatch(){
+  if(CL.phase==='league'){
+    const myLive=clAllLeagueFixtures().find(m=>(m.a===CL.myId||m.b===CL.myId)&&clIsLive(m.key));
+    if(myLive){clEnterFixture(myLive);return;}
+    const eligible=clMyEligibleFixtures();
+    if(!eligible.length){toast('No opponent free right now');return;}
+    if(eligible.length===1){clEnterFixture(eligible[0]);return;}
+    clOpponentPickerModal(eligible);
+    return;
+  }
   const m=clMyActive();
   if(!m){toast('No match for you right now');return;}
+  clEnterFixture(m);
+}
+function clOpponentPickerModal(eligible){
+  const rows=eligible.map(m=>{
+    const oppId=m.a===CL.myId?m.b:m.a;
+    return `<button class="btn ghost" onclick="clChooseFixture('${m.key}')">${esc(clName(oppId))}</button>`;
+  }).join('');
+  openModal('clpicker',`<h2>Choose your opponent</h2><p class="tag">These players are free right now:</p>
+    <div class="mbtns" style="flex-direction:column;align-items:stretch">${rows}
+      <button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);
+}
+function clChooseFixture(key){
+  closeModal();
+  const m=clMyEligibleFixtures().find(x=>x.key===key);
+  if(!m){toast('That opponent is no longer free');return;}
+  clEnterFixture(m);
+}
+function clEnterFixture(m){
   const oppId=m.a===CL.myId?m.b:m.a;
   const me=clPlayer(CL.myId),opp=clPlayer(oppId);
   if(CL.mode==='mp'){clMpEnterMatch(m);return;}
@@ -4174,6 +4638,12 @@ showMatchModal=function(){
   }
   _clShowMatch();
 };
+/* Set true the moment the human's own championship win is celebrated (in
+   the match-end modal below, or by clRenderHub()'s own first-look trigger
+   for anyone else — spectators, the runner-up, other MP clients) so the
+   fireworks only ever play once per tournament, not once per screen that
+   happens to render the crowned bracket. Reset per tournament. */
+let clChampionCelebrated=false;
 function clOnMyMatchEnd(){
   const key=G.clKey,res=clResultFromGame(G,G.players[0].id,G.players[1].id,key[0]==='L');
   const myScore=res.a===CL.myId?res.aScore:res.bScore;
@@ -4182,19 +4652,53 @@ function clOnMyMatchEnd(){
   if(CL.mode==='mp')clMpWriteResult(key,res);
   else{CL.results[key]=res;CL.myMatchDone=true;}
   const iWon=res.winner===CL.myId;
+  /* Winning the Final IS becoming champion — deterministic the instant
+     this match resolves, regardless of whether clAdvanceState() has
+     actually run yet to formalize po.champion (that only happens later,
+     when the host/you click through to advance the bracket) — no reason
+     to make the player wait for that bookkeeping step just to see their
+     own win acknowledged as the tournament-deciding one it is. */
+  if(key==='P:final'&&iWon){
+    clChampionCelebrated=true;
+    burstChampionFireworks();
+    openModal('clmatch',`<h2>👑 Champions League Winner! 👑</h2>
+      <p class="tag" style="font-size:15px">You beat ${esc(clName(oppId))} <b style="color:var(--gold)">${myScore}</b>–<b>${oppScore}</b> in the Final<br>Win margin ${res.margin}</p>
+      <div class="cl-champ" style="margin-top:2px"><div class="cl-champ-crown">👑</div>
+        <div class="cl-champ-name">${esc(clName(CL.myId))}</div>
+        <div class="cl-champ-sub">Champions League Winner — you won it!</div></div>
+      <div class="mbtns"><button class="btn primary" onclick="clGoHub()">See the trophy</button></div>`);
+    return;
+  }
   if(iWon){setTimeout(burstWin,150);setTimeout(burstWin,500);}
   const title=res.draw?'🤝 Draw':(iWon?'🏆 You win!':'💔 You lose');
   const sub=res.draw
     ?`You <b style="color:var(--gold)">${myScore}</b> · ${esc(clName(oppId))} <b>${oppScore}</b><br>Same score — 1 point each`
     :`You <b style="color:var(--gold)">${myScore}</b> · ${esc(clName(oppId))} <b>${oppScore}</b><br>Win margin ${res.margin}`;
+  /* League standings are live/meaningful for a league match. For a
+     playoff match (Q1/Eliminator/Q2, or a lost Final) the league table
+     is frozen — it stopped updating once the league stage ended — so
+     showing it here is stale and confusing; the bracket flowchart is
+     what's actually current for playoff results. Scoped 'modal' so its
+     element ids don't collide with the identical bracket already sitting
+     (hidden) in the hub screen behind this modal. */
+  const board=key[0]==='L'?clStandingsHtml(true):clBracketHtml('modal');
   openModal('clmatch',`<h2>${title}</h2>
     <p class="tag" style="font-size:14px">${sub}</p>
-    ${clStandingsHtml(true)}
+    ${board}
     <div class="mbtns"><button class="btn primary" onclick="clGoHub()">Back to tournament</button></div>`);
+  if(key[0]!=='L')setTimeout(()=>clDrawBracketConnectors('modal'),30);
 }
 function clGoHub(){
   clearTimeout(botTimer);
-  if(CL&&CL.mode==='mp')clmpDetachMyMatch();   // stop syncing my match; re-enterable later
+  if(CL&&CL.mode==='mp'){
+    /* the 'match' voice/chat channel only makes sense while clMyMatchKey
+       is set — clmpDetachMyMatch() (next line) clears it, so both fall
+       back to 'all' here rather than being left pointed at a match that
+       no longer exists from this client's perspective. */
+    if(clChat.channel==='match')clChatSwitchChannel('all');
+    if(voice.joined&&voiceChannelMode==='match')clSwitchVoiceChannel('all');
+    clmpDetachMyMatch();   // stop syncing my match; re-enterable later
+  }
   G=null;myIdx=-1;sel.clear();closeModal();
   const strip=$('#cl-live-strip');if(strip)strip.classList.add('hidden');
   goScr('scr-cl-hub');clRenderHub();
@@ -4210,11 +4714,11 @@ function clEnterPlayoffs(){
 /* Pure state advance — mutates CL.round/phase/playoff only, no sims/render.
    Shared by solo (clAdvance) and MP (host writes the result to Firebase). */
 function clAdvanceState(){
-  if(CL.phase==='league'){
-    if(CL.round<CL.schedule.length-1)CL.round++;
-    else clEnterPlayoffs();
-    return;
-  }
+  /* league no longer has discrete rounds to step through — clAllActiveDone()
+     for the league phase already means "every fixture in the whole pool
+     has a result" (see its definition above), so the only thing left to
+     do once matches genuinely stop is enter the playoffs. */
+  if(CL.phase==='league'){clEnterPlayoffs();return;}
   const po=CL.playoff;
   if(po.stage==='r1'){
     const q1=clRes('P:q1'),el=clRes('P:elim');
@@ -4232,7 +4736,14 @@ function clAdvanceState(){
 function clAdvance(){   // SOLO
   if(!clAllActiveDone()){toast('Matches still in progress');return;}
   clAdvanceState();
-  if(CL.phase==='done'){clStopSimTimer();clRenderHub();setTimeout(burstWin,200);setTimeout(burstWin,600);setTimeout(burstWin,1000);return;}
+  /* the champion celebration itself now lives in clRenderHub() (fires
+     once, the first time it sees phase==='done', covers every path that
+     can reach that state — this button, clMpAdvance, or just opening the
+     hub after someone else already crowned a champion) rather than here
+     directly — this call site used to fire burstWin() 3x on its own, but
+     burstWin() is anchored to #piles, which doesn't exist on the hub
+     screen, so it silently did nothing; see burstChampionFireworks(). */
+  if(CL.phase==='done'){clStopSimTimer();clRenderHub();return;}
   clSetupActiveSims();clRenderHub();
 }
 
@@ -4277,40 +4788,57 @@ function clRenderSpectate(){
 function clStandingsHtml(compact){
   const rows=clStandings(),n=CL.players.length;
   const cut=CL.phase==='league'?4:-1;
+  const canKick=!compact&&clIsHost();
   const body=rows.map(r=>{
     const you=r.id===CL.myId?' you':'';
     const q4=(r.rank===cut)?' q4':'';
     const nrrCls=r.nrr>0?'cl-nrr-pos':(r.nrr<0?'cl-nrr-neg':'');
     const nrr=(r.nrr>0?'+':'')+r.nrr;
-    const qb=(CL.phase==='league'&&r.rank<=4)?` <span class="cl-q-badge">Q</span>`:'';
-    return `<tr class="${you}${q4}">
+    const out=CL.withdrawn&&CL.withdrawn[r.id];
+    const qb=(CL.phase==='league'&&r.rank<=4&&!out)?` <span class="cl-q-badge">Q</span>`:'';
+    const outTag=out?` <span class="cl-out-place" style="margin-left:4px">OUT</span>`:'';
+    const kick=(canKick&&r.id!==CL.myId&&!out)
+      ?`<button class="cl-lp-kick" data-cl-hub-kick="${r.id}" data-cl-hub-kick-name="${esc(r.name)}" title="Remove from tournament">✕</button>`:'';
+    return `<tr class="${you}${q4}${out?' cl-withdrawn':''}">
       <td class="rk">${r.rank}</td>
-      <td class="name">${esc(r.name)}${qb}</td>
+      <td class="name">${esc(r.name)}${qb}${outTag}</td>
       <td>${r.GP}</td><td>${r.W}</td><td>${r.D}</td><td>${r.L}</td>
       <td class="pts">${r.pts}</td>
-      <td class="${nrrCls}">${nrr}</td></tr>`;
+      <td class="${nrrCls}">${nrr}</td>
+      <td>${kick}</td></tr>`;
   }).join('');
   return `<div class="cl-table-wrap"><table class="cl-table">
-    <thead><tr><th>#</th><th style="text-align:left">Player</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead>
+    <thead><tr><th>#</th><th style="text-align:left">Player</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th><th>NRR</th><th></th></tr></thead>
     <tbody>${body}</tbody></table></div>`;
 }
 function clFixturesHtml(){
   const act=clActiveMatches();
+  const canForfeit=clIsHost();
   return act.map(m=>{
+    if(m.multi)return `<div class="cl-fixture mine">
+      <div style="width:100%;text-align:center">
+        <div class="cl-fx-you">YOUR MATCH</div>
+        <div style="font-family:'Manrope';font-weight:700;margin:4px 0">${m.opponents.length} opponents free right now</div>
+        <div class="cl-fx-score" style="margin-bottom:8px">${m.opponents.map(id=>esc(clName(id))).join(' · ')}</div>
+        <button class="btn primary small" onclick="clPlayMyMatch()">Choose opponent ▸</button>
+      </div>
+    </div>`;
     const res=clRes(m.key),live=clIsLive(m.key);
     const mine=m.a===CL.myId||m.b===CL.myId;
     const aSc=clFixtureScore(m,'a'),bSc=clFixtureScore(m,'b');
     let status;
-    if(res&&res.draw)status=`<span class="cl-fx-status result">Draw · ${aSc}-${bSc}</span>`;
+    if(res&&res.forfeit)status=`<span class="cl-fx-status result">${esc(clName(res.winner))} won (forfeit)</span>`;
+    else if(res&&res.draw)status=`<span class="cl-fx-status result">Draw · ${aSc}-${bSc}</span>`;
     else if(res)status=`<span class="cl-fx-status result">${esc(clName(res.winner))} won · +${res.margin}</span>`;
     else if(live)status=`<span class="cl-fx-status live">LIVE</span>`;
     else status=`<span class="cl-fx-status waiting">waiting</span>`;
     const aWin=res&&res.winner===m.a,bWin=res&&res.winner===m.b;
     const watch=(live&&!(G&&G.clKey===m.key)&&!mine)?`<button class="cl-fx-watch" onclick="clWatch('${m.key}')">Watch ▸</button>`:'';
+    const forfeitBtn=(canForfeit&&!res)?`<button class="cl-fx-watch" style="border-color:var(--red);color:var(--red)" onclick="clHostForfeitPrompt('${m.key}','${m.a}','${m.b}')">⚑ Forfeit</button>`:'';
     const youTag=mine?`<div class="cl-fx-you">YOUR MATCH</div>`:'';
     return `<div class="cl-fixture ${mine?'mine':''} ${res?'done':''}">
       <div class="cl-fx-side"><div class="cl-fx-name ${aWin?'win':''}">${esc(clName(m.a))}</div><div class="cl-fx-score">${aSc}</div></div>
-      <div class="cl-fx-mid"><div class="cl-fx-vs">${m.label||'vs'}</div>${status}${youTag}${watch}</div>
+      <div class="cl-fx-mid"><div class="cl-fx-vs">${m.label||'vs'}</div>${status}${youTag}${watch}${forfeitBtn}</div>
       <div class="cl-fx-side right"><div class="cl-fx-name ${bWin?'win':''}">${esc(clName(m.b))}</div><div class="cl-fx-score">${bSc}</div></div>
     </div>`;
   }).join('');
@@ -4329,13 +4857,16 @@ function clBrMatchHtml(id,key,label,pair,extraCls){
   const bSc=pair.b!=null?clFixtureScore({key,a:pair.a,b:pair.b},'b'):null;
   const aWin=res&&res.winner===pair.a,bWin=res&&res.winner===pair.b;
   let outcome='';
-  if(res)outcome=`<div class="cl-br-outcome">${esc(clName(res.winner))} won by ${res.margin}</div>`;
+  if(res&&res.forfeit)outcome=`<div class="cl-br-outcome">${esc(clName(res.winner))} won (forfeit)</div>`;
+  else if(res)outcome=`<div class="cl-br-outcome">${esc(clName(res.winner))} won by ${res.margin}</div>`;
   else if(live)outcome=`<div class="cl-br-outcome" style="color:#FF8FB0">● live</div>`;
   const watch=(live&&!(G&&G.clKey===key)&&!mine)?` <button class="cl-fx-watch" onclick="clWatch('${key}')">Watch ▸</button>`:'';
+  const forfeitBtn=(clIsHost()&&!res&&pair.a!=null&&pair.b!=null)
+    ?` <button class="cl-fx-watch" style="border-color:var(--red);color:var(--red)" onclick="clHostForfeitPrompt('${key}','${pair.a}','${pair.b}')">⚑</button>`:'';
   const rowHtml=(pid,sc,win)=>pid!=null
     ?`<div class="cl-br-row ${win?'win':''}"><span>${esc(clName(pid))}</span><span class="cl-br-sc">${sc}</span></div>`
     :`<div class="cl-br-row cl-br-tbd"><span>TBD</span></div>`;
-  return box(`<div class="cl-br-tag">${label}${mine?' · <span style="color:var(--gold)">you</span>':''}${watch}</div>
+  return box(`<div class="cl-br-tag">${label}${mine?' · <span style="color:var(--gold)">you</span>':''}${watch}${forfeitBtn}</div>
     ${rowHtml(pair.a,aSc,aWin)}
     ${rowHtml(pair.b,bSc,bWin)}
     ${outcome}`);
@@ -4346,28 +4877,34 @@ function clBrMatchHtml(id,key,label,pair,extraCls){
    column immediately, well before Qualifier 2 is even played. This is
    purely a display computation; clActiveMatches() still gates when a
    match is actually *playable* on po.q2/po.final existing for real. */
-function clBracketHtml(){
+/* scope: an optional id suffix, so a second bracket instance (the CL
+   match-end modal shows one for a playoff result) can render alongside
+   the hub's own — which stays in the DOM, just hidden behind the modal —
+   without colliding on the same element ids. Default ('') preserves the
+   hub's original ids exactly. */
+function clBracketHtml(scope){
+  const sfx=scope?'-'+scope:'';
   const po=CL.playoff;
   const q1r=clRes('P:q1'),elimR=clRes('P:elim'),q2r=clRes('P:q2');
   const dispQ2=po.q2||((q1r||elimR)?{a:q1r?q1r.loser:null,b:elimR?elimR.winner:null}:null);
   const dispFinal=po.final||((q1r||q2r)?{a:q1r?q1r.winner:null,b:q2r?q2r.winner:null}:null);
-  let h=`<div id="cl-bracket-scroll"><div id="cl-bracket-flow">
-    <svg id="cl-bracket-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+  let h=`<div id="cl-bracket-scroll${sfx}" style="min-width:0"><div id="cl-bracket-flow${sfx}">
+    <svg id="cl-bracket-svg${sfx}" xmlns="http://www.w3.org/2000/svg"></svg>
     <div class="cl-br-col"><div class="cl-br-col-h">Round 1</div>
-      ${clBrMatchHtml('cl-box-q1','P:q1','Qualifier 1',po.q1)}
-      ${clBrMatchHtml('cl-box-elim','P:elim','Eliminator',po.elim)}
-      ${elimR?`<div id="cl-box-out4" class="cl-out-chip"><span class="cl-out-place">4TH</span><span>${esc(clName(elimR.loser))}</span></div>`:''}
+      ${clBrMatchHtml('cl-box-q1'+sfx,'P:q1','Qualifier 1',po.q1)}
+      ${clBrMatchHtml('cl-box-elim'+sfx,'P:elim','Eliminator',po.elim)}
+      ${elimR?`<div id="cl-box-out4${sfx}" class="cl-out-chip"><span class="cl-out-place">4TH</span><span>${esc(clName(elimR.loser))}</span></div>`:''}
     </div>
     <div class="cl-br-col"><div class="cl-br-col-h">Qualifier 2</div>
-      ${clBrMatchHtml('cl-box-q2','P:q2','Q1 loser vs Eliminator winner',dispQ2)}
-      ${q2r?`<div id="cl-box-out3" class="cl-out-chip"><span class="cl-out-place">3RD</span><span>${esc(clName(q2r.loser))}</span></div>`:''}
+      ${clBrMatchHtml('cl-box-q2'+sfx,'P:q2','Q1 loser vs Eliminator winner',dispQ2)}
+      ${q2r?`<div id="cl-box-out3${sfx}" class="cl-out-chip"><span class="cl-out-place">3RD</span><span>${esc(clName(q2r.loser))}</span></div>`:''}
     </div>
     <div class="cl-br-col"><div class="cl-br-col-h">Final</div>
-      ${clBrMatchHtml('cl-box-final','P:final','Q1 winner vs Q2 winner',dispFinal,'final')}
+      ${clBrMatchHtml('cl-box-final'+sfx,'P:final','Q1 winner vs Q2 winner',dispFinal,'final')}
     </div>`;
   if(po.champion){
     h+=`<div class="cl-br-col champ-col"><div class="cl-br-col-h">Champion</div>
-      <div id="cl-box-champ" class="cl-champ"><div class="cl-champ-crown">👑</div>
+      <div id="cl-box-champ${sfx}" class="cl-champ"><div class="cl-champ-crown">👑</div>
         <div class="cl-champ-name">${esc(clName(po.champion))}</div>
         <div class="cl-champ-sub">Champions League Winner${po.champion===CL.myId?' — you won it!':''}</div>
         <div class="cl-champ-sub" style="margin-top:8px">🥈 ${esc(clName(po.runnerUp))} · 🥉 ${esc(clName(po.third))} · 4th ${esc(clName(po.fourth))}</div>
@@ -4387,16 +4924,18 @@ function clBracketHtml(){
    the Qualifier-1-winner line has to cross the Qualifier-2 column's
    horizontal band to reach the Final column — reads as passing behind
    it, the same way real bracket-chart graphics look. */
-function clDrawBracketConnectors(){
-  const flow=document.getElementById('cl-bracket-flow');
-  const svg=document.getElementById('cl-bracket-svg');
+function clDrawBracketConnectors(scope){
+  const sfx=scope?'-'+scope:'';
+  const flow=document.getElementById('cl-bracket-flow'+sfx);
+  const svg=document.getElementById('cl-bracket-svg'+sfx);
   if(!flow||!svg||!CL||!CL.playoff)return;
   const w=flow.scrollWidth,h=flow.scrollHeight;
-  if(!w||!h){setTimeout(clDrawBracketConnectors,40);return;}   // layout not settled yet — same retry pattern used elsewhere for freshly-shown screens
+  if(!w||!h){setTimeout(()=>clDrawBracketConnectors(scope),40);return;}   // layout not settled yet — same retry pattern used elsewhere for freshly-shown screens
   svg.setAttribute('width',w);svg.setAttribute('height',h);
   svg.setAttribute('viewBox','0 0 '+w+' '+h);
   const flowRect=flow.getBoundingClientRect();
-  const rowAt=(boxId,idx)=>{const b=document.getElementById(boxId);if(!b)return null;return b.querySelectorAll('.cl-br-row')[idx]||null;};
+  const rowAt=(boxId,idx)=>{const b=document.getElementById(boxId+sfx);if(!b)return null;return b.querySelectorAll('.cl-br-row')[idx]||null;};
+  const byId=boxId=>document.getElementById(boxId+sfx);
   const anchor=(el,side)=>{const r=el.getBoundingClientRect();
     return {x:(side==='right'?r.right:r.left)-flowRect.left,y:r.top+r.height/2-flowRect.top};};
   const paths=[];
@@ -4416,16 +4955,16 @@ function clDrawBracketConnectors(){
   if(elimR&&po.elim){
     const wIdx=elimR.winner===po.elim.a?0:1;
     link(rowAt('cl-box-elim',wIdx),rowAt('cl-box-q2',1),false);              // Eliminator winner → Qualifier 2 slot b
-    link(rowAt('cl-box-elim',1-wIdx),document.getElementById('cl-box-out4'),false); // Eliminator loser → 4th place, out
+    link(rowAt('cl-box-elim',1-wIdx),byId('cl-box-out4'),false); // Eliminator loser → 4th place, out
   }
   if(q2r&&po.q2){
     const wIdx=q2r.winner===po.q2.a?0:1;
     link(rowAt('cl-box-q2',wIdx),rowAt('cl-box-final',1),true);              // Qualifier 2 winner → Final slot b
-    link(rowAt('cl-box-q2',1-wIdx),document.getElementById('cl-box-out3'),false);   // Qualifier 2 loser → 3rd place, out
+    link(rowAt('cl-box-q2',1-wIdx),byId('cl-box-out3'),false);   // Qualifier 2 loser → 3rd place, out
   }
   if(finalR&&po.final&&po.champion){
     const wIdx=finalR.winner===po.final.a?0:1;
-    link(rowAt('cl-box-final',wIdx),document.getElementById('cl-box-champ'),true);  // Final winner → Champion
+    link(rowAt('cl-box-final',wIdx),byId('cl-box-champ'),true);  // Final winner → Champion
   }
   svg.innerHTML=paths.join('');
 }
@@ -4442,6 +4981,18 @@ function clStageLabel(){
 /* ================= CL — HUB RENDER ================= */
 function clRenderHub(){
   if(!CL)return;
+  clAutoForfeitWithdrawn();
+  /* single shared trigger for the "tournament is over" celebration —
+     fires once, whichever client/screen sees phase:'done' first: the
+     champion's own client (already celebrated via clOnMyMatchEnd's
+     P:final special-case, which sets the flag itself so this doesn't
+     double-fire for them), the host who just clicked the final advance,
+     any other MP client syncing the news, or a solo player just opening
+     the hub after their own earlier elimination. */
+  if(CL.phase==='done'&&!clChampionCelebrated){
+    clChampionCelebrated=true;
+    burstChampionFireworks();
+  }
   const pb=$('#cl-hub-phasebar'),fx=$('#cl-hub-fixtures'),std=$('#cl-hub-standings'),
         br=$('#cl-hub-bracket'),playBtn=$('#btn-cl-play'),advBtn=$('#btn-cl-advance');
   const myM=clMyActive(),allDone=clAllActiveDone();
@@ -4454,9 +5005,19 @@ function clRenderHub(){
   std.innerHTML=`<div class="cl-sec-h">Standings${stdHint}</div>`+clStandingsHtml();
   if(CL.phase==='league'){
     br.classList.add('hidden');fx.classList.remove('hidden');
-    pb.innerHTML=`League Stage<span class="cl-sub">Round ${CL.round+1} of ${CL.schedule.length} · ${clLeagueDone()}/${clLeagueTotal()} matches played</span>`;
-    fx.innerHTML=`<div class="cl-sec-h">This round's fixtures</div>`+clFixturesHtml();
-    if(advBtn){if(allDone){advBtn.classList.remove('hidden');advBtn.textContent=CL.round<CL.schedule.length-1?'Next round →':'🏆 Enter playoffs →';}else advBtn.classList.add('hidden');}
+    /* no more "Round N of M" — matches no longer play out in lockstep
+       rounds (see the dynamic-scheduling block above), so a round number
+       wouldn't mean much once fixtures start finishing out of their
+       original order. A plain progress count is honest about what's
+       actually true regardless of play order. */
+    pb.innerHTML=`League Stage<span class="cl-sub">${clLeagueDone()}/${clLeagueTotal()} matches played</span>`;
+    const waiting=clWaitingPlayers();
+    const waitingLine=waiting.length
+      ?`<p class="tag" style="text-align:center;margin:2px 0 0">⏳ Waiting for an opponent to free up: ${waiting.map(p=>esc(p.name)).join(', ')}</p>`:'';
+    const fxList=clFixturesHtml();
+    fx.innerHTML=`<div class="cl-sec-h">Live &amp; available matches</div>`+
+      (fxList||`<p class="tag" style="text-align:center">No matches available right now — everyone's either finished or waiting.</p>`)+waitingLine;
+    if(advBtn){if(allDone){advBtn.classList.remove('hidden');advBtn.textContent='🏆 Enter playoffs →';}else advBtn.classList.add('hidden');}
   }else{
     fx.classList.add('hidden');br.classList.remove('hidden');
     pb.innerHTML=CL.phase==='done'?`🏆 Champion Crowned`:`Playoffs<span class="cl-sub">${clStageLabel()}</span>`;
@@ -4496,7 +5057,8 @@ function clStartSolo(){
   const players=[{id:'me',name,isBot:false,diff:null}];
   for(let i=0;i<n-1;i++)players.push({id:'b'+i,name:bots[i],isBot:true,diff:clSetup.diff});
   CL={mode:'solo',players,myId:'me',limit:clSetup.limit,numDecks:clSetup.numDecks,diff:clSetup.diff,
-      schedule:clMakeSchedule(players.map(p=>p.id)),round:0,phase:'league',results:{},sims:{},playoff:null,myMatchDone:false};
+      schedule:clMakeSchedule(players.map(p=>p.id)),round:0,phase:'league',results:{},sims:{},playoff:null,myMatchDone:false,withdrawn:{}};
+  clChampionCelebrated=false;
   clStopSimTimer();
   goScr('scr-cl-hub');
   clSetupActiveSims();
@@ -4563,6 +5125,10 @@ function clmpAttach(code){
   clmpDetachAll();
   clmp.code=code;clmp.ref=db.ref(CLROOMS+code);clmp.matchesRef=clmp.ref.child('matches');
   clmp.room=null;clmp.matches=null;clmp.everLoaded=false;
+  clChampionCelebrated=false;
+  if(clChat.ref)clChat.ref.off();
+  clChat={channel:'all',ref:null,log:[],unread:0,attachTs:0};
+  clChatSwitchChannel('all');
   /* the two listeners live on different paths and can fire in either
      order — only the root listener may declare the room "closed" (null),
      and only after it has actually loaded once; the matches listener just
@@ -4602,10 +5168,13 @@ function clmpSync(){
     if(m.result)results[key]=m.result;
     if(m.state){try{const g=JSON.parse(m.state);const sc={};g.players.forEach(p=>sc[p.id]=p.score);liveScores[key]=sc;}catch(e){}}
   });
+  const wasWithdrawn=CL&&CL.withdrawn&&CL.withdrawn[myUid];
   CL={mode:'mp',players,myId:myUid,limit:room.limit||240,numDecks:room.numDecks||1,diff:'mp',
     schedule:room.schedule?JSON.parse(room.schedule):[],round:room.round||0,
     phase:room.status==='lobby'?'league':(room.phase||room.status||'league'),
-    results,liveScores,sims:{},playoff:room.playoff?JSON.parse(room.playoff):null};
+    results,liveScores,sims:{},playoff:room.playoff?JSON.parse(room.playoff):null,
+    withdrawn:room.withdrawn||{}};
+  if(CL.withdrawn[myUid]&&!wasWithdrawn)toast('The host has removed you from the tournament — your remaining matches are forfeited');
   if(room.status==='lobby'){
     clRenderMpLobby();
     if(!onScreen('scr-cl-lobby'))goScr('scr-cl-lobby');
@@ -4658,12 +5227,18 @@ function clMpStart(){
 }
 function clMpTakeover(){
   if(!clmp.ref||clmp.isHost)return;
-  clmp.ref.child('host').set(myUid);toast('You are now the host');
+  clmp.isHost=true;   // optimistic — see uiTakeOverHost's comment for why; same pattern, same fix
+  clmp.ref.child('host').set(myUid);
+  toast('You are now the host');
+  clRenderMpLobby();
 }
 function clMpLeave(silent){
   if(!silent&&CL&&!confirm('Leave the tournament?'))return;
   const ref=clmp.ref;
   leaveVoice();   // voice is bound to clmp.ref (see currentVoiceRoomRef) — must tear down before that ref goes away
+  if(clChat.ref)clChat.ref.off();
+  clChat={channel:'all',ref:null,log:[],unread:0,attachTs:0};
+  closeChat();
   clmpDetachAll();CL=null;clMyMatchKey=null;G=null;myIdx=-1;
   const strip=$('#cl-live-strip');if(strip)strip.classList.add('hidden');
   if(ref)ref.child('players/'+myUid).remove().catch(()=>{});
@@ -4676,9 +5251,31 @@ $('#seg-cl-lobby-decks')&&$('#seg-cl-lobby-decks').addEventListener('click',e=>{
 $('#cl-lobby-players')&&$('#cl-lobby-players').addEventListener('click',e=>{
   const b=e.target.closest('[data-cl-kick]');if(!b||!clmp.isHost||!clmp.ref)return;
   if(confirm('Remove this player from the room?'))clmp.ref.child('players/'+b.dataset.clKick).remove();});
+/* the standings table is fully rebuilt on every clRenderHub() call, same
+   reasoning as the lobby list above — delegate once on the (stable)
+   wrapper rather than re-binding a per-button handler every render. */
+$('#cl-hub-standings')&&$('#cl-hub-standings').addEventListener('click',e=>{
+  const b=e.target.closest('[data-cl-hub-kick]');if(!b)return;
+  clHostKickPlayer(b.dataset.clHubKick,b.dataset.clHubKickName);
+});
 
 /* ---- entering / playing my own match ---- */
 function clMpEnterMatch(m){
+  /* Defensive: with matches now startable out of order (see the dynamic
+     league-scheduling block), it's theoretically possible for a stale
+     click or a genuine two-opponents-tap-"Play"-at-once race to try to
+     put the same player into two live fixtures at once. clMyEligibleFixtures
+     already excludes anyone with a live match from being offered as a
+     pairing in the first place, so this should be rare in practice — this
+     is just the last-line check against a stale/duplicate entry attempt,
+     not a distributed lock (a genuine same-instant race between two other
+     players both targeting a third isn't something a client-side check
+     alone can fully close — accepted as a rare, low-consequence edge case,
+     recoverable via a host forfeit if it ever actually happens). */
+  if(CL.phase==='league'){
+    const alreadyLive=clAllLeagueFixtures().find(x=>x.key!==m.key&&(x.a===myUid||x.b===myUid)&&clIsLive(x.key));
+    if(alreadyLive){toast('You already have a match in progress');clGoHub();return;}
+  }
   const aId=m.a,bId=m.b,fbk=clFbKey(m.key);
   clmpDetachMyMatch();
   mp.code=clmp.code;mp.ref=clmp.matchesRef.child(fbk);mp.stateRef=mp.ref.child('state');
@@ -4729,7 +5326,10 @@ function clMpAdvance(){
   clmp.ref.update({round:CL.round,phase:CL.phase,
     status:CL.phase==='done'?'done':CL.phase,
     playoff:CL.playoff?JSON.stringify(CL.playoff):null});
-  if(CL.phase==='done'){setTimeout(burstWin,200);setTimeout(burstWin,600);setTimeout(burstWin,1000);}
+  /* fireworks fire from clRenderHub() once it sees the synced phase:'done'
+     come back (same as every other client, including the host's own —
+     see clAdvance()'s comment) rather than optimistically here, so every
+     client's celebration is driven by the same one code path. */
 }
 /* Button gating for MP: advance is host-only; a non-host waiting on the
    host sees a hint instead. Play button already generic (clMyActive). */
@@ -4739,8 +5339,7 @@ function clMpHubButtons(){
   if(CL.phase==='done'||!allDone){advBtn.classList.add('hidden');return;}
   if(clmp.isHost){
     advBtn.classList.remove('hidden');
-    advBtn.textContent=CL.phase==='league'
-      ?(CL.round<CL.schedule.length-1?'Next round →':'🏆 Enter playoffs →')
+    advBtn.textContent=CL.phase==='league'?'🏆 Enter playoffs →'
       :(CL.playoff.stage==='final'?'👑 Crown champion →':'Next stage →');
   }else advBtn.classList.add('hidden');
 }
