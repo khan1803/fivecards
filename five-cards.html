@@ -943,8 +943,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
 <section class="screen" id="scr-bot">
   <div class="panel">
     <h2>Single Player</h2>
-    <span class="lbl">Your name</span>
-    <input id="inp-name-bot" maxlength="14" placeholder="Enter your name" autocomplete="off">
+    <p class="tag" id="playing-as-bot">Playing as <b style="color:var(--gold)"></b></p>
     <span class="lbl">Bot difficulty</span>
     <div class="seg" id="seg-diff">
       <button data-v="easy">Easy</button><button data-v="medium" class="sel">Medium</button><button data-v="hard">Hard</button>
@@ -970,8 +969,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
 <section class="screen" id="scr-mp">
   <div class="panel">
     <h2>Online Multiplayer</h2>
-    <span class="lbl">Your name</span>
-    <input id="inp-name" maxlength="14" placeholder="Enter your name" autocomplete="off">
+    <p class="tag" id="playing-as-mp">Playing as <b style="color:var(--gold)"></b></p>
     <div class="mp-split">
       <div class="mp-box">
         <h3>Create room</h3>
@@ -1008,8 +1006,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
 <section class="screen" id="scr-cl-solo">
   <div class="panel">
     <h2>🏆 Champions League · Solo</h2>
-    <span class="lbl">Your name</span>
-    <input id="inp-cl-name" maxlength="14" placeholder="Enter your name" autocomplete="off">
+    <p class="tag" id="playing-as-cl-solo">Playing as <b style="color:var(--gold)"></b></p>
     <span class="lbl">Total players (even)</span>
     <div class="seg" id="seg-cl-players">
       <button data-v="4" class="sel">4</button><button data-v="6">6</button><button data-v="8">8</button><button data-v="10">10</button>
@@ -1035,8 +1032,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
 <section class="screen" id="scr-cl-mp">
   <div class="panel">
     <h2>🏆 Champions League · Multiplayer</h2>
-    <span class="lbl">Your name</span>
-    <input id="inp-cl-mpname" maxlength="14" placeholder="Enter your name" autocomplete="off">
+    <p class="tag" id="playing-as-cl-mp">Playing as <b style="color:var(--gold)"></b></p>
     <div class="mp-split">
       <div class="mp-box">
         <h3>Create room</h3>
@@ -3017,7 +3013,7 @@ function pump(){
   },G.phase==='draw'?950:1350);
 }
 function startBotGame(){
-  const myName=getName('#inp-name-bot');if(!myName)return;
+  const myName=getName();if(!myName)return;
   const names=shuffle(['Ace','Ruby','Jax','Queenie','Kingsley','Maverick','Diesel','Scout','Nash','Piper']);
   const defs=[{name:myName,isBot:false}];
   for(let i=0;i<setup.nbots;i++)defs.push({name:names[i],isBot:true,diff:setup.diff});
@@ -3138,6 +3134,22 @@ function authInit(){
   if(!firebase.auth){toast('Auth not available — check the Firebase SDK scripts');return false;}
   if(authInit._done)return true;
   authInit._done=true;
+  /* getRedirectResult() surfaces errors specific to the signInWithRedirect
+     flow (see profileGoogleSignIn below) — a popup-based sign-in reports
+     its own failure directly from the click that started it, but a
+     redirect-based one completes on a *later* page load, after the
+     browser has already navigated back from Google, so this is the one
+     place that ever sees whether that completion actually succeeded.
+     Real errors here (not just "no redirect was pending", which resolves
+     with an empty result and no error) are shown with the actual
+     Firebase error code — see the comment on the catch block in
+     profileGoogleSignIn for why that detail matters. */
+  firebase.auth().getRedirectResult().then(result=>{
+    if(result&&result.user){closeModal();toast('Signed in'+(result.user.displayName?' as '+result.user.displayName:''));}
+  }).catch(e=>{
+    console.error('Google redirect sign-in failed:',e);
+    toast('Google sign-in failed ('+(e&&e.code||'unknown')+') — '+(e&&e.message||'see console for details'));
+  });
   firebase.auth().onAuthStateChanged(async user=>{
     authReady=true;
     if(user){
@@ -3209,12 +3221,18 @@ async function profileNameSetupSubmit(){
 async function profileGoogleSignIn(){
   if(!authInit())return{error:'Could not connect to server'};
   try{
-    await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
-    return{ok:true};
+    /* signInWithRedirect instead of signInWithPopup: popups get blocked
+       by browser popup-blockers and by third-party storage/cookie
+       partitioning (Safari ITP, Chrome), and rapid double-taps race into
+       auth/cancelled-popup-request — this is the "works on the Nth try"
+       pattern users were hitting. Redirect navigates away and back, so
+       the actual result is picked up by getRedirectResult() in
+       authInit() on the page load after the user returns from Google. */
+    await firebase.auth().signInWithRedirect(new firebase.auth.GoogleAuthProvider());
+    return{ok:true,redirecting:true};
   }catch(e){
-    if(e&&e.code==='auth/popup-closed-by-user')return{error:'Sign-in cancelled'};
     console.error(e);
-    return{error:'Google sign-in failed — try again'};
+    return{error:'Google sign-in failed ('+(e&&e.code||'unknown')+') — '+(e&&e.message||'try again')};
   }
 }
 function profileGoogleSignOut(){
@@ -3271,8 +3289,9 @@ function profileRecordWrongShow(){
   db.ref('profiles/'+profile.id+'/stats/wrongShows').transaction(n=>(n||0)+1);
 }
 function updateProfileBadge(){
-  const b=$('#btn-profile');if(!b)return;
-  b.textContent=profile.id?('👤 '+profile.name):'👤 Sign in';
+  const b=$('#btn-profile');
+  if(b)b.textContent=profile.id?('👤 '+profile.name):'👤 Sign in';
+  updatePlayingAsLabels();
 }
 function showProfileModal(){
   if(profile.id){
@@ -3298,8 +3317,7 @@ function showProfileModal(){
 async function profileGoogleSignInUi(){
   const res=await profileGoogleSignIn();
   if(res.error)return toast(res.error);
-  closeModal();
-  toast('Signed in'+(profile.name?' as '+profile.name:''));
+  if(res.redirecting)return;
 }
 async function profileRenameUi(){
   const input=$('#prof-rename');if(!input)return;
@@ -3365,17 +3383,36 @@ function roomCode(){
   for(let i=0;i<4;i++)s+=A[Math.floor(Math.random()*A.length)];
   return s;
 }
-function getName(sel){
-  const v=$(sel).value.trim();
-  if(!v){toast('Enter your name first');return null;}
-  localStorage.fcName=v;return v;
+/* Every screen that used to ask "your name" via a text input is only
+   ever reachable after requirePlaySignIn() has already passed (see the
+   home-screen button wiring), so profile.name is guaranteed set by the
+   time any of these call this — no separate manual entry needed once
+   sign-in itself carries the name. Kept as a function (not just reading
+   profile.name inline at each call site) so there's one place to change
+   if that guarantee ever needs revisiting, and so the "not actually
+   signed in" case still fails safely instead of silently using 'Player'
+   as a real name. */
+function getName(){
+  if(!profile.id||!profile.name){toast('Sign in with Google first');return null;}
+  return profile.name;
+}
+/* Populates every "Playing as {name}" label across the setup screens —
+   called once at startup and again on every profile change (see
+   updateProfileBadge) so they can never show a stale name after a
+   rename or a sign-out/sign-in as someone else. */
+function updatePlayingAsLabels(){
+  const name=profile.name||'';
+  ['playing-as-bot','playing-as-mp','playing-as-cl-solo','playing-as-cl-mp'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    const b=el.querySelector('b');if(b)b.textContent=name;
+  });
 }
 function effHost(r){
   const ps=Object.keys(r.players||{});
   return ps.includes(r.host)?r.host:ps.map(u=>[u,r.players[u].order]).sort((a,b)=>a[1]-b[1]).map(x=>x[0])[0];
 }
 function createRoom(){
-  const name=getName('#inp-name');if(!name||!fbInit())return;
+  const name=getName();if(!name||!fbInit())return;
   const code=roomCode(),ref=db.ref(ROOMS+code);
   ref.get().then(s=>{
     if(s.exists())return createRoom();          // rare collision → retry
@@ -3389,7 +3426,7 @@ function createRoom(){
   }).catch(()=>toast('Connection error — check internet'));
 }
 function joinRoom(){
-  const name=getName('#inp-name');if(!name)return;
+  const name=getName();if(!name)return;
   const code=($('#inp-code').value||'').trim().toUpperCase();
   if(code.length!==4)return toast('Enter the 4-letter room code');
   if(!fbInit())return;
@@ -3704,9 +3741,9 @@ function updateClChatTabs(){
 }
 function sendChat(text){
   text=(text||'').trim();if(!text)return;
-  if(chatIsCL()){if(!clChat.ref)return;clChat.ref.push({uid:myUid,name:localStorage.fcName||'Player',text:text.slice(0,200),ts:firebase.database.ServerValue.TIMESTAMP});return;}
+  if(chatIsCL()){if(!clChat.ref)return;clChat.ref.push({uid:myUid,name:profile.name||'Player',text:text.slice(0,200),ts:firebase.database.ServerValue.TIMESTAMP});return;}
   if(!mp.ref)return;
-  mp.ref.child('chat').push({uid:myUid,name:localStorage.fcName||'Player',text:text.slice(0,200),
+  mp.ref.child('chat').push({uid:myUid,name:profile.name||'Player',text:text.slice(0,200),
     ts:firebase.database.ServerValue.TIMESTAMP});
 }
 function renderChatLog(){
@@ -4401,8 +4438,6 @@ $('#btn-exit').onclick=()=>{
 $('#modal-back').addEventListener('click',e=>{
   if(e.target.id==='modal-back'&&['score','log','help','confirm'].includes(modalKind))closeModal();
 });
-$('#inp-name').value=localStorage.fcName||'';
-$('#inp-name-bot').value=localStorage.fcName||'';
 $('#inp-code').addEventListener('input',e=>e.target.value=e.target.value.toUpperCase());
 
 /* auto-rejoin after refresh mid-game (waits for deferred Firebase SDK) */
@@ -5399,7 +5434,7 @@ function clUpdateLiveStrip(){
 
 /* ================= CL — SOLO ENTRY ================= */
 function clStartSolo(){
-  const name=getName('#inp-cl-name');if(!name)return;
+  const name=getName();if(!name)return;
   const n=clSetup.players;
   const bots=shuffle(CL_BOTNAMES.slice());
   const players=[{id:'me',name,isBot:false,diff:null}];
@@ -5438,7 +5473,7 @@ const clUnFbKey=k=>k.replace('_',':');
 const onScreen=id=>{const c=document.querySelector('.screen.on');return c&&c.id===id;};
 
 function clMpCreate(){
-  const name=getName('#inp-cl-mpname');if(!name||!fbInit())return;
+  const name=getName();if(!name||!fbInit())return;
   const code=roomCode(),ref=db.ref(CLROOMS+code);
   ref.get().then(s=>{
     if(s.exists())return clMpCreate();
@@ -5449,7 +5484,7 @@ function clMpCreate(){
   }).catch(()=>toast('Connection error — check internet'));
 }
 function clMpJoin(){
-  const name=getName('#inp-cl-mpname');if(!name)return;
+  const name=getName();if(!name)return;
   const code=($('#inp-cl-code').value||'').trim().toUpperCase();
   if(code.length!==4)return toast('Enter the 4-letter room code');
   if(!fbInit())return;
