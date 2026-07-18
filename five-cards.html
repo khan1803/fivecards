@@ -3218,21 +3218,44 @@ async function profileNameSetupSubmit(){
   closeModal();
   toast('Welcome, '+name+'!');
 }
+/* Try popup first, fall back to redirect only if the popup can't run at
+   all (blocked, or an environment that doesn't support it). Redirect
+   alone turned out to have its own real failure mode on iOS Safari: a
+   screen recording from an affected player showed the redirect
+   completing all the way through Google's consent screen and landing
+   back on the app — but still signed out, because Safari's cross-site
+   storage partitioning (ITP) breaks the storage handoff between the
+   authDomain (supermall-tracker.firebaseapp.com) and the app's own
+   origin (khan1803.github.io), which are different sites. Popup avoids
+   that handoff entirely — it runs in the same top-level browsing
+   context, no cross-origin full-page navigation involved. The `_inFlight`
+   guard stops a double-tap from firing a second concurrent sign-in
+   (racing into auth/cancelled-popup-request), which was the other real
+   contributor to "takes multiple tries." */
 async function profileGoogleSignIn(){
+  if(profileGoogleSignIn._inFlight)return{error:'Sign-in already in progress — please wait'};
   if(!authInit())return{error:'Could not connect to server'};
+  profileGoogleSignIn._inFlight=true;
   try{
-    /* signInWithRedirect instead of signInWithPopup: popups get blocked
-       by browser popup-blockers and by third-party storage/cookie
-       partitioning (Safari ITP, Chrome), and rapid double-taps race into
-       auth/cancelled-popup-request — this is the "works on the Nth try"
-       pattern users were hitting. Redirect navigates away and back, so
-       the actual result is picked up by getRedirectResult() in
-       authInit() on the page load after the user returns from Google. */
-    await firebase.auth().signInWithRedirect(new firebase.auth.GoogleAuthProvider());
-    return{ok:true,redirecting:true};
+    try{
+      const result=await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
+      return{ok:true,user:result.user};
+    }catch(popupErr){
+      const code=popupErr&&popupErr.code;
+      if(code==='auth/popup-closed-by-user')return{error:'Sign-in cancelled'};
+      const canFallBackToRedirect=code==='auth/popup-blocked'||code==='auth/operation-not-supported-in-this-environment'||code==='auth/cancelled-popup-request';
+      if(!canFallBackToRedirect){
+        console.error(popupErr);
+        return{error:'Google sign-in failed ('+(code||'unknown')+') — '+(popupErr&&popupErr.message||'try again')};
+      }
+      await firebase.auth().signInWithRedirect(new firebase.auth.GoogleAuthProvider());
+      return{ok:true,redirecting:true};
+    }
   }catch(e){
     console.error(e);
     return{error:'Google sign-in failed ('+(e&&e.code||'unknown')+') — '+(e&&e.message||'try again')};
+  }finally{
+    profileGoogleSignIn._inFlight=false;
   }
 }
 function profileGoogleSignOut(){
@@ -3318,6 +3341,7 @@ async function profileGoogleSignInUi(){
   const res=await profileGoogleSignIn();
   if(res.error)return toast(res.error);
   if(res.redirecting)return;
+  if(res.user){closeModal();toast('Signed in'+(res.user.displayName?' as '+res.user.displayName:''));}
 }
 async function profileRenameUi(){
   const input=$('#prof-rename');if(!input)return;
