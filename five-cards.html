@@ -6,30 +6,40 @@
 <title>5 Cards — Lowest Hand Wins</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,600&family=Cinzel:wght@600;700;900&family=Manrope:wght@500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,600&family=Cinzel:wght@600;700;900&family=Manrope:wght@500;600;700;800&family=DM+Mono:wght@400;500&family=Unbounded:wght@600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
-  /* mystic-arena palette — molten gold stays the primary accent (badges,
-     turn glow, CTAs), magenta/teal are the two secondary accents the old
-     single-gold-family UI never had, lavender takes over every place
-     that used to be muted gold *text* (labels, sub-captions) so gold
-     itself stays reserved for things that actually matter at a glance */
-  --gold:#FFB84D;--gold2:#C97A2E;--goldlt:#FFE3A3;--golddk:#8F5215;--turnring:#FFCF5C;--nexttag:#9AD7FF;
-  --magenta:#FF9ECF;--magenta2:#C24B86;--teal:#9AD7FF;
-  --lav:#D9C9EA;--labelmuted:#C9B8DB;--lavdim:#9A86B5;
-  --felt:#5A2170;--felt-d:#170A2E;
-  --bg1:#170A2E;--bg2:#0A0518;--panel:#1C0D33;--line:rgba(255,184,77,.16);
-  --red:#D6456B;--ink:#FDF6E8;--dim:rgba(217,201,234,.55);
-  --inkdark:#170A2E;--cardink:#20132E;
+  /* "Prism" palette (2026-07-19) — ported from a Claude-Design export,
+     design tokens only (colors/fonts/shapes), no rule/logic changes.
+     Same variable names as the old mystic-arena palette so every
+     downstream var(--x) reference keeps working untouched — only the
+     values moved, to vivid oklch equivalents of the reference mockup's
+     magenta/cyan/gold/violet-on-deep-purple scheme. oklch() has been
+     supported in Safari/Chrome/Firefox since 2022, safe for this app's
+     actual player base (iOS Safari included). */
+  --gold:oklch(0.85 0.16 95);--gold2:oklch(0.65 0.14 70);--goldlt:oklch(0.92 0.1 95);--golddk:oklch(0.45 0.1 70);--turnring:oklch(0.85 0.16 95);--nexttag:oklch(0.78 0.15 210);
+  --magenta:oklch(0.72 0.2 350);--magenta2:oklch(0.5 0.17 350);--teal:oklch(0.78 0.15 210);
+  --lav:oklch(0.85 0.03 300);--labelmuted:oklch(0.78 0.02 300);--lavdim:oklch(0.6 0.02 300);
+  --felt:oklch(0.3 0.08 300);--felt-d:oklch(0.14 0.03 300);
+  --bg1:oklch(0.17 0.04 300);--bg2:oklch(0.10 0.03 300);--panel:oklch(0.22 0.045 300);--line:oklch(0.78 0.15 210 / .18);
+  --red:oklch(0.65 0.19 20);--ink:#FDF6E8;--dim:oklch(0.78 0.02 300 / .55);
+  --inkdark:oklch(0.14 0.03 300);--cardink:oklch(0.2 0.03 300);
+  --violet:oklch(0.6 0.2 300);
   --cw:clamp(52px,13vw,70px);--ch:calc(var(--cw)*1.42);
 }
 html,body{height:100%}
-body{font-family:'Manrope',Georgia,serif;
-  background:linear-gradient(160deg,#0A0518 0%,#170A2E 45%,#2c0f45 100%);
+body{font-family:'Plus Jakarta Sans',Georgia,serif;
+  background:radial-gradient(ellipse at 50% -10%, oklch(0.26 0.05 300) 0%, oklch(0.17 0.04 300) 45%, oklch(0.10 0.03 300) 100%);
   background-size:100% 220%;animation:bgDrift 22s ease-in-out infinite;
   color:var(--ink);overflow:hidden;position:relative}
 @keyframes bgDrift{0%,100%{background-position:50% 0%}50%{background-position:50% 100%}}
+/* ambient drifting glow blobs, ported from the Prism reference — purely
+   decorative, fixed behind everything, never touched by render() */
+body::before,body::after{content:'';position:fixed;border-radius:50%;filter:blur(70px);pointer-events:none;z-index:0}
+body::before{top:-10%;left:-8%;width:420px;height:420px;background:oklch(0.72 0.2 350 / .14);animation:blobDrift 16s ease-in-out infinite}
+body::after{bottom:-12%;right:-8%;width:460px;height:460px;background:oklch(0.78 0.15 210 / .14);animation:blobDrift 20s ease-in-out infinite reverse}
+@keyframes blobDrift{0%,100%{transform:translate(0,0)}50%{transform:translate(24px,-18px)}}
 button{font-family:inherit}
 .hidden{display:none!important}
 .bg-deco{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
@@ -48,55 +58,58 @@ button{font-family:inherit}
 #scr-game.on{justify-content:flex-start;padding:0}
 
 /* ---------- home ---------- */
-.home-box{display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center}
-.hero-badge{position:relative;width:192px;height:192px;display:flex;align-items:center;justify-content:center;margin-bottom:4px}
-.hero-badge .ring1{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(255,184,77,.3);animation:ringSpin 16s linear infinite}
-.hero-badge .ring2{position:absolute;inset:16px;border-radius:50%;border:1px solid rgba(255,158,207,.22);animation:ringSpinRev 12s linear infinite}
-.hero-badge .suit{position:absolute;font-size:14px;color:rgba(255,184,77,.45)}
-.hero-badge .suit.heart,.hero-badge .suit.diamond{color:rgba(255,158,207,.5)}
-.hero-badge .suit.tl{top:16px;left:16px}
-.hero-badge .suit.tr{top:16px;right:16px}
-.hero-badge .suit.bl{bottom:16px;left:16px}
-.hero-badge .suit.br{bottom:16px;right:16px}
-@keyframes ringSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-@keyframes ringSpinRev{from{transform:rotate(360deg)}to{transform:rotate(0deg)}}
-.hero-badge .five{font-family:'Playfair Display',serif;font-size:116px;font-weight:900;line-height:1;
-  background:linear-gradient(180deg,#FFE3A3 0%,#FFB84D 45%,#FF9ECF 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero-wordmark{font-family:'Playfair Display',serif;font-size:30px;font-weight:400;letter-spacing:16px;color:#FDF6E8;text-transform:uppercase;text-indent:16px}
-.hero-divider{width:110px;height:1px;background:linear-gradient(90deg,transparent,rgba(255,184,77,.7),transparent);margin:12px auto 10px}
-.tag{color:var(--labelmuted);opacity:.8;font-size:11px;font-weight:600;letter-spacing:3.5px;text-transform:uppercase;font-style:italic;font-family:'Playfair Display',serif}
-.home-suits{display:flex;gap:22px;font-size:22px}
-.home-suits span:nth-child(odd){color:rgba(255,184,77,.32)}
-.home-suits span:nth-child(even){color:rgba(255,158,207,.36)}
+.home-box{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+/* Prism wordmark (2026-07-19 round 2) — "5 CARDS" as a single gradient
+   text run, matching the reference design exactly, rather than the old
+   two-piece circular-badge "5" + tracked-out "CARDS" wordmark. One
+   continuous background-clip gradient sweep across the whole string
+   naturally reads as "5 leans cyan, CARDS leans gold/pink" without
+   needing two separately-colored elements. */
+.hero-wordmark{font-family:'Unbounded',sans-serif;font-size:min(64px,13vw);font-weight:800;line-height:1;
+  background:linear-gradient(100deg,var(--teal),var(--magenta),var(--gold),var(--violet));background-size:250% auto;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shimmer 4s linear infinite}
+/* .tag doubles as both a short uppercase caption (home screen's "Lowest
+   Hand Wins") and, far more often across the app, a longer descriptive
+   sentence (modal subtext, room rules) — uppercase+wide tracking reads
+   fine for the former but hurts readability at paragraph length, so the
+   base style is normal-case body copy; .tag.caption opts back into the
+   short-label treatment for the few spots that actually want it. */
+.tag{color:var(--labelmuted);opacity:.85;font-size:12.5px;font-weight:500;line-height:1.5;font-family:'Plus Jakarta Sans',sans-serif}
+.tag.caption{font-size:11px;font-weight:600;letter-spacing:5px;text-transform:uppercase;line-height:1.4}
+.home-suits{display:flex;gap:16px;font-size:20px}
+.home-suits span:nth-child(1){color:var(--teal)}
+.home-suits span:nth-child(2){color:var(--magenta)}
+.home-suits span:nth-child(3){color:var(--gold)}
+.home-suits span:nth-child(4){color:var(--violet)}
 
 /* ---------- buttons ---------- */
-.btn{border:0;border-radius:11px;padding:14px 20px;font-weight:800;cursor:pointer;font-size:14px;transition:transform .08s,filter .15s;font-family:'Manrope',sans-serif;letter-spacing:1px;text-transform:uppercase}
+.btn{border:0;border-radius:16px;padding:14px 20px;font-weight:700;cursor:pointer;font-size:14px;transition:transform .08s,filter .15s;font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:.2px}
 .btn:active{transform:scale(.97)}
-.btn.primary{background:linear-gradient(90deg,var(--magenta),var(--gold),var(--magenta));background-size:200% auto;animation:shimmer 5s linear infinite;color:var(--inkdark);box-shadow:0 10px 26px rgba(255,158,207,.3),inset 0 1px 0 rgba(255,255,255,.25)}
+.btn.primary{background:linear-gradient(90deg,var(--magenta),var(--gold),var(--magenta));background-size:200% auto;animation:shimmer 5s linear infinite;color:var(--inkdark);box-shadow:0 10px 26px rgba(255,158,207,.3),inset 0 1px 0 rgba(255,255,255,.25);font-family:'Unbounded',sans-serif}
 .btn.primary:disabled{filter:grayscale(.75) brightness(.65);cursor:default;box-shadow:none;animation:none}
 @keyframes shimmer{0%{background-position:0% 0}100%{background-position:200% 0}}
-.btn.ghost{background:rgba(154,215,255,.07);color:var(--lav);border:1px solid rgba(154,215,255,.28)}
+.btn.ghost{background:oklch(0.22 0.04 300 / .7);color:var(--lav);border:1px solid oklch(0.78 0.15 210 / .35)}
 .btn.danger{background:linear-gradient(180deg,#E0668A,#8F2F4E);color:#FDE6EE}
-.btn.big{width:min(320px,82vw);padding:17px;font-size:14px}
-.btn.small{padding:8px 16px;font-size:11px;letter-spacing:1.5px}
-.icon-btn{background:rgba(255,184,77,.08);border:1px solid rgba(255,184,77,.25);color:var(--gold);
-  width:38px;height:38px;border-radius:10px;font-size:16px;cursor:pointer}
+.btn.big{width:min(320px,82vw);padding:17px;font-size:14px;border-radius:18px}
+.btn.small{padding:8px 16px;font-size:11px;letter-spacing:.5px}
+.icon-btn{background:oklch(0.22 0.04 300);border:1px solid oklch(0.78 0.15 210 / .35);color:var(--teal);
+  width:38px;height:38px;border-radius:12px;font-size:16px;cursor:pointer}
 
 /* ---------- panels / forms ---------- */
-.panel{background:radial-gradient(circle at 50% 0%,#3a0f4d,var(--panel) 75%);border:1px solid rgba(255,184,77,.22);border-radius:22px;padding:26px;
+.panel{background:oklch(0.22 0.045 300 / .92);backdrop-filter:blur(14px);border:1px solid oklch(0.5 0.08 300 / .35);border-radius:24px;padding:26px;
   width:min(430px,94vw);display:flex;flex-direction:column;gap:12px;max-height:92dvh;overflow:auto;box-shadow:0 30px 80px rgba(0,0,0,.6)}
-.panel h2{color:#FDF6E8;font-size:22px;letter-spacing:1px;font-family:'Cinzel',serif;font-weight:700}
-.panel h3{font-size:15px;color:var(--ink);font-family:'Manrope',sans-serif;font-weight:700}
+.panel h2{color:#FDF6E8;font-size:22px;letter-spacing:0;font-family:'Unbounded',sans-serif;font-weight:800}
+.panel h3{font-size:15px;color:var(--ink);font-family:'Plus Jakarta Sans',sans-serif;font-weight:700}
 .lbl{font-size:10px;color:var(--labelmuted);text-transform:uppercase;letter-spacing:2.5px;margin-top:4px;font-family:'DM Mono',monospace}
-input{background:rgba(255,184,77,.06);border:1px solid rgba(255,184,77,.28);border-radius:10px;color:#FDF6E8;
-  padding:13px 14px;font-size:16px;width:100%;outline:none;font-family:'Manrope',sans-serif}
+input{background:oklch(0.16 0.03 300 / .6);border:1px solid oklch(0.78 0.15 210 / .3);border-radius:12px;color:#FDF6E8;
+  padding:13px 14px;font-size:16px;width:100%;outline:none;font-family:'Plus Jakarta Sans',sans-serif}
 input:focus{border-color:var(--gold)}
-.seg{display:flex;background:rgba(255,184,77,.06);border-radius:10px;padding:4px;gap:4px;border:1px solid rgba(255,184,77,.12)}
-.seg button{flex:1;padding:11px 6px;border:0;background:transparent;color:var(--labelmuted);border-radius:7px;font-weight:700;cursor:pointer;font-size:13px;font-family:'Manrope',sans-serif}
-.seg button.sel{background:linear-gradient(180deg,var(--goldlt),var(--gold2));color:var(--inkdark)}
+.seg{display:flex;background:oklch(0.16 0.03 300 / .6);border-radius:14px;padding:4px;gap:4px;border:1px solid oklch(0.5 0.08 300 / .3)}
+.seg button{flex:1;padding:11px 6px;border:0;background:transparent;color:var(--labelmuted);border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;font-family:'Plus Jakarta Sans',sans-serif}
+.seg button.sel{background:linear-gradient(135deg,var(--gold),var(--magenta));color:var(--inkdark)}
 .mp-split{display:flex;gap:12px}
 .mp-box{flex:1;background:rgba(255,184,77,.04);border:1px solid rgba(255,184,77,.14);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
-.lp{background:rgba(255,184,77,.05);border:1px solid rgba(255,184,77,.14);border-radius:10px;padding:12px 14px;font-weight:700;font-family:'Manrope',sans-serif;color:#FDF6E8;
+.lp{background:rgba(255,184,77,.05);border:1px solid rgba(255,184,77,.14);border-radius:10px;padding:12px 14px;font-weight:700;font-family:'Plus Jakarta Sans',sans-serif;color:#FDF6E8;
   display:flex;align-items:center;gap:6px}
 .lp-mic{font-size:12px;opacity:.85}
 .lp-kick{margin-left:auto;width:24px;height:24px;border-radius:50%;flex:0 0 auto;
@@ -135,12 +148,12 @@ input:focus{border-color:var(--gold)}
 .opp.me .avatar{border-color:var(--gold);box-shadow:0 0 0 2px rgba(255,184,77,.4),0 2px 8px rgba(0,0,0,.4)}
 .opp.me .opp-name-text{color:var(--gold)}
 .opp.elim{opacity:.4}
-.avatar{position:relative;z-index:1;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#5A2170,#2c0f45);
-  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:19px;flex:0 0 auto;color:#FDF6E8;
-  border:2px solid rgba(255,184,77,.4);box-shadow:0 2px 8px rgba(0,0,0,.4);font-family:'Manrope',sans-serif}
-.opp:nth-of-type(4n+2) .avatar{background:linear-gradient(135deg,#1E4A6B,#12283F)}
-.opp:nth-of-type(4n+3) .avatar{background:linear-gradient(135deg,#B4692A,#6E3E14)}
-.opp:nth-of-type(4n+4) .avatar{background:linear-gradient(135deg,#B0316E,#5E1A3D)}
+.avatar{position:relative;z-index:1;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--teal),oklch(0.3 0.05 300));
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:19px;flex:0 0 auto;color:#FDF6E8;
+  border:2px solid rgba(255,184,77,.4);box-shadow:0 2px 8px rgba(0,0,0,.4);font-family:'Plus Jakarta Sans',sans-serif}
+.opp:nth-of-type(4n+2) .avatar{background:linear-gradient(135deg,var(--magenta),oklch(0.3 0.05 300))}
+.opp:nth-of-type(4n+3) .avatar{background:linear-gradient(135deg,var(--gold),oklch(0.3 0.05 300))}
+.opp:nth-of-type(4n+4) .avatar{background:linear-gradient(135deg,var(--violet),oklch(0.3 0.05 300))}
 .opp.elim .avatar{background:rgba(45,30,55,.55)!important;color:rgba(253,246,232,.4);border-color:rgba(255,184,77,.14)}
 /* deliberately a distinct, much brighter colour from the muted --gold
    used everywhere else in the UI (rank badges, tag chips, etc.) — a
@@ -180,7 +193,7 @@ input:focus{border-color:var(--gold)}
   padding:9px 6px 4px;box-shadow:0 3px 10px rgba(0,0,0,.35);transition:border-color .2s,box-shadow .2s}
 .opp.turn .seat-card{border-color:rgba(255,184,77,.6);box-shadow:0 0 16px rgba(255,184,77,.28)}
 .opp-name{display:flex;flex-direction:column;align-items:center;gap:1px;overflow:hidden}
-.opp-name-text{font-size:13.5px;font-weight:700;color:#FDF6E8;font-family:'Manrope',sans-serif;
+.opp-name-text{font-size:13.5px;font-weight:700;color:#FDF6E8;font-family:'Plus Jakarta Sans',sans-serif;
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tagchip{font-size:9px;background:rgba(255,184,77,.16);color:var(--gold);border-radius:5px;padding:2px 7px;text-transform:uppercase;letter-spacing:.4px;font-family:'DM Mono',monospace}
 /* the starter's OPEN CARD marker now lives right on their seat chip,
@@ -210,9 +223,10 @@ input:focus{border-color:var(--gold)}
    other) has to inflate for the tallest one. */
 .minis.reveal{display:flex;gap:2px;flex-wrap:wrap;justify-content:center;margin-top:3px;max-height:39px;overflow:hidden}
 .mini-face{display:flex;align-items:center;justify-content:center;min-width:16px;height:18px;padding:0 2px;
-  border-radius:3px;background:#FAFAF8;color:var(--cardink);font-size:8px;font-weight:800;
-  font-family:'Cinzel',serif;box-shadow:0 2px 5px rgba(0,0,0,.4);animation:newTagPulse .3s ease-out}
-.mini-face.red{color:var(--red)}
+  border-radius:4px;background:linear-gradient(155deg,oklch(0.26 0.045 300),oklch(0.15 0.035 300));color:var(--teal);font-size:8px;font-weight:800;
+  box-shadow:0 0 0 1px oklch(0.78 0.15 210 / .4),0 2px 5px rgba(0,0,0,.4);
+  font-family:'Unbounded',sans-serif;animation:newTagPulse .3s ease-out}
+.mini-face.red{color:var(--magenta);box-shadow:0 0 0 1px oklch(0.72 0.2 350 / .4),0 2px 5px rgba(0,0,0,.4)}
 /* 2.5x the normal 10px — Saif's explicit ask for Open Show specifically:
    the running total is the whole point of the suspense, so it needs to
    read from across the table, not blend in with the rest of the sub-text */
@@ -351,7 +365,7 @@ body.dealing #my-hand .card{opacity:0;transform:translateY(8px);transition:none}
 body.dealing #actions .btn{pointer-events:none;opacity:.35}
 body.dealing #deck-top.pickable,body.dealing #open-cards .card{pointer-events:none}
 body.dealing .card-count{visibility:hidden}
-#status-bar{font-size:14px;font-weight:600;font-style:italic;min-height:22px;text-align:center;padding:0 14px;color:#FDF6E8;font-family:'Playfair Display',serif}
+#status-bar{font-size:14px;font-weight:600;min-height:22px;text-align:center;padding:0 14px;color:#FDF6E8;font-family:'Plus Jakarta Sans',sans-serif}
 /* bumped from 10px — was the smallest text anywhere in the UI, hard to
    actually read the last-action line at a glance. Kept in the same DM
    Mono / muted-gold "secondary info" family as opp-sub/round-info
@@ -361,19 +375,25 @@ body.dealing .card-count{visibility:hidden}
 #log-line{font-size:25px;color:var(--labelmuted);min-height:32px;cursor:pointer;text-align:center;padding:0 14px;font-family:'DM Mono',monospace;letter-spacing:.3px;margin-top:-6px}
 
 /* ---------- cards ---------- */
-.card{width:var(--cw);height:var(--ch);border-radius:9px;background:#FAFAF8;color:var(--cardink);position:relative;
-  box-shadow:0 3px 9px rgba(0,0,0,.55);flex:0 0 auto;user-select:none;transition:transform .13s,outline-color .13s;cursor:default;border:1px solid rgba(32,19,46,.12)}
-.card .tl{position:absolute;top:4px;left:5px;font-size:calc(var(--cw)*.25);font-weight:700;line-height:1;text-align:center;white-space:pre;font-family:'Cinzel',serif}
-.card .br{position:absolute;bottom:4px;right:5px;font-size:calc(var(--cw)*.25);font-weight:700;line-height:1;text-align:center;white-space:pre;transform:rotate(180deg);font-family:'Cinzel',serif}
+/* Prism card face (2026-07-19 round 2) — dark glass card matching the
+   reference design exactly: gradient-dark body (not the old cream/white
+   printed-card look), colored rank+suit text, soft accent-colored ring
+   instead of a printed black border. Structure (.tl/.mid/.br spans, same
+   DOM the JS in cardEl() already emits) is untouched — this is a color/
+   shape re-skin only, same top+mirrored-bottom-corner convention. */
+.card{width:var(--cw);height:var(--ch);border-radius:calc(var(--cw)*.18);background:linear-gradient(155deg,oklch(0.26 0.045 300),oklch(0.15 0.035 300));color:var(--teal);position:relative;
+  box-shadow:0 0 0 1.5px oklch(0.78 0.15 210 / .4),0 6px 16px rgba(0,0,0,.45);flex:0 0 auto;user-select:none;transition:transform .13s,box-shadow .13s;cursor:default;border:none}
+.card .tl{position:absolute;top:4px;left:5px;font-size:calc(var(--cw)*.25);font-weight:700;line-height:1;text-align:center;white-space:pre;font-family:'Unbounded',sans-serif}
+.card .br{position:absolute;bottom:4px;right:5px;font-size:calc(var(--cw)*.25);font-weight:700;line-height:1;text-align:center;white-space:pre;transform:rotate(180deg);font-family:'Unbounded',sans-serif}
 .card .mid{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:calc(var(--cw)*.5)}
-.card.red{color:var(--red)}
-.card.jk{color:#9257C9}
+.card.red{color:var(--magenta);box-shadow:0 0 0 1.5px oklch(0.72 0.2 350 / .4),0 6px 16px rgba(0,0,0,.45)}
+.card.jk{color:var(--violet);box-shadow:0 0 0 1.5px oklch(0.6 0.2 300 / .4),0 6px 16px rgba(0,0,0,.45)}
 .card.jk .mid{font-size:calc(var(--cw)*.44)}
-.card.back{background:linear-gradient(135deg,#5A2170,#2c0f45);border:2px solid var(--gold);position:relative;overflow:hidden}
-.card.back::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(255,184,77,.1) 0,rgba(255,184,77,.1) 1.5px,transparent 1.5px,transparent 8px)}
-.card.back::after{content:'♦';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:calc(var(--cw)*.5);color:rgba(255,184,77,.28)}
-.card.sel{transform:translateY(-16px);outline:3px solid var(--gold);box-shadow:0 10px 18px rgba(0,0,0,.6)}
-.card.pickable{outline:3px solid var(--gold);cursor:pointer;animation:pulse 1.2s infinite}
+.card.back{background:linear-gradient(155deg,oklch(0.26 0.045 300),oklch(0.15 0.035 300));box-shadow:0 0 0 2px var(--gold),0 6px 16px rgba(0,0,0,.45);position:relative;overflow:hidden}
+.card.back::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,oklch(0.78 0.15 210 / .08) 0,oklch(0.78 0.15 210 / .08) 1.5px,transparent 1.5px,transparent 8px)}
+.card.back::after{content:'♦';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:calc(var(--cw)*.5);color:oklch(0.85 0.16 95 / .3)}
+.card.sel{transform:translateY(-16px);box-shadow:0 0 0 2.5px var(--gold),0 0 22px oklch(0.85 0.16 95 / .55),0 10px 18px rgba(0,0,0,.6)}
+.card.pickable{box-shadow:0 0 0 2.5px var(--gold),0 0 16px oklch(0.85 0.16 95 / .4);cursor:pointer;animation:pulse 1.2s infinite}
 .card .newtag{position:absolute;top:-7px;left:-7px;z-index:5;background:var(--gold);color:var(--inkdark);
   font-size:8px;font-weight:900;letter-spacing:.4px;padding:2px 5px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.5);font-family:'DM Mono',monospace}
 .deckcard{cursor:default}
@@ -412,10 +432,10 @@ body.dealing .card-count{visibility:hidden}
 #my-meta{font-size:11px;color:var(--labelmuted);font-weight:500;font-family:'DM Mono',monospace}
 
 /* ---------- modal / toast ---------- */
-#modal-back{position:fixed;inset:0;background:rgba(10,5,24,.78);display:flex;align-items:center;justify-content:center;z-index:60;padding:14px}
-#modal{background:linear-gradient(180deg,#23103F,#170A2E);border:1px solid rgba(255,184,77,.22);border-radius:20px;padding:22px;
+#modal-back{position:fixed;inset:0;background:rgba(6,4,12,.72);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:60;padding:14px}
+#modal{background:oklch(0.22 0.045 300 / .97);backdrop-filter:blur(14px);border:1px solid oklch(0.85 0.16 95 / .35);border-radius:22px;padding:22px;
   width:min(470px,95vw);max-height:86dvh;overflow:auto;display:flex;flex-direction:column;gap:13px;box-shadow:0 30px 90px rgba(0,0,0,.6)}
-#modal h2{color:var(--gold);font-size:20px;font-family:'Cinzel',serif;text-shadow:0 2px 14px rgba(255,184,77,.3)}
+#modal h2{color:var(--gold);font-size:20px;font-family:'Unbounded',sans-serif;font-weight:800;text-shadow:0 2px 14px rgba(255,184,77,.3)}
 #modal .mbtns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:4px}
 /* ---------- volume panel ---------- */
 .vol-row{display:flex;flex-direction:column;gap:8px;margin:6px 0}
@@ -434,32 +454,32 @@ body.dealing .card-count{visibility:hidden}
 .rt{width:100%;border-collapse:collapse;font-size:12.5px}
 .rt th{color:var(--labelmuted);font-size:9px;text-transform:uppercase;letter-spacing:1.5px;text-align:left;padding:5px 6px;font-family:'DM Mono',monospace;font-weight:400}
 .rt td{padding:8px 6px;border-top:1px solid rgba(255,184,77,.1);color:rgba(253,246,232,.75);font-family:'DM Mono',monospace;font-size:11px}
-.rt .win{color:var(--gold);font-weight:800;font-family:'Cinzel',serif}
+.rt .win{color:var(--gold);font-weight:800;font-family:'Unbounded',sans-serif}
 .rt .out{color:var(--red);font-weight:800;font-size:10px}
 .lb-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px}
 .lb-matrix{width:auto;min-width:100%}
 .lb-matrix th,.lb-matrix td{white-space:nowrap;text-align:center;padding:6px 10px}
-.lb-matrix th{color:#FDF6E8;font-size:12px;text-transform:none;letter-spacing:0;font-weight:800;border-bottom:1.5px solid rgba(255,184,77,.25);font-family:'Cinzel',serif}
+.lb-matrix th{color:#FDF6E8;font-size:12px;text-transform:none;letter-spacing:0;font-weight:800;border-bottom:1.5px solid rgba(255,184,77,.25);font-family:'Unbounded',sans-serif}
 .lb-matrix td:first-child,.lb-matrix th:first-child{position:sticky;left:0;background:#1C0D33;
   text-align:left;color:var(--labelmuted);font-size:10px;text-transform:uppercase;letter-spacing:.5px;padding-right:14px;font-family:'DM Mono',monospace}
-.deal-fly{position:fixed;width:34px;height:48px;border-radius:5px;
-  background:linear-gradient(135deg,#5A2170,#2c0f45);
-  border:2px solid var(--gold);z-index:65;pointer-events:none;opacity:1;box-shadow:0 4px 10px rgba(0,0,0,.5);
+.deal-fly{position:fixed;width:34px;height:48px;border-radius:7px;
+  background:linear-gradient(155deg,oklch(0.26 0.045 300),oklch(0.15 0.035 300));
+  box-shadow:0 0 0 2px var(--gold),0 4px 10px rgba(0,0,0,.5);z-index:65;pointer-events:none;opacity:1;
   transition:transform .4s cubic-bezier(.22,.68,.32,1),opacity .35s ease-in .05s;will-change:transform,opacity}
-.deal-fly.face{background:#FAFAF8;border:2px solid var(--red);display:flex;align-items:center;justify-content:center;
+.deal-fly.face{box-shadow:0 0 0 2px var(--magenta),0 4px 10px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;
   transition:transform .4s cubic-bezier(.22,.68,.32,1),opacity .3s ease-in .55s}
-.deal-fly-txt{font-size:12px;font-weight:800;color:var(--cardink);font-family:'Cinzel',serif}
-.deal-fly-txt.red{color:var(--red)}
+.deal-fly-txt{font-size:12px;font-weight:800;color:var(--teal);font-family:'Unbounded',sans-serif}
+.deal-fly-txt.red{color:var(--magenta)}
 .announce-banner{font-size:26px;font-weight:900;text-align:center;color:var(--gold);padding:24px 6px;
-  text-shadow:0 2px 16px rgba(255,184,77,.35);animation:announcePop .35s ease-out;font-family:'Cinzel',serif}
+  text-shadow:0 2px 16px rgba(255,184,77,.35);animation:announcePop .35s ease-out;font-family:'Unbounded',sans-serif}
 @keyframes announcePop{0%{transform:scale(.65);opacity:0}65%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
-.headline{font-size:16px;font-weight:800;text-align:center;font-family:'Cinzel',serif}
+.headline{font-size:16px;font-weight:800;text-align:center;font-family:'Unbounded',sans-serif}
 .headline.bad{color:var(--red)}
 .headline.good{color:var(--gold)}
 .help-list{display:flex;flex-direction:column;gap:9px;font-size:14px;line-height:1.45;color:var(--ink)}
 .help-list b{color:var(--gold)}
 #toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#23103F;border:1px solid rgba(255,184,77,.32);
-  color:#FDF6E8;padding:11px 20px;border-radius:12px;font-size:13px;font-weight:600;z-index:80;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:'Playfair Display',serif}
+  color:#FDF6E8;padding:11px 20px;border-radius:12px;font-size:13px;font-weight:600;z-index:80;box-shadow:0 10px 30px rgba(0,0,0,.5);font-family:'Unbounded',sans-serif}
 .logbox{font-size:12px;line-height:1.7;color:var(--labelmuted);max-height:50dvh;overflow:auto;display:flex;flex-direction:column-reverse;font-family:'DM Mono',monospace}
 
 /* ---------- chat ---------- */
@@ -472,18 +492,18 @@ body.dealing .card-count{visibility:hidden}
   border-radius:20px 20px 0 0;width:min(470px,100vw);max-height:46dvh;display:flex;flex-direction:column;
   box-shadow:0 -20px 50px rgba(0,0,0,.5)}
 #chat-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid rgba(255,184,77,.18)}
-#chat-header h2{color:var(--gold);font-size:16px;font-family:'Cinzel',serif}
+#chat-header h2{color:var(--gold);font-size:16px;font-family:'Unbounded',sans-serif}
 /* who this message goes to — only shown while a Champions League
    tournament is active (openChat() toggles it); regular online play has
    no second channel, so it stays hidden there. */
 #cl-chat-tabs{display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid rgba(255,184,77,.12)}
 .cl-chat-tab{flex:1;padding:7px 6px;border-radius:9px;border:1px solid var(--line);background:rgba(255,184,77,.04);
-  color:var(--labelmuted);font-family:'Manrope';font-weight:700;font-size:12px;cursor:pointer}
+  color:var(--labelmuted);font-family:'Plus Jakarta Sans';font-weight:700;font-size:12px;cursor:pointer}
 .cl-chat-tab.sel{background:linear-gradient(180deg,var(--goldlt),var(--gold2));color:var(--inkdark);border-color:transparent}
 .cl-chat-tab:disabled{opacity:.4;cursor:not-allowed}
 #chat-log{flex:1;overflow-y:auto;padding:10px 14px;display:flex;flex-direction:column;gap:6px;min-height:80px}
 .chat-empty{color:var(--lavdim);font-size:13px;text-align:center;margin:auto}
-.chat-msg{max-width:78%;padding:8px 12px;border-radius:14px;font-size:14px;line-height:1.35;word-break:break-word;font-family:'Manrope',sans-serif;font-weight:600}
+.chat-msg{max-width:78%;padding:8px 12px;border-radius:14px;font-size:14px;line-height:1.35;word-break:break-word;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600}
 .chat-msg .who{font-size:10px;font-weight:800;color:var(--lavdim);margin-bottom:2px;text-transform:uppercase;letter-spacing:.4px;font-family:'DM Mono',monospace}
 .chat-msg.mine{align-self:flex-end;background:linear-gradient(90deg,var(--magenta),var(--gold));color:var(--inkdark);border-bottom-right-radius:4px}
 .chat-msg.mine .who{color:rgba(23,10,46,.65)}
@@ -510,7 +530,7 @@ body.dealing .card-count{visibility:hidden}
 .chat-bubble.show{opacity:1;transform:translate(-50%,0) scale(1)}
 .chat-bubble.hide{opacity:0;transform:translate(-50%,-6px) scale(.95)}
 .chat-bubble .who{font-size:9px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;font-family:'DM Mono',monospace}
-.chat-bubble .txt{font-size:12.5px;color:#FDF6E8;line-height:1.3;word-break:break-word;font-family:'Manrope',sans-serif;font-weight:600}
+.chat-bubble .txt{font-size:12.5px;color:#FDF6E8;line-height:1.3;word-break:break-word;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600}
 .chat-bubble::after{content:'';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);
   border:7px solid transparent;border-top-color:#1C0D33}
 .chat-bubble.below::after{bottom:auto;top:-7px;border-top-color:transparent;border-bottom-color:#1C0D33}
@@ -552,21 +572,16 @@ body.dealing .card-count{visibility:hidden}
 [data-theme="neon"] .bg-deco span{color:#F0543C;opacity:.028}
 [data-theme="neon"] .bg-deco span:nth-child(2){color:#00D4FF;opacity:.022}
 [data-theme="neon"] .bg-deco span:nth-child(3){color:#00D4FF;opacity:.018}
-[data-theme="neon"] .hero-badge .ring1{border-color:rgba(240,84,60,.22)}
-[data-theme="neon"] .hero-badge .ring2{border-color:rgba(240,84,60,.11)}
-[data-theme="neon"] .hero-badge .suit{color:rgba(240,84,60,.42)}
-[data-theme="neon"] .hero-badge .suit.heart,
-[data-theme="neon"] .hero-badge .suit.diamond{color:rgba(0,212,255,.38)}
-[data-theme="neon"] .hero-badge .five{
-  background:linear-gradient(180deg,#FFB5A0 0%,#F0543C 50%,#7A2018 100%);
+[data-theme="neon"] .hero-wordmark{
+  background:linear-gradient(100deg,#00D4FF,#F0543C,#FFB5A0,#00D4FF);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
   animation:neonShimmer 2.4s ease-in-out infinite!important
 }
-[data-theme="neon"] .hero-wordmark{color:#F0EBF8}
-[data-theme="neon"] .hero-divider{background:linear-gradient(90deg,transparent,rgba(240,84,60,.65),transparent)}
 [data-theme="neon"] .tag{color:var(--gold)}
-[data-theme="neon"] .home-suits span:nth-child(odd){color:rgba(240,84,60,.3)}
-[data-theme="neon"] .home-suits span:nth-child(even){color:rgba(0,212,255,.32)}
+[data-theme="neon"] .home-suits span:nth-child(1){color:#00D4FF}
+[data-theme="neon"] .home-suits span:nth-child(2){color:#F0543C}
+[data-theme="neon"] .home-suits span:nth-child(3){color:var(--gold)}
+[data-theme="neon"] .home-suits span:nth-child(4){color:#00D4FF}
 [data-theme="neon"] .btn.primary{
   background:linear-gradient(180deg,var(--goldlt) 0%,var(--gold2) 55%,var(--golddk) 100%);
   box-shadow:0 6px 22px rgba(240,84,60,.32),inset 0 1px 0 rgba(255,255,255,.14)
@@ -627,7 +642,7 @@ body.dealing .card-count{visibility:hidden}
    ====================================================== */
 @keyframes noirShimmer{0%,100%{filter:drop-shadow(0 0 16px rgba(255,184,77,.4))}50%{filter:drop-shadow(0 0 36px rgba(255,158,207,.8))}}
 @keyframes neonShimmer{0%,100%{filter:drop-shadow(0 0 16px rgba(240,84,60,.4))}50%{filter:drop-shadow(0 0 36px rgba(240,84,60,.9))}}
-.hero-badge .five{animation:noirShimmer 2.8s ease-in-out infinite}
+.hero-wordmark{animation:shimmer 4s linear infinite,noirShimmer 2.8s ease-in-out infinite}
 
 @keyframes scrIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 @keyframes scrOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-10px)}}
@@ -667,7 +682,7 @@ body.dealing .card-count{visibility:hidden}
 [data-theme="neon"] #theme-btn-home{background:rgba(240,84,60,.07);border-color:rgba(240,84,60,.22);color:rgba(240,84,60,.55)}
 #btn-profile{position:fixed;top:14px;left:14px;z-index:10;background:rgba(255,184,77,.08);
   border:1px solid rgba(255,184,77,.25);border-radius:20px;padding:7px 14px;color:var(--labelmuted);
-  font-size:11px;letter-spacing:.5px;cursor:pointer;font-family:'Manrope',sans-serif;font-weight:700;backdrop-filter:blur(6px);max-width:150px;
+  font-size:11px;letter-spacing:.5px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;backdrop-filter:blur(6px);max-width:150px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 [data-theme="neon"] #btn-profile{background:rgba(240,84,60,.07);border-color:rgba(240,84,60,.22);color:rgba(240,84,60,.75)}
 
@@ -743,13 +758,13 @@ body.dealing .card-count{visibility:hidden}
 }
 /* ================= CHAMPIONS LEAGUE ================= */
 .btn.cl-tile{background:linear-gradient(120deg,var(--magenta2),var(--gold2));color:var(--ink);
-  border:1px solid var(--gold);box-shadow:0 6px 22px rgba(255,158,207,.24);font-family:'Cinzel',serif;font-weight:700;letter-spacing:.5px}
+  border:1px solid var(--gold);box-shadow:0 6px 22px rgba(255,158,207,.24);font-family:'Unbounded',sans-serif;font-weight:700;letter-spacing:.5px}
 .btn.cl-tile:hover{filter:brightness(1.08)}
 .cl-crest{font-size:56px;filter:drop-shadow(0 4px 14px rgba(255,184,77,.5));animation:clCrest 3.2s ease-in-out infinite}
 @keyframes clCrest{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-6px) rotate(3deg)}}
 .cl-lobby-list{display:flex;flex-direction:column;gap:6px;width:100%;margin:10px 0}
 .cl-lp{display:flex;align-items:center;gap:8px;justify-content:space-between;background:rgba(255,255,255,.05);
-  border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-family:'Manrope';font-weight:600}
+  border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-family:'Plus Jakarta Sans';font-weight:600}
 .cl-lp .cl-lp-host{font-size:11px;color:var(--gold);font-family:'DM Mono',monospace}
 .cl-lp .cl-lp-kick{background:none;border:0;color:var(--red);font-size:15px;cursor:pointer;padding:2px 6px}
 
@@ -758,7 +773,7 @@ body.dealing .card-count{visibility:hidden}
 #scr-cl-hub.on{display:flex}
 #cl-hub-top{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;
   border-bottom:1px solid var(--line);background:rgba(10,5,24,.6);flex:0 0 auto}
-#cl-hub-title{font-family:'Cinzel',serif;font-weight:700;font-size:16px;color:var(--goldlt);letter-spacing:.5px}
+#cl-hub-title{font-family:'Unbounded',sans-serif;font-weight:700;font-size:16px;color:var(--goldlt);letter-spacing:.5px}
 /* .screen (the shared base class every screen section uses) sets
    align-items:center, not stretch — so without an explicit width, this
    flex item centers at its own content's intrinsic width instead of
@@ -772,7 +787,7 @@ table.lb-rank td.rk{color:var(--gold);font-weight:700}
 table.lb-rank td.wr{color:var(--teal)}
 #cl-hub-foot{flex:0 0 auto;padding:12px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);background:rgba(10,5,24,.6)}
 #cl-hub-foot .btn{width:100%}
-#cl-hub-phasebar{text-align:center;font-family:'Cinzel',serif;color:var(--goldlt);font-size:14px;letter-spacing:.5px}
+#cl-hub-phasebar{text-align:center;font-family:'Unbounded',sans-serif;color:var(--goldlt);font-size:14px;letter-spacing:.5px}
 #cl-hub-phasebar .cl-sub{display:block;font-family:'DM Mono',monospace;font-size:11px;color:var(--lavdim);margin-top:3px;letter-spacing:0}
 /* every direct child of #cl-hub-body is a flex item in a column flex —
    flex items default to min-width:auto (can't shrink below their content's
@@ -782,7 +797,7 @@ table.lb-rank td.wr{color:var(--teal)}
    is the standard fix. */
 #cl-hub-fixtures,#cl-hub-standings{min-width:0}
 
-.cl-sec-h{font-family:'Cinzel',serif;font-size:13px;color:var(--gold);letter-spacing:.5px;margin:2px 0 6px;text-transform:uppercase}
+.cl-sec-h{font-family:'Unbounded',sans-serif;font-size:13px;color:var(--gold);letter-spacing:.5px;margin:2px 0 6px;text-transform:uppercase}
 /* Fixtures list */
 .cl-fixture{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
   border-radius:12px;padding:10px 12px;margin-bottom:8px}
@@ -790,11 +805,11 @@ table.lb-rank td.wr{color:var(--teal)}
 .cl-fixture.done{opacity:.72}
 .cl-fx-side{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:1px}
 .cl-fx-side.right{text-align:right;align-items:flex-end}
-.cl-fx-name{font-family:'Manrope';font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.cl-fx-name{font-family:'Plus Jakarta Sans';font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .cl-fx-name.win{color:var(--gold)}
 .cl-fx-score{font-family:'DM Mono',monospace;font-size:13px;color:var(--lav)}
 .cl-fx-mid{flex:0 0 auto;text-align:center;min-width:52px}
-.cl-fx-vs{font-family:'Cinzel',serif;font-size:11px;color:var(--lavdim)}
+.cl-fx-vs{font-family:'Unbounded',sans-serif;font-size:11px;color:var(--lavdim)}
 .cl-fx-status{font-family:'DM Mono',monospace;font-size:10px;margin-top:2px;padding:2px 6px;border-radius:8px;display:inline-block}
 .cl-fx-status.live{background:rgba(214,69,107,.2);color:#FF8FB0}
 .cl-fx-status.live::before{content:'● ';animation:clBlink 1s steps(1) infinite}
@@ -808,10 +823,10 @@ table.lb-rank td.wr{color:var(--teal)}
 /* Standings table */
 .cl-table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
 table.cl-table{border-collapse:collapse;width:100%;font-family:'DM Mono',monospace;font-size:12px;min-width:330px}
-table.cl-table th{font-family:'Cinzel',serif;font-size:10.5px;color:var(--gold);text-transform:uppercase;
+table.cl-table th{font-family:'Unbounded',sans-serif;font-size:10.5px;color:var(--gold);text-transform:uppercase;
   letter-spacing:.4px;padding:7px 6px;text-align:center;background:rgba(255,184,77,.07);border-bottom:1px solid var(--line);white-space:nowrap}
 table.cl-table td{padding:7px 6px;text-align:center;border-bottom:1px solid rgba(255,255,255,.05);color:var(--lav);white-space:nowrap}
-table.cl-table td.name{text-align:left;font-family:'Manrope';font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
+table.cl-table td.name{text-align:left;font-family:'Plus Jakarta Sans';font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
 table.cl-table td.pts{color:var(--goldlt);font-weight:700}
 table.cl-table tr.you td{background:rgba(255,184,77,.09)}
 table.cl-table tr.q4 td{border-bottom:2px dashed var(--teal)}
@@ -837,24 +852,24 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
 [id^="cl-bracket-svg"]{position:absolute;inset:0;pointer-events:none;overflow:visible}
 .cl-br-col{flex:0 0 auto;width:180px;display:flex;flex-direction:column;gap:10px;position:relative;z-index:1}
 .cl-br-col.champ-col{width:230px}
-.cl-br-col-h{font-family:'Cinzel',serif;font-size:12px;color:var(--gold);letter-spacing:.5px;text-transform:uppercase}
+.cl-br-col-h{font-family:'Unbounded',sans-serif;font-size:12px;color:var(--gold);letter-spacing:.5px;text-transform:uppercase}
 .cl-br-match{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;position:relative}
 .cl-br-match.mine{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
 .cl-br-match.final{border-color:var(--goldlt);background:linear-gradient(120deg,rgba(255,184,77,.1),rgba(255,158,207,.08))}
 .cl-br-tag{font-family:'DM Mono',monospace;font-size:10px;color:var(--lavdim);letter-spacing:.5px;margin-bottom:5px}
-.cl-br-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-family:'Manrope';font-weight:600;font-size:14px}
+.cl-br-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-family:'Plus Jakarta Sans';font-weight:600;font-size:14px}
 .cl-br-row.win{color:var(--gold)}
 .cl-br-row.cl-br-tbd{color:var(--lavdim);font-style:italic;font-weight:500;font-size:12px}
 .cl-br-row .cl-br-sc{font-family:'DM Mono',monospace;font-size:12px;color:var(--lav)}
 .cl-br-outcome{font-family:'DM Mono',monospace;font-size:10px;color:var(--lavdim);margin-top:5px}
 .cl-out-chip{display:flex;align-items:center;gap:7px;background:rgba(214,69,107,.08);
-  border:1px dashed rgba(214,69,107,.4);border-radius:10px;padding:7px 10px;font-family:'Manrope';font-weight:600;font-size:12px;color:var(--lav)}
+  border:1px dashed rgba(214,69,107,.4);border-radius:10px;padding:7px 10px;font-family:'Plus Jakarta Sans';font-weight:600;font-size:12px;color:var(--lav)}
 .cl-out-place{font-family:'DM Mono',monospace;font-size:9px;color:var(--red);letter-spacing:.5px}
 #cl-hub-bracket .cl-champ{width:100%}
 .cl-champ{text-align:center;padding:16px;border:1px solid var(--gold);border-radius:16px;
   background:linear-gradient(120deg,rgba(255,184,77,.16),rgba(255,158,207,.12));margin-top:4px}
 .cl-champ .cl-champ-crown{font-size:40px}
-.cl-champ .cl-champ-name{font-family:'Cinzel',serif;font-weight:900;font-size:24px;color:var(--goldlt);margin-top:4px}
+.cl-champ .cl-champ-name{font-family:'Unbounded',sans-serif;font-weight:900;font-size:24px;color:var(--goldlt);margin-top:4px}
 .cl-champ .cl-champ-sub{font-family:'DM Mono',monospace;font-size:11px;color:var(--lavdim);margin-top:3px}
 
 /* Live score strip inside a match */
@@ -874,7 +889,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
 .cl-watch-scoreboard{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 14px}
 .cl-watch-side{flex:1 1 0;min-width:0;text-align:center}
 .cl-watch-side.lead .cl-watch-sc{color:var(--gold)}
-.cl-watch-name{font-family:'Manrope';font-weight:700;font-size:16px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-watch-name{font-family:'Plus Jakarta Sans';font-weight:700;font-size:16px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cl-watch-sc{font-family:'DM Mono',monospace;font-size:34px;font-weight:700;color:var(--lav);margin-top:6px}
 .cl-watch-vs{flex:0 0 auto;font-family:'DM Mono',monospace;font-size:11px;color:var(--lavdim);text-align:center;line-height:1.5}
 .cl-watch-log{font-family:'DM Mono',monospace;font-size:12px;color:var(--lav);line-height:1.9;background:rgba(0,0,0,.2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
@@ -914,22 +929,10 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
   <button id="theme-btn-home">🌃 Tokyo Neon</button>
   <button id="btn-profile">👤 Sign in</button>
   <div class="home-box">
-    <div class="hero-badge">
-      <div class="ring1"></div>
-      <div class="ring2"></div>
-      <div class="suit tl">♠</div>
-      <div class="suit heart tr">♥</div>
-      <div class="suit bl">♣</div>
-      <div class="suit diamond br">♦</div>
-      <div class="five">5</div>
-    </div>
-    <div>
-      <div class="hero-wordmark">CARDS</div>
-      <div class="hero-divider"></div>
-      <p class="tag" style="margin:0">Lowest Hand Wins</p>
-    </div>
-    <div class="home-suits"><span>♠</span><span>♥</span><span>♣</span><span>♦</span></div>
-    <div style="display:flex;flex-direction:column;gap:12px;width:min(320px,82vw);margin-top:4px">
+    <div class="home-suits"><span>♠</span><span>♥</span><span>♦</span><span>♣</span></div>
+    <div class="hero-wordmark">5 CARDS</div>
+    <p class="tag caption" style="margin:0">Lowest Hand Wins</p>
+    <div style="display:flex;flex-direction:column;gap:12px;width:min(320px,82vw);margin-top:20px">
       <button class="btn primary big" id="btn-gobot">♟&ensp;Single Player</button>
       <button class="btn ghost big" id="btn-gomp">⬡&ensp;Online Multiplayer</button>
       <button class="btn cl-tile big" id="btn-gocl">🏆&ensp;Champions League</button>
@@ -2855,9 +2858,9 @@ function showMatchModal(){
 }
 function showScoreModal(){
   if(!G)return;
-  openModal('score',`<h2>Leaderboard</h2><p class="tag">Round ${G.round} · Eliminated at ${G.limit} pts</p>
+  openModal('score',`<h2>Match Standings</h2><p class="tag">Round ${G.round} · Eliminated at ${G.limit} pts</p>
     ${leaderboardMatrix()}
-    <div class="mbtns"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+    <div class="mbtns"><button class="btn ghost" onclick="closeModal()">Close</button><button class="btn ghost" onclick="openLeaderboard()">🏅 Lifetime Leaderboard</button></div>`);
 }
 function showLogModal(){
   if(!G)return;
@@ -5195,7 +5198,7 @@ function clFixturesHtml(){
     if(m.multi)return `<div class="cl-fixture mine">
       <div style="width:100%;text-align:center">
         <div class="cl-fx-you">YOUR MATCH</div>
-        <div style="font-family:'Manrope';font-weight:700;margin:4px 0">${m.opponents.length} opponents free right now</div>
+        <div style="font-family:'Plus Jakarta Sans';font-weight:700;margin:4px 0">${m.opponents.length} opponents free right now</div>
         <div class="cl-fx-score" style="margin-bottom:8px">${m.opponents.map(id=>esc(clName(id))).join(' · ')}</div>
         <button class="btn primary small" onclick="clPlayMyMatch()">Choose opponent ▸</button>
       </div>
