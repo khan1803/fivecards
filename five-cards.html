@@ -1010,9 +1010,9 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
   <div class="panel">
     <h2>🏆 Champions League · Solo</h2>
     <p class="tag" id="playing-as-cl-solo">Playing as <b style="color:var(--gold)"></b></p>
-    <span class="lbl">Total players (even)</span>
+    <span class="lbl">Total players</span>
     <div class="seg" id="seg-cl-players">
-      <button data-v="4" class="sel">4</button><button data-v="6">6</button><button data-v="8">8</button><button data-v="10">10</button>
+      <button data-v="4" class="sel">4</button><button data-v="5">5</button><button data-v="6">6</button><button data-v="7">7</button><button data-v="8">8</button><button data-v="9">9</button><button data-v="10">10</button>
     </div>
     <span class="lbl">Bot difficulty</span>
     <div class="seg" id="seg-cl-diff">
@@ -1039,7 +1039,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
     <div class="mp-split">
       <div class="mp-box">
         <h3>Create room</h3>
-        <p class="tag">Difficulty of play, decks and the losing limit are set in the room. Needs an even number of players (4+).</p>
+        <p class="tag">Difficulty of play, decks and the losing limit are set in the room. Needs at least 4 players — odd counts are fine, whoever's unpaired that round just sits out.</p>
         <button class="btn primary" id="btn-cl-create">Create</button>
       </div>
       <div class="mp-box">
@@ -1049,7 +1049,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
         <button class="btn primary" id="btn-cl-join">Join</button>
       </div>
     </div>
-    <p class="tag">4–10 players (even) · share the room code with friends</p>
+    <p class="tag">4–10 players · share the room code with friends</p>
     <button class="btn ghost" data-back>← Back</button>
   </div>
 </section>
@@ -4603,12 +4603,25 @@ const clSetup={players:4,diff:'medium',numDecks:1,limit:240};
 const clMpSetup={diff:'medium',numDecks:1,limit:240};
 const CL_BOTNAMES=['Ace','Ruby','Jax','Queenie','Kingsley','Maverick','Diesel','Scout','Nash','Piper'];
 
-/* round-robin (circle method): player 0 stays fixed, the rest rotate. */
+/* round-robin (circle method): player 0 stays fixed, the rest rotate.
+   Odd player counts pad with a null BYE seat — the standard circle-method
+   fix: at odd n, n-1 rounds only produces n-1 pairs/round-worth of
+   matches (a truncation bug that silently drops fixtures — verified for
+   real via clMakeScheduleSelfTest below), whereas padding to an even
+   n+1 and running the *full* n rounds guarantees every real pair meets
+   exactly once, with whichever player draws the BYE seat that round
+   simply sitting idle. Filtering out the BYE pair per round is exactly
+   the "one player sits idle, which is okay" behavior. */
 function clMakeSchedule(ids){
-  const arr=ids.slice(),n=arr.length,rounds=[];
+  const arr=ids.slice();
+  if(arr.length%2!==0)arr.push(null);   // BYE seat
+  const n=arr.length,rounds=[];
   for(let r=0;r<n-1;r++){
     const pairs=[];
-    for(let i=0;i<n/2;i++)pairs.push({a:arr[i],b:arr[n-1-i]});
+    for(let i=0;i<n/2;i++){
+      const a=arr[i],b=arr[n-1-i];
+      if(a!=null&&b!=null)pairs.push({a,b});
+    }
     rounds.push(pairs);
     arr.splice(1,0,arr.pop());
   }
@@ -5618,12 +5631,13 @@ function clRenderMpLobby(){
     return `<div class="cl-lp"><span>${esc(p.name)}${me?' <span style="color:var(--teal);font-size:11px">(you)</span>':''}${inVoice?' <span class="lp-mic">🎙️</span>':''}</span>
       <span>${isHost?'<span class="cl-lp-host">HOST</span> ':''}${kick}</span></div>`;
   }).join('');
-  const n=ps.length,even=n%2===0;
+  const n=ps.length;
   const hint=$('#cl-lobby-hint');
-  if(n<4)hint.textContent=`Need at least 4 players (even number) · ${n} joined`;
-  else if(!even)hint.textContent=`Need an even number of players · ${n} joined — one more to go`;
-  else hint.textContent=`${n} players · ${n-1} rounds · everyone plays everyone once`;
-  const canStart=clmp.isHost&&n>=4&&even;
+  if(n<4)hint.textContent=`Need at least 4 players · ${n} joined`;
+  else hint.textContent=n%2===0
+    ?`${n} players · ${n-1} rounds · everyone plays everyone once`
+    :`${n} players · ${n} rounds · everyone plays everyone once (one player sits out each round)`;
+  const canStart=clmp.isHost&&n>=4;
   $('#btn-cl-lobby-start').classList.toggle('hidden',!canStart);
   $('#btn-cl-takeover').classList.toggle('hidden',clmp.isHost);
 }
@@ -5631,7 +5645,6 @@ function clMpStart(){
   const r=clmp.room;if(!r||!clmp.isHost)return;
   const ps=Object.keys(r.players||{});
   if(ps.length<4)return toast('Need at least 4 players');
-  if(ps.length%2!==0)return toast('Need an even number of players');
   const ordered=Object.entries(r.players).sort((a,b)=>(a[1].order||0)-(b[1].order||0)).map(([uid])=>uid);
   const schedule=clMakeSchedule(ordered);
   clmp.ref.update({status:'league',phase:'league',round:0,
