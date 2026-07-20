@@ -2317,9 +2317,9 @@ function render(){
      someone's actually signed in (profileRecordMatch/profileRecordWrongShow
      both no-op otherwise). Wrong-show applies to both regular online play
      and Champions League matches alike — G.round monotonically increases
-     within one match, so comparing it against a one-shot G.wrongShowRound
-     marker is the same "exactly once" guard pattern announcedRound already
-     uses elsewhere, just scoped to this specific stat. Match win/loss/
+     within one match, so comparing it against a one-shot marker is the
+     same "exactly once" guard pattern announcedRound already uses
+     elsewhere, just scoped to this specific stat. Match win/loss/
      forfeit is regular-MP-only here (!G.clKey) — Champions League records
      its own outcomes separately, per-fixture, from clRenderHub() instead,
      since a CL "match" concludes into CL.results, not G.phase==='matchEnd'
@@ -2327,14 +2327,31 @@ function render(){
      losing player is recorded the instant they're eliminated, not only
      once the whole match ends — in a 3+ player game that can be many
      rounds before the last two players finish it out, and by the time
-     you're eliminated your own outcome is already fixed. */
-  if(G.mode==='mp'&&G.result&&G.result.shower===myIdx&&!G.result.ok&&G.wrongShowRound!==G.round){
-    G.wrongShowRound=G.round;
+     you're eliminated your own outcome is already fixed.
+
+     These guards live on `mp` (mp.wrongShowRound/mp.statsRecorded), not
+     on `G` — a real, serious bug found 2026-07-19: both stateRef sync
+     handlers do a flat `G=JSON.parse(raw)` on *every* remote move, which
+     silently wipes any guard stored directly on G (it was never part of
+     the synced state to begin with, just a local annotation). With the
+     guard on G, an eliminated/wrong-shown player's client would re-fire
+     profileRecordMatch/profileRecordWrongShow on every single subsequent
+     turn anyone else in the match took, for the rest of that match —
+     this is exactly why the leaderboard showed players with hundreds of
+     "games played" (all really one match) and one player with 41 wrong
+     shows (really one). `mp` itself is a stable, module-level object —
+     never replaced wholesale, only mutated — so a flag stored on it
+     survives every state resync within the same match untouched, and is
+     explicitly reset only at the one place a genuinely *new* match
+     begins (the `G===null` branch both stateRef listeners already use
+     for the identical reset of `announcedRound`). */
+  if(G.mode==='mp'&&G.result&&G.result.shower===myIdx&&!G.result.ok&&mp.wrongShowRound!==G.round){
+    mp.wrongShowRound=G.round;
     profileRecordWrongShow();
   }
-  if(G.mode==='mp'&&!G.clKey&&!G.statsRecorded){
-    if(me&&me.elim){profileRecordMatch(me.forfeited?'forfeited':'lost');G.statsRecorded=true;}
-    else if(G.phase==='matchEnd'&&me&&!me.elim){profileRecordMatch('won');G.statsRecorded=true;}
+  if(G.mode==='mp'&&!G.clKey&&!mp.statsRecorded){
+    if(me&&me.elim){profileRecordMatch(me.forfeited?'forfeited':'lost');mp.statsRecorded=true;}
+    else if(G.phase==='matchEnd'&&me&&!me.elim){profileRecordMatch('won');mp.statsRecorded=true;}
   }
   $('#round-info').textContent=`ROUND ${G.round} · LIMIT ${G.limit}`;
   /* Spectators are a regular-online-room-only concept (Champions League
@@ -2484,7 +2501,7 @@ function render(){
   /* center piles */
   $('#deck-count').textContent=G.deck.length;
   const canDraw=myTurn&&G.phase==='draw';
-  const canTapReveal=openShowRevealing&&(G.mode!=='mp'||mp.isHost);
+  const canTapReveal=!clSpectating&&openShowRevealing&&(G.mode!=='mp'||mp.isHost);
   $('#deck-top').classList.toggle('pickable',canDraw||canTapReveal);
   const oc=$('#open-cards');oc.innerHTML='';
   for(const c of G.open){
@@ -2567,7 +2584,7 @@ function render(){
     const mx=ordr.length*5;
     st=canTapReveal?`🎴 Tap the deck to reveal the next card (${tot}/${mx})`:`🎴 Host is revealing cards… (${tot}/${mx})`;
   }
-  else if(mp.isSpectator)st=isEnd()?'Round over':`👁 Spectating — ${G.players[G.turn].name} is playing…`;
+  else if(mp.isSpectator||clSpectating)st=isEnd()?'Round over':`👁 Spectating — ${G.players[G.turn].name} is playing…`;
   else if(isEnd())st='Round over';
   else if(iCanSnapShow)st=`⚡ Fresh deal — you may Show now, before ${G.players[G.turn].name} plays`;
   else if(!me||me.elim)st=`${G.players[G.turn].name} is playing…`;
@@ -2589,7 +2606,7 @@ function render(){
     const myShownSum=myRevealCnt!=null?handSum(sortHand(me.hand).slice(0,myRevealCnt)):handSum(me.hand);
     $('#my-meta').textContent=dispElimMe2?`${me.name} · OUT · score ${dispScore(me,myIdx)}`
       :`${me.name} · hand ${myShownSum} pts · score ${dispScore(me,myIdx)}`;
-  }else if(mp.isSpectator){
+  }else if(mp.isSpectator||clSpectating){
     $('#my-rank-badge').textContent='';
     $('#my-meta').textContent='👁 Spectating';
   }
@@ -2789,7 +2806,15 @@ function showRoundModal(){
      race the plain Next Round path — there's only ever one write, the
      host's, and it decides which kind of round to deal by looking at
      G.openShowCalledBy at the moment it fires. */
-  const iCanAdvance=G.mode!=='mp'||mp.isHost;
+  /* A CL spectator must never see (let alone be able to trigger) round
+     advancement — G.mode is set to 'mp' purely to reuse the CL-aware
+     chat/voice/render machinery for spectating (see clRenderSpectate),
+     but mp.isHost here is whatever leftover value the *regular* online-
+     multiplayer room host flag happens to hold, completely unrelated to
+     this spectated match — could easily be stale-true from an earlier
+     real session in the same tab, which would hand a bystander a live
+     "Next Round"/"Deal Open Show" button for someone else's match. */
+  const iCanAdvance=!clSpectating&&(G.mode!=='mp'||mp.isHost);
   const calledBy=G.openShowCalledBy;
   /* Escape hatch for exactly the situation that first prompted the
      host-only-deals rule: the actual host's device (a different browser/
@@ -3036,6 +3061,7 @@ function startBotGame(){
 }
 function uiNextRound(){
   if(!G||G.phase!=='roundEnd')return;
+  if(clSpectating)return;   // read-only — see showRoundModal()'s iCanAdvance comment
   if(G.mode==='mp'&&!mp.isHost)return;   // only the host may deal — see showRoundModal()
   closeModal();
   /* Deals an Open Show if (and only if) someone already called one via
@@ -3073,6 +3099,7 @@ function uiCallOpenShow(){
    or a synced update from the host's tap arriving over Firebase. */
 function uiRevealNextCard(){
   if(!G||G.openShow==null||G.openShowRevealDone)return;
+  if(clSpectating)return;   // read-only — see canTapReveal's comment
   if(G.mode==='mp'&&!mp.isHost)return;
   const order=G.openShowParticipants||[];
   if(!order.length)return;
@@ -3097,6 +3124,7 @@ function uiHome(){
   clearTimeout(botTimer);G=null;sel.clear();closeModal();goScr('scr-home');
 }
 function uiLeave(){
+  if(clSpectating){clSpectating=false;clSpectateKey=null;G=null;myIdx=-1;sel.clear();goScr('scr-cl-hub');clRenderHub();return;}
   if(G&&G.mode==='mp')leaveRoom(false);
   else uiHome();
 }
@@ -3590,7 +3618,7 @@ function attachRoom(code){
     if(typeof g.v==='number'&&g.v<mp.lastV)return;   // stale echo
     mp.lastV=g.v||0;
     if(!mp.isSpectator&&mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().cancel();mp.odArmed=false;}
-    if(G===null)announcedRound=-1;   // fresh entry from the lobby — this match's round 1 hasn't been announced yet
+    if(G===null){announcedRound=-1;mp.statsRecorded=false;mp.wrongShowRound=null;}   // fresh entry from the lobby — this match's round 1 hasn't been announced yet, nothing recorded yet either
     G=g;G.mode='mp';
     myIdx=mp.isSpectator?-1:G.players.findIndex(p=>p.id===myUid);
     const me=G.players[myIdx];
@@ -4307,7 +4335,7 @@ function leaveRoom(remote){
            eliminated" the way the normal in-game path does (see render()'s
            own stats hook), so record this one explicitly, right here,
            before that happens. */
-        if(G.mode==='mp'){profileRecordMatch('forfeited');G.statsRecorded=true;}
+        if(G.mode==='mp'){profileRecordMatch('forfeited');mp.statsRecorded=true;}
       }
     }
   }
@@ -4368,7 +4396,7 @@ $('#btn-cl-play').onclick=clPlayMyMatch;
 $('#btn-cl-advance').onclick=()=>(CL&&CL.mode==='mp')?clMpAdvance():clAdvance();
 $('#btn-cl-hub-exit').onclick=clHubExit;
 $('#btn-cl-hub-help').onclick=showHelpModal;
-$('#btn-cl-watch-back').onclick=()=>{clSpectateKey=null;goScr('scr-cl-hub');clRenderHub();};
+$('#btn-cl-watch-back').onclick=()=>{clSpectateKey=null;clSpectating=false;goScr('scr-cl-hub');clRenderHub();};
 $('#btn-lb-back').onclick=()=>goScr('scr-home');
 /* MP entry points (defined in the CL-multiplayer block) */
 $('#btn-cl-create').onclick=()=>clMpCreate();
@@ -4466,8 +4494,8 @@ $('#deck-pile').onclick=()=>{
   if(me&&!me.elim&&G.turn===myIdx&&G.phase==='draw')applyMove({t:'draw',src:'deck'});
 };
 $('#btn-exit').onclick=()=>{
-  const title=mp.isSpectator?'Stop watching?':'Leave game?';
-  const msg=mp.isSpectator?'You’ll stop watching this match.':'Your current game will be abandoned.';
+  const title=(mp.isSpectator||clSpectating)?'Stop watching?':'Leave game?';
+  const msg=(mp.isSpectator||clSpectating)?'You’ll stop watching this match.':'Your current game will be abandoned.';
   openModal('confirm',`<h2>${title}</h2><p>${msg}</p>
     <div class="mbtns"><button class="btn danger" onclick="closeModal();uiLeave()">Leave</button>
     <button class="btn ghost" onclick="closeModal()">Stay</button></div>`);
@@ -5002,7 +5030,11 @@ function clSimTick(){
   if(CL.phase==='league')clSetupActiveSims();
   clUpdateLiveStrip();
   if($('#scr-cl-hub').classList.contains('on'))clRenderHub();
-  if($('#scr-cl-watch').classList.contains('on'))clRenderSpectate();
+  /* gated on clSpectating, not "is #scr-cl-watch the on-screen section" —
+     a live spectated match now renders into the real #scr-game (see
+     clRenderSpectate), so that screen check would stop being true after
+     the very first frame and the table would silently freeze. */
+  if(clSpectating)clRenderSpectate();
   const nothingRunning=!Object.keys(CL.sims).length;
   /* league only fully stops once every fixture has a result — a
      momentary lull (nothing running right now, but the league isn't
@@ -5016,7 +5048,7 @@ function clSimTick(){
 }
 function clAfterSimSettle(){
   if($('#scr-cl-hub').classList.contains('on'))clRenderHub();
-  if($('#scr-cl-watch').classList.contains('on'))clRenderSpectate();
+  if(clSpectating)clRenderSpectate();
 }
 
 /* ---- playing your own match ---- */
@@ -5068,6 +5100,20 @@ function clEnterFixture(m){
    the hub instead of the normal Play-Again / Back-to-Lobby modal. */
 const _clShowMatch=showMatchModal;
 showMatchModal=function(){
+  /* Spectating must stay purely read-only: clOnMyMatchEnd() writes this
+     fixture's result using CL.myId as one of the two sides, which is
+     only correct for an actual participant. The real result is already
+     recorded independently of any spectator watching — by clSimTick for
+     a solo bot-vs-bot sim, or by each real participant's own client for
+     an MP 1v1 — so a spectator triggering this too is at best redundant
+     and at worst shows the wrong "You win/lose" framing for a match that
+     isn't theirs (found live: watching a bot-vs-bot fixture showed the
+     spectator their own "You lose" modal off someone else's result). No
+     modal at all for a spectator — the table itself already shows the
+     final score once the match ends, and clRenderSpectate() falls back
+     to the plain "Match finished" message the moment the fixture's real
+     result lands. */
+  if(clSpectating)return;
   if(G&&G.clKey){
     if(!G.clRecorded){G.clRecorded=true;clOnMyMatchEnd();}
     return;
@@ -5135,6 +5181,17 @@ function clGoHub(){
     if(voice.joined&&voiceChannelMode==='match')clSwitchVoiceChannel('all');
     clmpDetachMyMatch();   // stop syncing my match; re-enterable later
   }
+  /* This is also the actual function the global uiLeave() override runs
+     for *any* G with a clKey set — including a spectator's synthetic G
+     (see clRenderSpectate) — since spectating never touches mp.ref/
+     clMyMatchKey in the first place, clearing them above is a harmless
+     no-op for a spectator; the two lines that actually matter for them
+     are these. Without this reset, exiting a spectated match left
+     clSpectating stuck true, which the sim-tick/room-sync loops read
+     every tick to decide whether to keep calling clRenderSpectate() —
+     found live: it kept silently re-entering the just-left match's
+     table on the very next tick after "leaving" it. */
+  clSpectateKey=null;clSpectating=false;
   G=null;myIdx=-1;sel.clear();closeModal();
   const strip=$('#cl-live-strip');if(strip)strip.classList.add('hidden');
   goScr('scr-cl-hub');clRenderHub();
@@ -5185,10 +5242,27 @@ function clAdvance(){   // SOLO
 
 /* ---- spectating another table (solo sim or MP synced state) ---- */
 let clSpectateKey=null;
+/* Spectating (2026-07-19, redone): used to render a bespoke scoreboard+log
+   strip (#scr-cl-watch, clRenderSpectate's old markup below) instead of
+   the real table. Saif asked for the actual felt/seats/cards view instead
+   — reusing the real game screen (#scr-game) and its existing render()
+   is both far richer (turn glow, deck/discard piles, per-seat score,
+   Open Show reveals, all of it) and free: regular online multiplayer's
+   spectator mode (mp.isSpectator, myIdx=-1) already made render() fully
+   spectator-aware back on 2026-07-06 — nobody's actual hand is ever shown
+   face-up to anyone but themselves regardless of spectator status, so
+   "cards hidden to the spectator" falls out automatically, no new logic
+   needed for that part. clSpectating mirrors mp.isSpectator for exactly
+   the cases render()/the exit button need to tell "watching" apart from
+   "playing" — a real participant's own G.clKey path already covers
+   everything else. #scr-cl-watch and its old bespoke markup are kept
+   only for the two states render() can't handle: no live game yet
+   (waiting to start) or already finished (no G object exists to render). */
+let clSpectating=false;
 function clWatch(key){
   if(!clIsLive(key)){toast('That match has finished');clRenderHub();return;}
-  clSpectateKey=key;clSpectateMp=(CL.mode==='mp');
-  goScr('scr-cl-watch');clRenderSpectate();
+  clSpectateKey=key;clSpectateMp=(CL.mode==='mp');clSpectating=true;
+  clRenderSpectate();
 }
 /* returns the live game object for the spectated key, or null */
 function clSpectateGame(){
@@ -5202,22 +5276,29 @@ function clSpectateGame(){
   const s=CL.sims&&CL.sims[clSpectateKey];return s?s.g:null;
 }
 function clRenderSpectate(){
-  const wrap=$('#cl-watch-body');if(!wrap)return;
   const g=clSpectateGame();
-  const res=clSpectateKey&&clRes(clSpectateKey);
   if(!g){
-    wrap.innerHTML=res
+    const res=clSpectateKey&&clRes(clSpectateKey);
+    const wrap=$('#cl-watch-body');
+    if(wrap)wrap.innerHTML=res
       ?`<p class="tag" style="text-align:center;padding-top:30px">Match finished — ${esc(clName(res.winner))} won by ${res.margin}.</p>`
       :`<p class="tag" style="text-align:center;padding-top:30px">Waiting for this match to start…</p>`;
+    goScr('scr-cl-watch');
     return;
   }
-  const a=g.players[0],b=g.players[1];
-  const log=(g.log||[]).slice(-7).reverse().map(esc).join('<br>');
-  wrap.innerHTML=`<div class="cl-watch-scoreboard">
-    <div class="cl-watch-side ${a.score<=b.score?'lead':''}"><div class="cl-watch-name">${esc(a.name)}</div><div class="cl-watch-sc">${a.score}</div></div>
-    <div class="cl-watch-vs">Round ${g.round}<br>lost at ${g.limit}</div>
-    <div class="cl-watch-side ${b.score<=a.score?'lead':''}"><div class="cl-watch-name">${esc(b.name)}</div><div class="cl-watch-sc">${b.score}</div></div>
-  </div><div class="cl-watch-log">${log||'—'}</div>`;
+  /* Same convention regular MP spectating already uses: myIdx=-1 (no
+     seat of my own — every player, including both real participants,
+     renders as an "opponent" seat around the table), G.mode='mp' so the
+     CL-aware chat/voice channel logic and every other G.mode==='mp'
+     branch already proven correct for real CL-MP matches treats this
+     identically. Reassigned fresh from clSpectateGame() on every call
+     (this function is already invoked from the same sim-tick/room-sync
+     ticks that used to drive the old scoreboard) so the table stays live
+     without any new polling of its own. */
+  G=g;G.mode='mp';G.clKey=clSpectateKey;myIdx=-1;
+  sel.clear();
+  if(!onScreen('scr-game')){announcedRound=-1;goScr('scr-game');}
+  render();
 }
 
 /* ================= CL — HTML BUILDERS ================= */
@@ -5540,7 +5621,7 @@ function clStartSolo(){
 }
 function clQuit(){
   if(!confirm('Leave the tournament? Progress will be lost.'))return;
-  clStopSimTimer();CL=null;clSpectateKey=null;G=null;myIdx=-1;
+  clStopSimTimer();CL=null;clSpectateKey=null;clSpectating=false;G=null;myIdx=-1;
   const strip=$('#cl-live-strip');if(strip)strip.classList.add('hidden');
   goScr('scr-home');
 }
@@ -5657,6 +5738,7 @@ function clmpSync(){
     return;
   }
   // league / playoffs / done
+  if(clSpectating){clRenderSpectate();return;}
   if(G&&G.clKey){clUpdateLiveStrip();return;}   // I'm inside my match — don't yank me out
   if(onScreen('scr-cl-watch')){clRenderSpectate();return;}
   if(!onScreen('scr-cl-hub'))goScr('scr-cl-hub');
@@ -5717,7 +5799,7 @@ function clMpLeave(silent){
   if(clChat.ref)clChat.ref.off();
   clChat={channel:'all',ref:null,log:[],unread:0,attachTs:0};
   closeChat();
-  clmpDetachAll();CL=null;clMyMatchKey=null;G=null;myIdx=-1;
+  clmpDetachAll();CL=null;clMyMatchKey=null;clSpectateKey=null;clSpectating=false;G=null;myIdx=-1;
   const strip=$('#cl-live-strip');if(strip)strip.classList.add('hidden');
   if(ref)ref.child('players/'+myUid).remove().catch(()=>{});
   goScr('scr-home');
@@ -5786,7 +5868,7 @@ function clMpMatchStateHandler(s){
   let g;try{g=JSON.parse(raw);}catch(e){return;}
   if(typeof g.v==='number'&&g.v<mp.lastV)return;   // stale echo
   mp.lastV=g.v||0;
-  if(G===null)announcedRound=-1;
+  if(G===null){announcedRound=-1;mp.wrongShowRound=null;}   // CL match win/loss/forfeit is tracked separately (clStatsRecorded), only wrong-show needs resetting here
   G=g;G.mode='mp';G.clKey=clMyMatchKey;
   myIdx=G.players.findIndex(p=>p.id===myUid);
   const me=G.players[myIdx];
