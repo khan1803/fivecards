@@ -2350,8 +2350,8 @@ function render(){
     profileRecordWrongShow();
   }
   if(G.mode==='mp'&&!G.clKey&&!mp.statsRecorded){
-    if(me&&me.elim){profileRecordMatch(me.forfeited?'forfeited':'lost');mp.statsRecorded=true;}
-    else if(G.phase==='matchEnd'&&me&&!me.elim){profileRecordMatch('won');mp.statsRecorded=true;}
+    if(me&&me.elim){profileRecordMatch(me.forfeited?'forfeited':'lost',mpMargin(me));mp.statsRecorded=true;}
+    else if(G.phase==='matchEnd'&&me&&!me.elim){profileRecordMatch('won',mpMargin(me));mp.statsRecorded=true;}
   }
   $('#round-info').textContent=`ROUND ${G.round} · LIMIT ${G.limit}`;
   /* Spectators are a regular-online-room-only concept (Champions League
@@ -3336,16 +3336,46 @@ function requirePlaySignIn(){
    even in the — extremely unlikely, since a profile is one person — case
    of the same profile somehow recording from two places near-
    simultaneously. */
-function profileRecordMatch(outcome){
+/* margin: signed "how much better/worse than the field" for this one
+   game — positive when I finished ahead, negative when behind, 0 for an
+   exact draw. Accumulated into a single running total (netMargin) rather
+   than separate for/against buckets: sum(signed margin) is mathematically
+   identical to the classic sf-sa "net run rate" split (CL's in-tournament
+   standings use that split locally — see clStandings — but a lifetime
+   total only needs the one number). NRR shown on the leaderboard is just
+   this field, read straight back. Optional/omittable for older callers;
+   Number.isNaN guards against a bad computation silently corrupting the
+   running total. draws used to fall through this function entirely
+   untouched — counted in `played` but in no other bucket at all, a real
+   bug (found 2026-07-19) that made the leaderboard numbers look
+   internally inconsistent ("random"). */
+function profileRecordMatch(outcome,margin){
   if(!profile.id||!db)return;
   db.ref('profiles/'+profile.id+'/stats').transaction(s=>{
-    s=s||{played:0,won:0,lost:0,forfeited:0,wrongShows:0};
+    s=s||{played:0,won:0,lost:0,forfeited:0,draws:0,wrongShows:0,netMargin:0};
     s.played=(s.played||0)+1;
     if(outcome==='won')s.won=(s.won||0)+1;
     else if(outcome==='forfeited')s.forfeited=(s.forfeited||0)+1;
     else if(outcome==='lost')s.lost=(s.lost||0)+1;
+    else if(outcome==='draw')s.draws=(s.draws||0)+1;
+    if(typeof margin==='number'&&!Number.isNaN(margin))s.netMargin=(s.netMargin||0)+margin;
     return s;
   });
+}
+/* Regular multiplayer's margin: no single "opponent" once there are 3+
+   players, so this compares me against the average of everyone else at
+   the table — eliminated players' scores are already frozen (final) by
+   the time a win is recorded; a still-active opponent's score used for a
+   loss/forfeit margin is necessarily in-progress (I'm being eliminated
+   *before* the match is over for them), which is the best information
+   honestly available at that moment, not a bug. Positive = I'm ahead
+   (this game's score is lower, which is what wins). */
+function mpMargin(me){
+  if(!G||!me)return 0;
+  const others=G.players.filter(p=>p.id!==me.id);
+  if(!others.length)return 0;
+  const avgOther=others.reduce((s,p)=>s+p.score,0)/others.length;
+  return avgOther-me.score;
 }
 function profileRecordWrongShow(){
   if(!profile.id||!db)return;
@@ -3414,27 +3444,43 @@ async function renderLeaderboardTable(){
   try{
     const snap=await db.ref('profiles').get();
     const all=snap.val()||{};
+    /* Points: win=2, draw=1, forfeit=1 (counts the same as a draw — still
+       a "showed up and didn't lose outright" result — not 0 the way an
+       actual loss is), loss=0. Purely derived from the counters already
+       tracked, computed fresh on every render rather than stored as its
+       own field — one less write path for a duplicate-recording bug to
+       ever hide in. NRR is the lifetime running total of per-game signed
+       margins (profileRecordMatch's `margin` param) — positive means
+       this player tends to win by more than they lose by, same idea as
+       cricket's net run rate the CL in-tournament standings already use
+       (clStandings' sf-sa), just accumulated across every game instead
+       of one tournament. */
     const rows=Object.entries(all).map(([id,p])=>{
-      const s=p.stats||{played:0,won:0,lost:0,forfeited:0,wrongShows:0};
-      const played=s.played||0,won=s.won||0;
+      const s=p.stats||{played:0,won:0,lost:0,forfeited:0,draws:0,wrongShows:0,netMargin:0};
+      const played=s.played||0,won=s.won||0,lost=s.lost||0,forfeited=s.forfeited||0,draws=s.draws||0;
       const winPct=played?Math.round(won/played*100):0;
-      return{id,name:p.name||'?',played,won,lost:s.lost||0,forfeited:s.forfeited||0,wrongShows:s.wrongShows||0,winPct};
+      const points=won*2+draws*1+forfeited*1;
+      const nrr=Math.round((s.netMargin||0)*10)/10;
+      return{id,name:p.name||'?',played,won,lost,forfeited,draws,wrongShows:s.wrongShows||0,winPct,points,nrr};
     }).filter(r=>r.played>0);   // a profile that's never played a tracked game yet has nothing to show
     if(!rows.length){
       wrap.innerHTML=`<p class="tag" style="text-align:center;padding:20px 0">No games recorded yet — be the first! Sign in, then play an online multiplayer or Champions League match.</p>`;
       return;
     }
-    rows.sort((a,b)=>b.won-a.won||b.winPct-a.winPct||b.played-a.played||a.name.localeCompare(b.name));
+    rows.sort((a,b)=>b.points-a.points||b.nrr-a.nrr||b.won-a.won||a.name.localeCompare(b.name));
     const body=rows.map((r,i)=>{
       const you=r.id===profile.id?' you':'';
+      const nrrCls=r.nrr>0?'cl-nrr-pos':(r.nrr<0?'cl-nrr-neg':'');
+      const nrrTxt=(r.nrr>0?'+':'')+r.nrr;
       return `<tr class="${you}">
         <td class="rk">${i+1}</td>
         <td class="name">${esc(r.name)}${r.id===profile.id?' <span style="color:var(--gold);font-size:10px">(you)</span>':''}</td>
         <td>${r.played}</td><td>${r.won}</td><td>${r.lost}</td><td>${r.forfeited}</td><td>${r.wrongShows}</td>
+        <td class="pts">${r.points}</td><td class="${nrrCls}">${nrrTxt}</td>
         <td class="wr">${r.winPct}%</td></tr>`;
     }).join('');
     wrap.innerHTML=`<div class="cl-table-wrap"><table class="cl-table lb-rank">
-      <thead><tr><th>#</th><th style="text-align:left">Player</th><th>Played</th><th>Won</th><th>Lost</th><th>Forfeit</th><th>Wrong Show</th><th>Win%</th></tr></thead>
+      <thead><tr><th>#</th><th style="text-align:left">Player</th><th>Played</th><th>Won</th><th>Lost</th><th>Forfeit</th><th>Wrong Show</th><th>Pts</th><th>NRR</th><th>Win%</th></tr></thead>
       <tbody>${body}</tbody></table></div>
       <button class="btn ghost small" style="align-self:center" onclick="renderLeaderboardTable()">↻ Refresh</button>`;
   }catch(e){
@@ -3976,10 +4022,28 @@ function playReactionEffect(uid,type){
    No dedicated media server — every pair of players in the room opens a direct
    RTCPeerConnection. Firebase just carries the one-time offer/answer/ICE-candidate
    handshake (fivecards/rooms/{CODE}/rtc/{toUid}), then gets out of the way; audio
-   flows peer-to-peer after that. Only a public STUN server is configured (no TURN),
-   so a pair stuck behind strict/symmetric NATs may fail to connect to each other —
-   a real limitation of not running a relay server, not a bug. */
-const RTC_CONFIG={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
+   flows peer-to-peer after that.
+
+   2026-07-19: this used to configure only a public STUN server, no TURN —
+   a real, confirmed cause of "not everyone can hear everyone." STUN only
+   helps two peers discover their own public IP/port so they can attempt
+   a *direct* connection; it does nothing for a pair where at least one
+   side is behind a NAT that direct peer-to-peer traffic can't actually
+   traverse (symmetric NAT — common on mobile carrier networks and some
+   corporate/campus wifi), which needs a relay (TURN) in the middle
+   instead. Added Open Relay Project's free public TURN servers as a
+   fallback — no signup/account needed, no cost, and ICE tries every
+   configured server and uses whichever candidate pair actually works, so
+   this only ever adds a fallback path and can't break the direct-STUN
+   case that already worked. A pair that's still stuck after this is a
+   genuinely exotic network (both sides on hostile firewalls), not the
+   general "several players can't hear anyone" symptom reported. */
+const RTC_CONFIG={iceServers:[
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'}
+]};
 let voice={joined:false,muted:false,localStream:null,peers:{},presenceRef:null,sigRef:null,speakTimer:null,roomRef:null};
 /* Which Firebase room voice chat actually runs against. Regular online
    multiplayer ties voice to the single game room (mp.ref) — fine, since
@@ -4008,13 +4072,34 @@ function currentVoiceRoomRef(){
 /* Switch channel without a full manual leave+rejoin click sequence —
    used both by the picker modal and by clGoHub()'s automatic fallback
    when leaving a match makes 'match' stop making sense. No-ops cleanly
-   if not currently joined (just records the preference for next join). */
+   if not currently joined (just records the preference for next join).
+
+   Real bug fixed here (2026-07-19): this used to do a full leaveVoice()
+   (stops the mic, releases the device) followed by joinVoice() (calls
+   getUserMedia() again to reacquire it). Stopping a getUserMedia stream
+   and immediately requesting a new one back-to-back is a well-known
+   flaky sequence on real devices — the OS/browser hasn't always released
+   the mic yet, so the reacquire can transiently fail (silently, or with
+   a permission-looking error) — reported as "switching mic scope
+   disables voice until I refresh." Since the actual mic hardware access
+   never needs to change, only *which Firebase room* the mic is
+   broadcasting into does, this now reattaches the *same already-live*
+   MediaStream to the new room (leaveVoiceRoom/joinVoiceRoom) instead of
+   ever touching getUserMedia a second time. */
 async function clSwitchVoiceChannel(mode){
   if(mode===voiceChannelMode)return;
-  const wasJoined=voice.joined;
-  if(wasJoined)leaveVoice();
+  if(!voice.joined){voiceChannelMode=mode;return;}
+  const stream=voice.localStream;
+  leaveVoiceRoom();
   voiceChannelMode=mode;
-  if(wasJoined)await joinVoice();
+  const ref=currentVoiceRoomRef();
+  if(ref)joinVoiceRoom(ref,stream);
+  else{   // nowhere valid to reattach (e.g. 'match' picked with no active match) — same as a real leave
+    stream.getTracks().forEach(t=>t.stop());
+    clearInterval(voice.speakTimer);
+    voice={joined:false,muted:false,localStream:null,peers:{},presenceRef:null,sigRef:null,speakTimer:null,roomRef:null};
+    updateVoiceUI();
+  }
 }
 let voicePresent=new Set();  // uids currently in the voice channel, per Firebase presence — drives the mic badge in render()
 /* real mic / mic-with-strike glyphs (every other platform's mute icon is
@@ -4096,21 +4181,22 @@ function clVoiceOptionsModal(){
 }
 async function clJoinVoiceChannel(mode){
   closeModal();
-  if(voice.joined){
-    if(voiceChannelMode===mode)return;
-    leaveVoice();
-  }
+  /* already-joined case now reuses clSwitchVoiceChannel's reattach-
+     without-a-new-getUserMedia-call path — see its comment for why a
+     full leave+rejoin here was the actual cause of "switching mic scope
+     disables voice until refresh." */
+  if(voice.joined){await clSwitchVoiceChannel(mode);return;}
   voiceChannelMode=mode;
   await joinVoice();
 }
-async function joinVoice(){
-  const ref=currentVoiceRoomRef();
-  if(!ref||voice.joined)return;
-  let stream;
-  try{stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
-  catch(e){toast('Microphone access denied');return;}
+/* Attaches to a voice room (presence + signaling) using an *already
+   acquired* mic stream — no getUserMedia call here. Split out of
+   joinVoice() specifically so switching between CL's "everyone"/"your
+   opponent" channels never has to touch getUserMedia a second time —
+   see clSwitchVoiceChannel's comment for why that mattered. */
+function joinVoiceRoom(ref,stream){
   voice.roomRef=ref;
-  voice.localStream=stream;voice.joined=true;voice.muted=false;
+  voice.localStream=stream;voice.joined=true;
   updateVoiceUI();
   const vRef=ref.child('voice/'+myUid);
   vRef.set(true);vRef.onDisconnect().remove();
@@ -4141,22 +4227,38 @@ async function joinVoice(){
   });
   startSpeakingLoop();
 }
+async function joinVoice(){
+  const ref=currentVoiceRoomRef();
+  if(!ref||voice.joined)return;
+  let stream;
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
+  catch(e){toast('Microphone access denied');return;}
+  voice.muted=false;
+  joinVoiceRoom(ref,stream);
+}
 function toggleMute(){
   if(!voice.joined||!voice.localStream)return;
   voice.muted=!voice.muted;
   voice.localStream.getAudioTracks().forEach(t=>t.enabled=!voice.muted);
   updateVoiceUI();
 }
-function leaveVoice(){
-  if(!voice.joined)return;
+/* Detaches from the current room (presence + signaling + peers) but
+   deliberately does NOT stop voice.localStream or touch voice.joined —
+   used only by clSwitchVoiceChannel, which reattaches the same stream to
+   a different room right after. Real full leave is leaveVoice() below. */
+function leaveVoiceRoom(){
   if(voice.roomRef)voice.roomRef.child('voice/'+myUid).remove();
   if(voice.presenceRef)voice.presenceRef.off();
   if(voice.sigRef)voice.sigRef.off();
   Object.keys(voice.peers).forEach(teardownPeer);
+  voicePresent.clear();
+}
+function leaveVoice(){
+  if(!voice.joined)return;
+  leaveVoiceRoom();
   if(voice.localStream)voice.localStream.getTracks().forEach(t=>t.stop());
   clearInterval(voice.speakTimer);
   voice={joined:false,muted:false,localStream:null,peers:{},presenceRef:null,sigRef:null,speakTimer:null,roomRef:null};
-  voicePresent.clear();
   updateVoiceUI();renderLobby();
   if(CL&&CL.mode==='mp'&&onScreen('scr-cl-lobby'))clRenderMpLobby();
   document.querySelectorAll('.opp.speaking').forEach(el=>el.classList.remove('speaking'));
@@ -4335,7 +4437,7 @@ function leaveRoom(remote){
            eliminated" the way the normal in-game path does (see render()'s
            own stats hook), so record this one explicitly, right here,
            before that happens. */
-        if(G.mode==='mp'){profileRecordMatch('forfeited');mp.statsRecorded=true;}
+        if(G.mode==='mp'){profileRecordMatch('forfeited',mpMargin(me));mp.statsRecorded=true;}
       }
     }
   }
@@ -4513,6 +4615,23 @@ window.addEventListener('load',()=>{
     const r=s.val();
     if(r&&r.players&&r.players[myUid])attachRoom(code);
     else localStorage.removeItem('fcRoom');
+  }).catch(()=>{});
+});
+/* same auto-rejoin, for a Champions League tournament room — this never
+   existed before (only the regular-MP path above did), which is exactly
+   why refreshing mid-tournament silently dropped back to a blank home
+   screen and needed the room code re-entered by hand. Separate
+   localStorage key (fcClRoom) since a player could in principle have a
+   regular-MP room and a CL tournament saved at once (unlikely in
+   practice, but the two features are otherwise fully independent, so
+   there's no reason to make them share one slot and clobber each other). */
+window.addEventListener('load',()=>{
+  const code=localStorage.fcClRoom;
+  if(!code||typeof firebase==='undefined'||!fbInit())return;
+  db.ref(CLROOMS+code).get().then(s=>{
+    const r=s.val();
+    if(r&&r.players&&r.players[myUid])clmpAttach(code);
+    else localStorage.removeItem('fcClRoom');
   }).catch(()=>{});
 });
 /* separate from the auto-rejoin handler above (which bails out early
@@ -5276,9 +5395,25 @@ function clSpectateGame(){
   const s=CL.sims&&CL.sims[clSpectateKey];return s?s.g:null;
 }
 function clRenderSpectate(){
-  const g=clSpectateGame();
+  /* Real bug found live (2026-07-19): checking clSpectateGame() alone
+     isn't enough to know a match is actually still going. For a real
+     MP fixture, the match's Firebase `state` node is never cleared once
+     the game ends — it just sits there forever holding the final
+     matchEnd position, since there's no "return to lobby" step for an
+     individual CL 1v1 the way a whole room resets between matches (see
+     mpBackToLobby's comment on the equivalent regular-MP case). So
+     clSpectateGame() kept returning a valid (finished) game forever,
+     and this function never fell through to the "match finished"
+     branch below — a spectator just sat frozen on the final table with
+     no indication anything had actually ended, reported as "the screen
+     gets stuck." Checking clRes() *first* — does a real result already
+     exist for this fixture? — fixes it regardless of whether `state`
+     still exists, and naturally covers the solo-mode case too (where
+     clSpectateGame() already does go null once the sim is cleaned up,
+     so this is just a stricter, always-correct version of that check). */
+  const res=clSpectateKey&&clRes(clSpectateKey);
+  const g=res?null:clSpectateGame();
   if(!g){
-    const res=clSpectateKey&&clRes(clSpectateKey);
     const wrap=$('#cl-watch-body');
     if(wrap)wrap.innerHTML=res
       ?`<p class="tag" style="text-align:center;padding-top:30px">Match finished — ${esc(clName(res.winner))} won by ${res.margin}.</p>`
@@ -5519,10 +5654,12 @@ function clRecordStatsForNewResults(){
     if(!r||!r.done)return;
     if(r.a!==CL.myId&&r.b!==CL.myId)return;
     clStatsRecorded.add(key);
-    if(r.draw)profileRecordMatch('draw');
-    else if(r.winner===CL.myId)profileRecordMatch('won');
-    else if(r.forfeit&&r.loser===CL.myId)profileRecordMatch('forfeited');
-    else profileRecordMatch('lost');
+    const myScore=r.a===CL.myId?r.aScore:r.bScore, oppScore=r.a===CL.myId?r.bScore:r.aScore;
+    const margin=oppScore-myScore;   // positive = I scored lower (better) than my opponent
+    if(r.draw)profileRecordMatch('draw',margin);
+    else if(r.winner===CL.myId)profileRecordMatch('won',margin);
+    else if(r.forfeit&&r.loser===CL.myId)profileRecordMatch('forfeited',margin);
+    else profileRecordMatch('lost',margin);
   });
 }
 function clRenderHub(){
@@ -5678,6 +5815,7 @@ function clMpCopyCode(){
 }
 function clmpAttach(code){
   clmpDetachAll();
+  localStorage.fcClRoom=code;   // survives a refresh — see the auto-rejoin handler near the regular-MP one
   clmp.code=code;clmp.ref=db.ref(CLROOMS+code);clmp.matchesRef=clmp.ref.child('matches');
   clmp.room=null;clmp.matches=null;clmp.everLoaded=false;
   clChampionCelebrated=false;
@@ -5713,6 +5851,7 @@ function clmpSync(){
   const room=clmp.room;
   if(!room)return;   // root listener owns closure detection; nothing to sync yet
   if(!room.players||!room.players[myUid]){   // I was removed/kicked
+    localStorage.removeItem('fcClRoom');
     clmpDetachAll();CL=null;goScr('scr-home');toast('You left the tournament');return;}
   clmp.isHost=effHost(room)===myUid;
   const players=Object.entries(room.players).sort((a,b)=>(a[1].order||0)-(b[1].order||0))
@@ -5795,6 +5934,7 @@ function clMpTakeover(){
 function clMpLeave(silent){
   if(!silent&&CL&&!confirm('Leave the tournament?'))return;
   const ref=clmp.ref;
+  localStorage.removeItem('fcClRoom');
   leaveVoice();   // voice is bound to clmp.ref (see currentVoiceRoomRef) — must tear down before that ref goes away
   if(clChat.ref)clChat.ref.off();
   clChat={channel:'all',ref:null,log:[],unread:0,attachTs:0};
