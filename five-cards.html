@@ -1026,6 +1026,11 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
     <div class="seg" id="seg-cl-limit">
       <button data-v="120">120 pts</button><button data-v="180">180 pts</button><button data-v="240" class="sel">240 pts</button><button data-v="360">360 pts</button>
     </div>
+    <span class="lbl">Games per player</span>
+    <div class="seg" id="seg-cl-games">
+      <button data-v="0" class="sel">All</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button>
+    </div>
+    <p class="tag" style="margin:0">With a limit, who you face is decided live — whoever's free first gets matched first, not a fixed schedule. You'll stop once you hit your own limit; some players may end up with one fewer or more game than others.</p>
     <button class="btn primary big" id="btn-cl-start-solo" style="align-self:center;margin-top:6px">Start Tournament</button>
     <button class="btn ghost" data-back>← Back</button>
   </div>
@@ -1039,7 +1044,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
     <div class="mp-split">
       <div class="mp-box">
         <h3>Create room</h3>
-        <p class="tag">Difficulty of play, decks and the losing limit are set in the room. Needs at least 4 players — odd counts are fine, whoever's unpaired that round just sits out.</p>
+        <p class="tag">Decks, losing limit and games-per-player are set in the room. Needs at least 4 players — odd counts are fine, whoever's unpaired that round just sits out.</p>
         <button class="btn primary" id="btn-cl-create">Create</button>
       </div>
       <div class="mp-box">
@@ -1059,7 +1064,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
   <div class="panel" style="text-align:center;align-items:center">
     <h2>🏆 Room&ensp;<span id="cl-lobby-code"></span></h2>
     <button class="btn ghost small" id="btn-cl-copy">📋 Copy code</button>
-    <p class="tag" id="cl-lobby-settings-view">Lost at <span id="cl-lobby-limit"></span> pts · <span id="cl-lobby-decks"></span></p>
+    <p class="tag" id="cl-lobby-settings-view">Lost at <span id="cl-lobby-limit"></span> pts · <span id="cl-lobby-decks"></span> · <span id="cl-lobby-games"></span></p>
     <div id="cl-lobby-settings-edit" class="hidden" style="width:100%">
       <span class="lbl">A match is lost at</span>
       <div class="seg" id="seg-cl-lobby-limit">
@@ -1068,6 +1073,10 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
       <span class="lbl">Decks</span>
       <div class="seg" id="seg-cl-lobby-decks">
         <button data-v="1">1</button><button data-v="2">2</button>
+      </div>
+      <span class="lbl">Games per player</span>
+      <div class="seg" id="seg-cl-lobby-games">
+        <button data-v="0">All</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button>
       </div>
     </div>
     <div id="cl-lobby-voicebar">
@@ -4350,6 +4359,7 @@ segInit('seg-cl-players',v=>clSetup.players=+v);
 segInit('seg-cl-diff',v=>clSetup.diff=v);
 segInit('seg-cl-decks',v=>clSetup.numDecks=+v);
 segInit('seg-cl-limit',v=>clSetup.limit=+v);
+segInit('seg-cl-games',v=>clSetup.gamesLimit=+v||null);
 $('#btn-gocl').onclick=()=>{if(requirePlaySignIn())goScr('scr-cl-mode');};
 $('#btn-cl-solo').onclick=()=>goScr('scr-cl-solo');
 $('#btn-cl-mp').onclick=()=>goScr('scr-cl-mp');
@@ -4599,8 +4609,8 @@ showMatchModal=function(){
    holds every match, each pair writes only their own match's state.
    ================================================================== */
 let CL=null, clSimTimer=null;
-const clSetup={players:4,diff:'medium',numDecks:1,limit:240};
-const clMpSetup={diff:'medium',numDecks:1,limit:240};
+const clSetup={players:4,diff:'medium',numDecks:1,limit:240,gamesLimit:null};
+const clMpSetup={diff:'medium',numDecks:1,limit:240,gamesLimit:null};
 const CL_BOTNAMES=['Ace','Ruby','Jax','Queenie','Kingsley','Maverick','Diesel','Scout','Nash','Piper'];
 
 /* round-robin (circle method): player 0 stays fixed, the rest rotate.
@@ -4767,6 +4777,20 @@ function clStandings(){
 }
 const clLeagueTotal=()=>CL.players.length*(CL.players.length-1)/2;
 const clLeagueDone=()=>Object.keys(CL.results).filter(k=>k[0]==='L'&&CL.results[k].done).length;
+/* Games-per-player cap (CL.gamesLimit, null/0 = unlimited = full round
+   robin, unchanged from before). Counts a fixture as "used up" the
+   moment it's live, not just once it has a result — otherwise a player
+   already mid-game could get handed a second/third match before their
+   first one even finishes. Who actually ends up capped out first, and
+   which specific opponents get skipped, isn't decided in advance: it
+   falls out of real play order (see clMyEligibleFixtures/
+   clEligibleBotFixtures below), which is the literal "first come first
+   serve, who plays who first" ask — not a pre-truncated schedule. */
+function clGamesLimitReached(uid){
+  if(!CL||!CL.gamesLimit)return false;
+  const count=clAllLeagueFixtures().filter(m=>(m.a===uid||m.b===uid)&&(clRes(m.key)||clIsLive(m.key))).length;
+  return count>=CL.gamesLimit;
+}
 
 /* ================= CL — DYNAMIC LEAGUE SCHEDULING =================
    The league no longer advances in lockstep rounds. clMakeSchedule()'s
@@ -4805,11 +4829,12 @@ function clIsPlayerFree(uid){
    live match of my own already. */
 function clMyEligibleFixtures(){
   if(!CL||CL.phase!=='league')return[];
+  if(clGamesLimitReached(CL.myId))return[];   // I've already played my cap — done for the league
   return clAllLeagueFixtures().filter(m=>{
     if(clRes(m.key))return false;
     if(m.a!==CL.myId&&m.b!==CL.myId)return false;
     const opp=m.a===CL.myId?m.b:m.a;
-    return clIsPlayerFree(opp);
+    return clIsPlayerFree(opp)&&!clGamesLimitReached(opp);
   });
 }
 /* Solo only: a maximal set of bot-vs-bot fixtures that can all start
@@ -4833,6 +4858,7 @@ function clEligibleBotFixtures(){
     if(clRes(m.key))return;
     if(m.a===CL.myId||m.b===CL.myId)return;   // I always play my own matches myself
     if(busy.has(m.a)||busy.has(m.b))return;
+    if(clGamesLimitReached(m.a)||clGamesLimitReached(m.b))return;
     chosen.push(m);busy.add(m.a);busy.add(m.b);
   });
   return chosen;
@@ -4846,8 +4872,25 @@ function clWaitingPlayers(){
   const all=clAllLeagueFixtures();
   return CL.players.filter(p=>{
     if(!clIsPlayerFree(p.id))return false;
+    if(clGamesLimitReached(p.id))return false;   // done for the league, not "waiting"
     const remaining=all.filter(m=>!clRes(m.key)&&(m.a===p.id||m.b===p.id));
-    return remaining.length>0&&remaining.every(m=>!clIsPlayerFree(m.a===p.id?m.b:m.a));
+    return remaining.length>0&&remaining.every(m=>{
+      const opp=m.a===p.id?m.b:m.a;
+      return !clIsPlayerFree(opp)||clGamesLimitReached(opp);
+    });
+  });
+}
+/* League is over once nothing can ever start again — no live fixtures
+   and no remaining pair where both sides are still free and under their
+   cap. With no cap set this converges to exactly "every fixture has a
+   result" (the old clLeagueDone()>=clLeagueTotal() check), so this is a
+   strict generalization, not a second code path to keep in sync. */
+function clLeagueExhausted(){
+  if(!CL||CL.phase!=='league')return false;
+  if(clAllLeagueFixtures().some(m=>clIsLive(m.key)))return false;
+  return clAllLeagueFixtures().every(m=>{
+    if(clRes(m.key))return true;
+    return clGamesLimitReached(m.a)||clGamesLimitReached(m.b);
   });
 }
 /* Matches relevant to show right now — for league: every fixture with an
@@ -4898,7 +4941,7 @@ function clMyActive(){
 }
 function clAllActiveDone(){
   if(!CL)return false;
-  if(CL.phase==='league')return clLeagueDone()>=clLeagueTotal();
+  if(CL.phase==='league')return clLeagueExhausted();
   const a=clActiveMatches();return a.length&&a.every(m=>clRes(m.key)&&clRes(m.key).done);
 }
 
@@ -4967,7 +5010,7 @@ function clSimTick(){
      instant it becomes eligible, rather than needing to be manually
      restarted. Playoffs keep the original stop-as-soon-as-idle behavior,
      since a stage's matches are a fixed, small, always-converging set. */
-  if(nothingRunning&&(CL.phase!=='league'||clLeagueDone()>=clLeagueTotal())){
+  if(nothingRunning&&(CL.phase!=='league'||clLeagueExhausted())){
     clStopSimTimer();clAfterSimSettle();
   }
 }
@@ -5433,7 +5476,13 @@ function clRenderHub(){
        wouldn't mean much once fixtures start finishing out of their
        original order. A plain progress count is honest about what's
        actually true regardless of play order. */
-    pb.innerHTML=`League Stage<span class="cl-sub">${clLeagueDone()}/${clLeagueTotal()} matches played</span>`;
+    /* with a games-per-player cap, the eventual total match count isn't
+       knowable in advance (it falls out of real-time pairing order, not
+       a fixed schedule) — showing a fake "/Y" would be misleading, so
+       the cap case just shows a plain running count instead. */
+    pb.innerHTML=CL.gamesLimit
+      ?`League Stage<span class="cl-sub">${clLeagueDone()} matches played · ${CL.gamesLimit} games/player cap</span>`
+      :`League Stage<span class="cl-sub">${clLeagueDone()}/${clLeagueTotal()} matches played</span>`;
     const waiting=clWaitingPlayers();
     const waitingLine=waiting.length
       ?`<p class="tag" style="text-align:center;margin:2px 0 0">⏳ Waiting for an opponent to free up: ${waiting.map(p=>esc(p.name)).join(', ')}</p>`:'';
@@ -5480,6 +5529,7 @@ function clStartSolo(){
   const players=[{id:'me',name,isBot:false,diff:null}];
   for(let i=0;i<n-1;i++)players.push({id:'b'+i,name:bots[i],isBot:true,diff:clSetup.diff});
   CL={mode:'solo',players,myId:'me',limit:clSetup.limit,numDecks:clSetup.numDecks,diff:clSetup.diff,
+      gamesLimit:clSetup.gamesLimit,
       schedule:clMakeSchedule(players.map(p=>p.id)),round:0,phase:'league',results:{},sims:{},playoff:null,myMatchDone:false,withdrawn:{}};
   clChampionCelebrated=false;
   clStatsRecorded=new Set();
@@ -5517,7 +5567,7 @@ function clMpCreate(){
   const code=roomCode(),ref=db.ref(CLROOMS+code);
   ref.get().then(s=>{
     if(s.exists())return clMpCreate();
-    ref.set({host:myUid,status:'lobby',limit:240,numDecks:1,
+    ref.set({host:myUid,status:'lobby',limit:240,numDecks:1,gamesLimit:0,
       created:firebase.database.ServerValue.TIMESTAMP,
       players:{[myUid]:{name,order:Date.now()}}},
       err=>{if(err)toast('Could not create room');else clmpAttach(code);});
@@ -5595,6 +5645,7 @@ function clmpSync(){
   });
   const wasWithdrawn=CL&&CL.withdrawn&&CL.withdrawn[myUid];
   CL={mode:'mp',players,myId:myUid,limit:room.limit||240,numDecks:room.numDecks||1,diff:'mp',
+    gamesLimit:room.gamesLimit||null,
     schedule:room.schedule?JSON.parse(room.schedule):[],round:room.round||0,
     phase:room.status==='lobby'?'league':(room.phase||room.status||'league'),
     results,liveScores,sims:{},playoff:room.playoff?JSON.parse(room.playoff):null,
@@ -5616,11 +5667,13 @@ function clRenderMpLobby(){
   $('#cl-lobby-code').textContent=clmp.code;
   $('#cl-lobby-limit').textContent=r.limit||240;
   $('#cl-lobby-decks').textContent=(r.numDecks||1)===2?'2 decks':'1 deck';
+  $('#cl-lobby-games').textContent=r.gamesLimit?`${r.gamesLimit} games/player`:'everyone plays everyone';
   $('#cl-lobby-settings-view').classList.toggle('hidden',clmp.isHost);
   $('#cl-lobby-settings-edit').classList.toggle('hidden',!clmp.isHost);
   if(clmp.isHost){
     $('#seg-cl-lobby-limit').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',+b.dataset.v===(r.limit||240)));
     $('#seg-cl-lobby-decks').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',+b.dataset.v===(r.numDecks||1)));
+    $('#seg-cl-lobby-games').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',+b.dataset.v===(r.gamesLimit||0)));
   }
   const hostUid=effHost(r);
   const ps=Object.entries(r.players||{}).sort((a,b)=>(a[1].order||0)-(b[1].order||0));
@@ -5673,6 +5726,8 @@ $('#seg-cl-lobby-limit')&&$('#seg-cl-lobby-limit').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b||!clmp.isHost||!clmp.ref)return;clmp.ref.update({limit:+b.dataset.v});});
 $('#seg-cl-lobby-decks')&&$('#seg-cl-lobby-decks').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b||!clmp.isHost||!clmp.ref)return;clmp.ref.update({numDecks:+b.dataset.v});});
+$('#seg-cl-lobby-games')&&$('#seg-cl-lobby-games').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b||!clmp.isHost||!clmp.ref)return;clmp.ref.update({gamesLimit:+b.dataset.v});});
 $('#cl-lobby-players')&&$('#cl-lobby-players').addEventListener('click',e=>{
   const b=e.target.closest('[data-cl-kick]');if(!b||!clmp.isHost||!clmp.ref)return;
   if(confirm('Remove this player from the room?'))clmp.ref.child('players/'+b.dataset.clKick).remove();});
