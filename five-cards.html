@@ -6,7 +6,7 @@
 <title>5 Cards — Lowest Hand Wins</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,600&family=Cinzel:wght@600;700;900&family=Manrope:wght@500;600;700;800&family=DM+Mono:wght@400;500&family=Unbounded:wght@600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,600&family=Cinzel:wght@600;700;900&family=Manrope:wght@500;600;700;800&family=DM+Mono:wght@400;500&family=Unbounded:wght@600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@500;700;800&family=Spectral:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -81,6 +81,32 @@ button{font-family:inherit}
 .home-suits span:nth-child(2){color:var(--magenta)}
 .home-suits span:nth-child(3){color:var(--gold)}
 .home-suits span:nth-child(4){color:var(--violet)}
+
+/* home-screen floating hero card + table-peek — the two pieces from the
+   reference design (card-design-options.dc.html "1c") that were still
+   missing after the earlier wordmark/palette work; purely decorative
+   (aria-hidden). Deliberately normal-flow (a sibling in .home-box's own
+   flex column), not absolutely positioned over the title/buttons —
+   guarantees it's always visible (Saif's explicit ask — the design's
+   own absolute placement risked landing under the fixed corner buttons
+   or the title on a narrow phone) and can never overlap anything on any
+   viewport by construction, rather than by tuned pixel offsets. */
+@keyframes heroFloatCard{0%,100%{transform:translateY(0) rotate(-7deg)}50%{transform:translateY(-8px) rotate(-7deg)}}
+.hero-float-card{position:relative;width:64px;height:90px;border-radius:10px;flex:0 0 auto;
+  background:linear-gradient(160deg,oklch(0.26 0.045 300),oklch(0.15 0.035 300));
+  box-shadow:0 0 0 1.5px var(--teal),0 0 30px oklch(0.72 0.2 350 / .35),0 18px 30px rgba(0,0,0,.5);
+  animation:heroFloatCard 3.4s ease-in-out infinite;padding:8px;box-sizing:border-box}
+.hero-float-card .tl{display:block;font:800 17px 'Unbounded',sans-serif;color:var(--gold)}
+.hero-float-card .mid{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:26px;color:var(--magenta)}
+@keyframes peekGlow{0%,100%{opacity:.55}50%{opacity:1}}
+.hero-table-peek{position:relative;width:150px;height:70px;margin-top:22px}
+.hero-table-peek::before{content:'';position:absolute;inset:0;border-radius:50%;
+  border:1.5px solid oklch(0.78 0.15 210 / .4);box-shadow:0 0 20px oklch(0.72 0.2 350 / .25)}
+.peek-dot{position:absolute;width:9px;height:9px;border-radius:2px;transform:rotate(45deg);
+  background:var(--gold);box-shadow:0 0 10px var(--gold);animation:peekGlow 1.6s ease-in-out infinite}
+.peek-dot:nth-child(2),.peek-dot:nth-child(3){background:var(--teal);box-shadow:none;animation:none}
+.peek-dot:nth-child(4){background:var(--magenta);box-shadow:none;animation:none}
 
 /* ---------- buttons ---------- */
 .btn{border:0;border-radius:16px;padding:14px 20px;font-weight:700;cursor:pointer;font-size:14px;transition:transform .08s,filter .15s;font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:.2px}
@@ -372,7 +398,7 @@ body.dealing .card-count{visibility:hidden}
    (10.5-11px) rather than jumping to status-bar's 14px serif — this is
    still a quieter, secondary line, just now a size someone can actually
    read without leaning in. */
-#log-line{font-size:25px;color:var(--labelmuted);min-height:32px;cursor:pointer;text-align:center;padding:0 14px;font-family:'DM Mono',monospace;letter-spacing:.3px;margin-top:-6px}
+#log-line{font-size:20px;color:var(--labelmuted);min-height:26px;cursor:pointer;text-align:center;padding:0 14px;font-family:'DM Mono',monospace;letter-spacing:.3px;margin-top:-6px}
 
 /* ---------- cards ---------- */
 /* Prism card face (2026-07-19 round 2) — dark glass card matching the
@@ -476,7 +502,7 @@ body.dealing .card-count{visibility:hidden}
    #my-hand's own left edge exactly the same way — padding-left covers
    that so the badge doesn't get its left edge sliced off by this same
    overflow-x:auto the instant a freshly-drawn card sorts to the front. */
-#my-hand{display:flex;justify-content:center;padding-top:30px;padding-left:10px;padding-right:10px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+#my-hand{display:flex;justify-content:center;padding-top:22px;padding-left:10px;padding-right:10px;max-width:100%;overflow-x:auto;scrollbar-width:none}
 #my-hand::-webkit-scrollbar{display:none}
 #my-hand .card{cursor:pointer;flex:0 0 auto}
 #my-hand .card:not(:first-child){margin-left:calc(var(--cw)*-.32)}
@@ -757,27 +783,97 @@ body.dealing .card-count{visibility:hidden}
    MOBILE — cleaner layout
    ====================================================== */
 @media(max-width:390px){
-  :root{--cw:clamp(42px,10.5vw,58px)}
+  :root{--cw:clamp(36px,9.5vw,52px)}
   #my-hand .card:not(:first-child){margin-left:calc(var(--cw)*-.38)}
 }
+/* 2026-07-20: rebalanced table-vs-hand screen share on mobile — Saif's
+   own screenshot showed the table (the actual game — deck, discard,
+   opponents) squeezed into barely half the screen while the hand/status
+   strip below the gold divider (#my-area's border-top) took the rest.
+   #arena already has flex:1 (grows into whatever's left), so shrinking
+   #my-area's own content height directly hands that space back to the
+   table — no separate "give the table more room" rule needed, just
+   trimming every element down here that had slack. Combined savings
+   (smaller cards, tighter gaps/padding, smaller log line, less hand
+   clearance) land the divider roughly 2cm lower on a typical phone,
+   matching what was asked. */
 @media(max-width:480px){
   #actions{gap:8px;width:100%;padding:0 8px}
   #actions .btn{flex:1;padding:13px 8px;font-size:12px;min-height:44px;letter-spacing:1px}
   #status-bar{font-size:13px}
-  #log-line{font-size:22px}
-  #my-area{gap:7px;padding:12px 6px calc(10px + env(safe-area-inset-bottom))}
+  #log-line{font-size:18px}   /* the exact ~20% cut Saif asked for, measured off the 22px this actually rendered at on his phone */
+  #my-area{gap:5px;padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
+  #my-hand{padding-top:20px}
   #my-meta{font-size:10px}
   #topbar{padding:8px 10px}
   .icon-btn{width:34px;height:34px;font-size:14px;border-radius:8px}
   #round-info{font-size:10px;letter-spacing:1.5px}
+  .cs-swatch{width:20px;height:20px;border-radius:6px}
+  #card-style-picker{gap:5px}
 }
 @media(max-height:700px) and (max-width:480px){
-  #table{padding:38px 26px 6px}
-  #my-area{gap:5px;padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
-  #my-hand{padding-top:26px}   /* keep enough clearance for the sel-lift/pop peak + NEW badge — see the base rule's comment */
-  #actions .btn{padding:11px 8px;font-size:12px;min-height:42px}
+  #table{padding:30px 22px 4px}
+  #my-area{gap:4px;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+  #my-hand{padding-top:18px}   /* keep enough clearance for the sel-lift/pop peak + NEW badge — see the base rule's comment */
+  #actions .btn{padding:10px 8px;font-size:12px;min-height:40px}
   #status-bar{font-size:12px;min-height:16px}
+  #log-line{font-size:14px;min-height:18px}
 }
+
+/* ======================================================
+   VOLT — Neon Arcade THEME (data-theme="volt")
+   Electric cyan/magenta/gold on ink-blue-black, Space Grotesk display.
+   Ported from card-design-options.dc.html's "1a" aesthetic direction —
+   core palette vars only (the same handful the original Prism reskin
+   changed to retheme the *whole* app), not a rule-by-rule re-skin like
+   Tokyo Neon's — the app's components already consume var(--gold) etc.
+   broadly enough that this cascades correctly on its own. Display
+   typography (title, primary CTAs) explicitly swapped to Space Grotesk
+   for a genuinely distinct feel; smaller UI text stays on the existing
+   Plus Jakarta Sans/DM Mono rather than re-doing every label's font too.
+   ====================================================== */
+[data-theme="volt"]{
+  --gold:#DEE86A;--gold2:#A8B23E;--goldlt:#EEF2A0;--golddk:#6B7420;--turnring:#DEE86A;--nexttag:#3DD6E8;
+  --magenta:#F0459C;--magenta2:#A82868;--teal:#3DD6E8;--violet:#7A5CE8;
+  --felt:#1E2A5C;--felt-d:#0A0F24;
+  --bg1:#141830;--bg2:#0A0D1E;--panel:#181C38;--line:rgba(61,214,232,.18);
+  --red:#F0459C;--ink:#F0F4FF;--dim:rgba(61,214,232,.5);
+  --inkdark:#0A0D1E;--cardink:#141830;
+}
+[data-theme="volt"] body{background:radial-gradient(ellipse at 50% -10%,#1E2450 0%,#141830 45%,#0A0D1E 100%)}
+[data-theme="volt"] .hero-wordmark{font-family:'Space Grotesk',sans-serif;
+  background:linear-gradient(90deg,var(--teal),var(--magenta),var(--gold));background-size:250% auto;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shimmer 4s linear infinite!important}
+[data-theme="volt"] .home-suits span:nth-child(1){color:var(--teal)}
+[data-theme="volt"] .home-suits span:nth-child(2){color:var(--magenta)}
+[data-theme="volt"] .home-suits span:nth-child(3){color:var(--gold)}
+[data-theme="volt"] .home-suits span:nth-child(4){color:var(--violet)}
+[data-theme="volt"] .btn.primary{font-family:'Space Grotesk',sans-serif;background:linear-gradient(90deg,var(--teal),var(--gold));color:#0A0D1E}
+[data-theme="volt"] .panel h2,[data-theme="volt"] #modal h2{font-family:'Space Grotesk',sans-serif}
+
+/* ======================================================
+   ROYALE — Velvet Lounge THEME (data-theme="royale")
+   Deep emerald + ruby + brass, Spectral serif display. Ported from
+   the "1b" direction — same scope approach as Volt above.
+   ====================================================== */
+[data-theme="royale"]{
+  --gold:#D4B36A;--gold2:#A8863E;--goldlt:#E8D4A0;--golddk:#6B5420;--turnring:#D4B36A;--nexttag:#8FBFA0;
+  --magenta:#B84058;--magenta2:#822838;--teal:#8FBFA0;--violet:#A8863E;
+  --felt:#1C3A30;--felt-d:#0A1810;
+  --bg1:#173028;--bg2:#0C1812;--panel:#1C3A30;--line:rgba(212,179,106,.18);
+  --red:#B84058;--ink:#F0EAD8;--dim:rgba(212,179,106,.5);
+  --inkdark:#170A08;--cardink:#1C3A30;
+}
+[data-theme="royale"] body{background:radial-gradient(ellipse at 50% -10%,#20402E 0%,#173028 45%,#0C1812 100%)}
+[data-theme="royale"] .hero-wordmark{font-family:'Spectral',serif;font-weight:700;
+  background:linear-gradient(90deg,var(--gold),var(--magenta),var(--gold));background-size:250% auto;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shimmer 4s linear infinite!important}
+[data-theme="royale"] .home-suits span:nth-child(1){color:var(--gold)}
+[data-theme="royale"] .home-suits span:nth-child(2){color:var(--magenta)}
+[data-theme="royale"] .home-suits span:nth-child(3){color:var(--magenta)}
+[data-theme="royale"] .home-suits span:nth-child(4){color:var(--gold)}
+[data-theme="royale"] .btn.primary{background:linear-gradient(90deg,var(--gold2),var(--goldlt),var(--gold2));color:#170A08}
+[data-theme="royale"] .panel h2,[data-theme="royale"] #modal h2{font-family:'Spectral',serif;font-weight:700}
 
 /* ---------- voice chat ---------- */
 #btn-voice.voice-live{background:rgba(255,184,77,.24);border-color:var(--gold);color:var(--gold)}
@@ -999,12 +1095,26 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
     <div class="home-suits"><span>♠</span><span>♥</span><span>♦</span><span>♣</span></div>
     <div class="hero-wordmark">5 CARDS</div>
     <p class="tag caption" style="margin:0">Lowest Hand Wins</p>
-    <div style="display:flex;flex-direction:column;gap:12px;width:min(320px,82vw);margin-top:20px">
+    <!-- floating hero card + table-peek, per the reference design's home
+         screen (card-design-options.dc.html "1c") — the two pieces
+         Saif flagged as still missing from a screenshot comparison.
+         Normal-flow, not absolutely positioned over the title/buttons —
+         deliberately, so it's guaranteed visible (Saif's own ask) and
+         can never overlap anything on any viewport, mobile included,
+         by construction rather than by tuned pixel offsets. -->
+    <div class="hero-float-card" aria-hidden="true"><span class="tl">K</span><span class="mid">♦</span></div>
+    <div style="display:flex;flex-direction:column;gap:12px;width:min(320px,82vw);margin-top:8px">
       <button class="btn primary big" id="btn-gobot">♟&ensp;Single Player</button>
       <button class="btn ghost big" id="btn-gomp">⬡&ensp;Online Multiplayer</button>
       <button class="btn cl-tile big" id="btn-gocl">🏆&ensp;Champions League</button>
       <button class="btn ghost big" id="btn-leaderboard">🏅&ensp;Leaderboard</button>
       <button class="btn ghost" id="btn-help" style="border:0;background:none">How to play</button>
+    </div>
+    <div class="hero-table-peek" aria-hidden="true">
+      <span class="peek-dot" style="top:-5px;left:50%;margin-left:-4px"></span>
+      <span class="peek-dot" style="top:50%;left:-5px;margin-top:-4px"></span>
+      <span class="peek-dot" style="top:50%;right:-5px;margin-top:-4px"></span>
+      <span class="peek-dot" style="bottom:-5px;left:50%;margin-left:-4px"></span>
     </div>
   </div>
 </section>
@@ -1222,8 +1332,10 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
       </div>
     </div>
     <div id="lobby-players" style="width:100%"></div>
+    <button class="btn big hidden" id="btn-ready-mp">✓ Ready</button>
     <button class="btn primary big" id="btn-start-mp">Start Game</button>
     <p class="tag hidden" id="lobby-wait">Waiting for host to start…</p>
+    <p class="tag hidden" id="lobby-wait-ready">⏳ Waiting for everyone to ready up…</p>
     <button class="btn ghost small hidden" id="btn-takeover-host">Take over as host</button>
     <div id="lobby-voicebar">
       <button class="btn ghost" id="btn-voice-lobby"><span id="voice-lobby-icon">🎤</span>&ensp;Voice</button>
@@ -3826,13 +3938,36 @@ function renderLobby(){
   }
   const ps=Object.entries(r.players||{}).map(([u,p])=>({u,...p})).sort((a,b)=>a.order-b.order);
   const host=effHost(r);
+  /* Ready-check (2026-07-20, PUBG-style lobby flow Saif asked for):
+     every non-host player must mark themselves ready before the host's
+     Start button actually unlocks — the host doesn't ready-up themselves,
+     pressing Start once everyone else has is their own equivalent
+     commitment. Ready is per-player Firebase state (players/{uid}/ready),
+     so it's visible to everyone the same way the host star/mic badge
+     already is. */
+  const nonHost=ps.filter(p=>p.u!==host);
+  const allReady=nonHost.length>0&&nonHost.every(p=>p.ready);
   $('#lobby-players').innerHTML=ps.map(p=>
-    `<div class="lp">${p.u===host?'⭐ ':''}${esc(p.name)}${p.u===myUid?' <span style="color:var(--dim)">(you)</span>':''}${voicePresent.has(p.u)?' <span class="lp-mic">🎙️</span>':''}${(mp.isHost&&p.u!==myUid)?`<button class="lp-kick" title="Remove ${esc(p.name)}" data-kick-uid="${esc(p.u)}" data-kick-name="${esc(p.name)}">✕</button>`:''}</div>`).join('');
+    `<div class="lp">${p.u===host?'⭐ ':''}${esc(p.name)}${p.u===myUid?' <span style="color:var(--dim)">(you)</span>':''}${voicePresent.has(p.u)?' <span class="lp-mic">🎙️</span>':''}${p.u!==host?(p.ready?' <span style="color:var(--gold);font-weight:800">✓ Ready</span>':' <span style="color:var(--dim)">Not ready</span>'):''}${(mp.isHost&&p.u!==myUid)?`<button class="lp-kick" title="Remove ${esc(p.name)}" data-kick-uid="${esc(p.u)}" data-kick-name="${esc(p.name)}">✕</button>`:''}</div>`).join('');
+  const me=ps.find(p=>p.u===myUid);
+  const btnReady=$('#btn-ready-mp');
+  btnReady.classList.toggle('hidden',mp.isHost);
+  if(!mp.isHost&&me){
+    btnReady.textContent=me.ready?'✓ Ready':'Mark Ready';
+    btnReady.className=me.ready?'btn primary big':'btn ghost big';
+  }
   $('#btn-start-mp').classList.toggle('hidden',!mp.isHost);
-  $('#btn-start-mp').disabled=ps.length<2;
-  $('#lobby-wait').classList.toggle('hidden',mp.isHost);
+  $('#btn-start-mp').disabled=ps.length<2||!allReady;
+  $('#lobby-wait').classList.toggle('hidden',mp.isHost||!allReady);
+  $('#lobby-wait-ready').classList.toggle('hidden',mp.isHost||allReady);
   $('#btn-takeover-host').classList.toggle('hidden',mp.isHost);
   updateVoiceUI();
+}
+function toggleReadyMp(){
+  if(!mp.ref||mp.isHost)return;
+  const me=mp.room&&mp.room.players&&mp.room.players[myUid];
+  if(!me)return;
+  mp.ref.child('players/'+myUid+'/ready').set(!me.ready);
 }
 /* Any connected player may claim host — the real host's device might be
    a different browser/tab entirely (identity is per-localStorage, not
@@ -3914,8 +4049,9 @@ function hostKickPlayer(targetUid){
 }
 function mpStart(){
   const r=mp.room;if(!r||!mp.isHost)return;
-  const ps=Object.entries(r.players||{}).map(([uid,p])=>({id:uid,name:p.name,isBot:false,order:p.order}));
+  const ps=Object.entries(r.players||{}).map(([uid,p])=>({id:uid,name:p.name,isBot:false,order:p.order,ready:p.ready}));
   if(ps.length<2)return toast('Need at least 2 players');
+  if(ps.some(p=>p.id!==myUid&&!p.ready))return toast('Not everyone is ready yet');
   ps.sort((a,b)=>a.order-b.order);
   G=newMatch(ps,r.limit||240,'mp',r.numDecks||1);
   announcedRound=-1;
@@ -3941,6 +4077,11 @@ function mpBackToLobby(){
        off data that isn't live. */
     const updates={status:'lobby',spectators:null,state:null};
     Object.entries(specs).forEach(([uid,sp])=>{updates['players/'+uid]={name:sp.name,order:sp.order};});
+    /* everyone re-confirms ready for the next match — carrying over
+       ready states from the match that just ended would let the host's
+       Start button look immediately available before anyone's actually
+       looked at the new lobby. */
+    Object.keys((mp.room&&mp.room.players)||{}).forEach(uid=>{updates['players/'+uid+'/ready']=null;});
     mp.ref.update(updates);
   });
 }
@@ -4627,6 +4768,7 @@ $('#btn-start-bot').onclick=startBotGame;
 $('#btn-create').onclick=createRoom;
 $('#btn-join').onclick=joinRoom;
 $('#btn-start-mp').onclick=mpStart;
+$('#btn-ready-mp').onclick=toggleReadyMp;
 $('#btn-takeover-host').onclick=uiTakeOverHost;
 $('#btn-leave-lobby').onclick=()=>leaveRoom(false);
 
@@ -4749,7 +4891,7 @@ $('#btn-exit').onclick=()=>{
     <button class="btn ghost" onclick="closeModal()">Stay</button></div>`);
 };
 $('#modal-back').addEventListener('click',e=>{
-  if(e.target.id==='modal-back'&&['score','log','help','confirm'].includes(modalKind))closeModal();
+  if(e.target.id==='modal-back'&&['score','log','help','confirm','themepicker','clvoice'].includes(modalKind))closeModal();
 });
 $('#inp-code').addEventListener('input',e=>e.target.value=e.target.value.toUpperCase());
 
@@ -4797,18 +4939,40 @@ window.addEventListener('load',()=>{
 /* ======================================================
    THEME TOGGLE
    ====================================================== */
-let _currentTheme=localStorage.fcTheme||'noir';
+/* 2026-07-20: grew from a single noir/neon toggle to 4 themes (Saif's
+   ask — "we have monte carlo and tokyo neon, add 3 more" from the
+   card-design-options.dc.html aesthetic directions). A single tap can't
+   cleanly cycle 4 named options the way it could cycle 2, so both theme
+   buttons now open a small picker instead of toggling directly — same
+   pattern as the card-style swatch picker. THEMES[''] is the app's
+   existing default look (previously labeled "Monte Carlo" from an
+   earlier, since-replaced palette — relabeled "Prism" here since that's
+   genuinely what it's been since the 2026-07-19 Prism reskin, not a new
+   theme, just an honest rename of what was already there). */
+const THEMES=[
+  {id:'',name:'Prism',icon:'🎴'},
+  {id:'neon',name:'Tokyo Neon',icon:'🌃'},
+  {id:'volt',name:'Volt',icon:'⚡'},
+  {id:'royale',name:'Royale',icon:'♣️'},
+];
+let _currentTheme=localStorage.fcTheme||'';
 function applyTheme(t){
   _currentTheme=t;
-  const isNeon=t==='neon';
-  document.documentElement.setAttribute('data-theme',isNeon?'neon':'');
-  $('#theme-btn').textContent=isNeon?'🎨':'🌃';
-  $('#theme-btn-home').textContent=isNeon?'🎨 Monte Carlo':'🌃 Tokyo Neon';
+  document.documentElement.setAttribute('data-theme',t);
+  const cur=THEMES.find(x=>x.id===t)||THEMES[0];
+  $('#theme-btn').textContent=cur.icon;
+  $('#theme-btn-home').textContent=cur.icon+' '+cur.name;
   localStorage.fcTheme=t;
 }
-function toggleTheme(){applyTheme(_currentTheme==='neon'?'noir':'neon');}
-$('#theme-btn').onclick=toggleTheme;
-$('#theme-btn-home').onclick=toggleTheme;
+function themePickerModal(){
+  const rows=THEMES.map(t=>
+    `<button class="btn ${t.id===_currentTheme?'primary':'ghost'}" onclick="applyTheme('${t.id}');closeModal()">${t.icon} ${t.name}</button>`).join('');
+  openModal('themepicker',`<h2>Choose a theme</h2>
+    <div class="mbtns" style="flex-direction:column;align-items:stretch">${rows}
+    <button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);
+}
+$('#theme-btn').onclick=themePickerModal;
+$('#theme-btn-home').onclick=themePickerModal;
 applyTheme(_currentTheme);
 
 /* ======================================================
