@@ -5789,6 +5789,7 @@ function clOnMyMatchEnd(){
        first built. */
     if(!clStatsRecorded.has(key)&&profile.id){
       clStatsRecorded.add(key);
+      if(clmp.ref)clmp.ref.child('players/'+myUid+'/statsRecorded/'+clFbKey(key)).set(true);
       const myIdxCl=G.players[0].id===CL.myId?0:1;
       const me2=G.players[myIdxCl];
       if(res.draw)profileRecordMatch('draw',me2.wins,me2.roundPts.length);
@@ -6224,6 +6225,7 @@ function clRecordStatsForNewResults(){
     if(!r||!r.done)return;
     if(r.a!==CL.myId&&r.b!==CL.myId)return;
     clStatsRecorded.add(key);
+    if(clmp.ref)clmp.ref.child('players/'+myUid+'/statsRecorded/'+clFbKey(key)).set(true);
     /* Fallback path only — normally clOnMyMatchEnd() (fires the instant
        my own match actually concludes, live G still in hand) already
        recorded this fixture with real roundsWon/roundsPlayed and added
@@ -6442,6 +6444,22 @@ function clmpSync(){
     localStorage.removeItem('fcClRoom');
     clmpDetachAll();CL=null;goScr('scr-home');toast('You left the tournament');return;}
   clmp.isHost=effHost(room)===myUid;
+  /* Real bug found live (2026-07-21): a player who refreshed mid-tournament
+     (an explicitly-requested feature — see the auto-rejoin handler) got
+     every already-finished fixture of theirs re-credited to their lifetime
+     profile stats, every single time, because clStatsRecorded was only
+     ever an in-memory Set — a real page reload always restarts the script
+     with a fresh empty one (`let clStatsRecorded=new Set()` at its
+     declaration), no matter what clmpAttach() itself does. One player
+     refreshing repeatedly during a single 5-games-per-player league
+     reported 31 lifetime games recorded. Fixed by making the "already
+     recorded" marker durable: persisted to players/{uid}/statsRecorded/
+     {fbKey} in Firebase the instant a fixture is actually credited (see
+     clOnMyMatchEnd/clRecordStatsForNewResults), and re-seeded into the
+     local Set here — a union, not an overwrite, so an in-session credit
+     that hasn't round-tripped back from Firebase yet doesn't get lost. */
+  const myStatsRecorded=(room.players[myUid]&&room.players[myUid].statsRecorded)||{};
+  Object.keys(myStatsRecorded).forEach(fbk=>clStatsRecorded.add(clUnFbKey(fbk)));
   const players=Object.entries(room.players).sort((a,b)=>(a[1].order||0)-(b[1].order||0))
     .map(([uid,p])=>({id:uid,name:p.name,isBot:false,diff:null,emojis:p.emojis||null}));
   const results={},liveScores={};
