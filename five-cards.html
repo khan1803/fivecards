@@ -305,7 +305,7 @@ input:focus{border-color:var(--gold)}
 /* lobby emoji picker — each player picks 5 of REACTIONS to carry into
    their own in-game reaction wheel (see reactionWheelHtml()'s myEmojiPicks
    branch) instead of the full, ever-growing set showing at once mid-game */
-#emoji-pick-grid{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:4px 0 8px}
+#emoji-pick-grid,#cl-emoji-pick-grid{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:4px 0 8px}
 .emoji-pick-btn{width:40px;height:40px;border-radius:10px;overflow:hidden;padding:0;cursor:pointer;
   border:2px solid rgba(255,184,77,.25);background:var(--panel);opacity:.55;transition:transform .12s,opacity .12s,border-color .12s}
 .emoji-pick-btn img{width:100%;height:100%;object-fit:cover}
@@ -1275,6 +1275,10 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
     </div>
     <div class="cl-lobby-list" id="cl-lobby-players"></div>
     <p class="tag" id="cl-lobby-hint">Waiting for players…</p>
+    <div id="cl-lobby-emoji-picker" style="width:100%">
+      <p class="lbl" style="margin-top:10px">Pick 5 reaction emojis&ensp;<span id="cl-emoji-pick-count">(0/5)</span></p>
+      <div id="cl-emoji-pick-grid"></div>
+    </div>
     <button class="btn primary big hidden" id="btn-cl-lobby-start">Start Tournament</button>
     <button class="btn ghost small hidden" id="btn-cl-takeover">Take over as host</button>
     <button class="btn ghost" id="btn-cl-leave-lobby">← Leave room</button>
@@ -2354,6 +2358,15 @@ function sortHand(h){
     if(isJoker(a)&&isJoker(b))return 0;
     if(isJoker(a))return -1;if(isJoker(b))return 1;
     if(val(a)!==val(b))return val(a)-val(b);   // point value, not rank — 8 is worth 0, so it sorts left of A
+    /* Real bug found live (2026-07-21): "card sequence incorrect, e.g.
+       Q,J,Q" — 10/J/Q/K all share the same 10-point value, so without
+       this the comparator fell straight through to the suit tiebreak
+       below with no rank ordering at all, leaving same-value cards in
+       whatever arbitrary order they were drawn in (a hand could render
+       as Q,J,Q instead of J,Q,Q). Breaking the value tie by actual rank
+       first fixes that *and* makes it far easier to spot a same-suit run
+       at a glance, which is the whole point of sorting a rummy hand. */
+    if(rIdx(a.r)!==rIdx(b.r))return rIdx(a.r)-rIdx(b.r);
     return SUITS.indexOf(a.s)-SUITS.indexOf(b.s);
   });
 }
@@ -5947,6 +5960,30 @@ function clRenderSpectate(){
   const res=clSpectateKey&&clRes(clSpectateKey);
   const g=res?null:clSpectateGame();
   if(!g){
+    /* Real bug found live (2026-07-21): "game stuck on the 'X calls for a
+       Show!!!' banner after the match I was spectating ended". The real
+       participant writes the match's final result (clMpWriteResult, see
+       clOnMyMatchEnd) as soon as *their* client sees matchEnd — independent
+       of, and usually much faster than, the spectator's own local
+       announce-banner timer (showAnnouncePending/openShowBannerPending,
+       ~1.7-1.8s, see render()). Once that result lands here, `res` goes
+       truthy and this branch takes over *without ever calling render()
+       again* — but render() is the only place that (a) clears those
+       pending flags once their deadline passes and (b) promotes the
+       announce banner to the real round/match modal. With this branch
+       never touching either, a spectator whose local announce timer
+       hadn't fired yet by the time the real result arrived was left with
+       that modal on screen forever: nothing left to ever advance or
+       close it, since a finished match has no further Firebase writes to
+       trigger another render(), and this exact branch is what stops
+       calling it. Since `res` being truthy already means the match is
+       definitively over, any pending announce/reveal banner at this
+       point is stale by definition — clear it here rather than leaving it
+       to a render() that will never run again. */
+    if(showAnnouncePending||openShowBannerPending){
+      showAnnouncePending=false;openShowBannerPending=false;
+      closeModalIf('announce');
+    }
     const wrap=$('#cl-watch-body');
     if(wrap)wrap.innerHTML=res
       ?`<p class="tag" style="text-align:center;padding-top:30px">Match finished — ${esc(clName(res.winner))} won by ${res.margin}.</p>`
@@ -6406,7 +6443,7 @@ function clmpSync(){
     clmpDetachAll();CL=null;goScr('scr-home');toast('You left the tournament');return;}
   clmp.isHost=effHost(room)===myUid;
   const players=Object.entries(room.players).sort((a,b)=>(a[1].order||0)-(b[1].order||0))
-    .map(([uid,p])=>({id:uid,name:p.name,isBot:false,diff:null}));
+    .map(([uid,p])=>({id:uid,name:p.name,isBot:false,diff:null,emojis:p.emojis||null}));
   const results={},liveScores={};
   const matches=clmp.matches||room.matches||{};
   Object.entries(matches).forEach(([fbk,m])=>{
@@ -6467,11 +6504,12 @@ function clRenderMpLobby(){
   }
   const hostUid=effHost(r);
   const ps=Object.entries(r.players||{}).sort((a,b)=>(a[1].order||0)-(b[1].order||0));
+  const emojiStrip=p=>(p.emojis&&p.emojis.length)?`<span class="lp-emojis">${p.emojis.map(k=>REACTIONS[k]?`<img src="${REACTIONS[k].img}" alt="${esc(k)}">`:'').join('')}</span>`:'';
   $('#cl-lobby-players').innerHTML=ps.map(([uid,p])=>{
     const isHost=uid===hostUid,me=uid===myUid;
     const inVoice=voiceMicOn.has(uid);
     const kick=(clmp.isHost&&!me)?`<button class="cl-lp-kick" data-cl-kick="${uid}">✕</button>`:'';
-    return `<div class="cl-lp"><span>${esc(p.name)}${me?' <span style="color:var(--teal);font-size:11px">(you)</span>':''}${inVoice?' <span class="lp-mic">🎙️</span>':''}</span>
+    return `<div class="cl-lp"><span>${esc(p.name)}${me?' <span style="color:var(--teal);font-size:11px">(you)</span>':''}${inVoice?' <span class="lp-mic">🎙️</span>':''}${emojiStrip(p)}</span>
       <span>${isHost?'<span class="cl-lp-host">HOST</span> ':''}${kick}</span></div>`;
   }).join('');
   const n=ps.length;
@@ -6480,14 +6518,49 @@ function clRenderMpLobby(){
   else hint.textContent=n%2===0
     ?`${n} players · ${n-1} rounds · everyone plays everyone once`
     :`${n} players · ${n} rounds · everyone plays everyone once (one player sits out each round)`;
-  const canStart=clmp.isHost&&n>=4;
+  const myEmojiCount=((r.players&&r.players[myUid]&&r.players[myUid].emojis)||[]).length;
+  const canStart=clmp.isHost&&n>=4&&myEmojiCount===5;
   $('#btn-cl-lobby-start').classList.toggle('hidden',!canStart);
   $('#btn-cl-takeover').classList.toggle('hidden',clmp.isHost);
+  renderClEmojiPicker(myEmojiCount);
+}
+/* Champions League's own copy of the regular-MP lobby emoji picker (see
+   renderEmojiPicker()/toggleEmojiPick() there) — same "pick 5 of
+   REACTIONS" rule, same live-strip-in-the-roster display, just against
+   clmp.ref/clmp.room instead of mp.ref/mp.room since CL runs its own
+   separate tournament-room schema. CL has no per-player ready-check (the
+   host alone decides when to start, same as before this shipped), so the
+   only new gate is the *host's own* 5 picks — everyone else's picks are
+   just informational/cosmetic to the roster until this player's own
+   1v1 matches actually start using their emojis (see clmpSync()'s
+   players.map and clMpEnterMatch()'s newMatch() call). */
+function renderClEmojiPicker(myEmojiCount){
+  $('#cl-emoji-pick-count').textContent=`(${myEmojiCount}/5)`;
+  const r=clmp.room;const me=r&&r.players&&r.players[myUid];
+  const mine=new Set((me&&me.emojis)||[]);
+  $('#cl-emoji-pick-grid').innerHTML=Object.entries(REACTIONS).map(([key,rx])=>
+    `<button class="emoji-pick-btn${mine.has(key)?' sel':''}" data-key="${esc(key)}" title="${esc(rx.label)}"><img src="${rx.img}" alt="${esc(key)}"></button>`).join('');
+  $('#cl-emoji-pick-grid').querySelectorAll('.emoji-pick-btn').forEach(b=>{
+    b.onclick=()=>toggleClEmojiPick(b.dataset.key);
+  });
+}
+function toggleClEmojiPick(key){
+  if(!clmp.ref)return;
+  const r=clmp.room;const me=r&&r.players&&r.players[myUid];if(!me)return;
+  let picks=[...(me.emojis||[])];
+  if(picks.includes(key)){picks=picks.filter(k=>k!==key);}
+  else{
+    if(picks.length>=5){toast('Only 5 allowed — tap one to remove it first');return;}
+    picks.push(key);
+  }
+  clmp.ref.child('players/'+myUid+'/emojis').set(picks);
 }
 function clMpStart(){
   const r=clmp.room;if(!r||!clmp.isHost)return;
   const ps=Object.keys(r.players||{});
   if(ps.length<4)return toast('Need at least 4 players');
+  const myEmojiCount=((r.players&&r.players[myUid]&&r.players[myUid].emojis)||[]).length;
+  if(myEmojiCount!==5)return toast('Pick exactly 5 reaction emojis first');
   const ordered=Object.entries(r.players).sort((a,b)=>(a[1].order||0)-(b[1].order||0)).map(([uid])=>uid);
   const schedule=clMakeSchedule(ordered);
   clmp.ref.update({status:'league',phase:'league',round:0,
@@ -6565,8 +6638,8 @@ function clMpEnterMatch(m){
   mp.stateRef.transaction(cur=>{
     if(cur)return;                         // already created by the other player — abort
     const A=clPlayer(aId),B=clPlayer(bId);
-    const g=newMatch([{id:aId,name:A.name,isBot:false,diff:null},
-                      {id:bId,name:B.name,isBot:false,diff:null}],CL.limit,'mp',CL.numDecks);
+    const g=newMatch([{id:aId,name:A.name,isBot:false,diff:null,emojis:A.emojis||null},
+                      {id:bId,name:B.name,isBot:false,diff:null,emojis:B.emojis||null}],CL.limit,'mp',CL.numDecks);
     g.clKey=m.key;deal(g);
     return JSON.stringify(g);
   });
