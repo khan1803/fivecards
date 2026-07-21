@@ -400,6 +400,62 @@ body.dealing .card-count{visibility:hidden}
 
 @keyframes pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.28)}}
 
+/* ---------- selectable card designs (2026-07-20) ----------
+   Ported from a Claude-Design handoff (card-design-options.dc.html) —
+   design tokens/shapes only, same DOM cardEl() already emits (.tl/.mid/
+   .br spans), so switching styles is pure CSS, zero JS/engine risk. Four
+   of the ten reference iterations chosen as a representative spread
+   (bold/foil to quiet/elegant) rather than all ten, per Saif's own "a
+   few card designs" framing. Selected via [data-card-style] on <html>,
+   same mechanism as the existing theme toggle (applyTheme/[data-theme]),
+   persisted the same way (localStorage). Default/unset = the game's
+   existing "Prism" card (no override rules needed — that's just .card's
+   own base styling above, untouched). */
+
+/* foil — 2a "Foil Rarity Frame": animated conic-gradient foil ring border */
+@keyframes cardFoilSweep{0%{background-position:0% 0}100%{background-position:200% 0}}
+[data-card-style="foil"] .card{background:linear-gradient(160deg,oklch(0.24 0.045 300),oklch(0.13 0.03 300));
+  box-shadow:none;border:3px solid transparent;
+  background-image:linear-gradient(160deg,oklch(0.24 0.045 300),oklch(0.13 0.03 300)),linear-gradient(115deg,var(--gold),var(--magenta),var(--teal),var(--gold));
+  background-origin:border-box;background-clip:padding-box,border-box;background-size:100% 100%,250% 100%;
+  animation:cardFoilSweep 3s linear infinite}
+[data-card-style="foil"] .card .tl,[data-card-style="foil"] .card .br{color:var(--gold)}
+[data-card-style="foil"] .card.red .mid{color:var(--magenta)}
+[data-card-style="foil"] .card:not(.red):not(.jk) .mid{color:var(--gold)}
+[data-card-style="foil"] .card.back{background-image:linear-gradient(160deg,oklch(0.24 0.045 300),oklch(0.13 0.03 300)),linear-gradient(115deg,var(--gold),var(--magenta),var(--teal),var(--gold))}
+
+/* glass — 2b "Glass Minimal": translucent frosted panel */
+[data-card-style="glass"] .card{background:oklch(0.3 0.04 300 / .35);backdrop-filter:blur(10px);
+  border:1px solid oklch(0.85 0.05 300 / .25);box-shadow:0 10px 20px rgba(0,0,0,.4),inset 0 1px 0 oklch(1 0 0 / .12)}
+[data-card-style="glass"] .card .tl,[data-card-style="glass"] .card .br{color:#fff}
+[data-card-style="glass"] .card.red .mid{color:var(--magenta);filter:drop-shadow(0 0 8px oklch(0.72 0.2 350 / .5))}
+[data-card-style="glass"] .card:not(.red):not(.jk) .mid{color:var(--teal);filter:drop-shadow(0 0 8px oklch(0.78 0.15 210 / .5))}
+[data-card-style="glass"] .card.back{background:oklch(0.3 0.04 300 / .35);backdrop-filter:blur(10px)}
+
+/* ivory — 3b "Ivory Serif": the one light-ground card, reads as a
+   lacquered physical card against the dark felt. Uses the already-
+   loaded Unbounded (not the reference's Spectral) — not worth a fifth
+   Google Fonts request for one card style. */
+[data-card-style="ivory"] .card{background:oklch(0.94 0.015 85);box-shadow:0 4px 10px rgba(0,0,0,.35);border:none}
+[data-card-style="ivory"] .card .tl,[data-card-style="ivory"] .card .br{color:oklch(0.4 0.16 340)}
+[data-card-style="ivory"] .card .mid{color:oklch(0.4 0.16 340)}
+[data-card-style="ivory"] .card.red .mid,[data-card-style="ivory"] .card.red .tl,[data-card-style="ivory"] .card.red .br{color:oklch(0.4 0.16 340)}
+[data-card-style="ivory"] .card.jk .mid,[data-card-style="ivory"] .card.jk .tl,[data-card-style="ivory"] .card.jk .br{color:oklch(0.5 0.14 300)}
+[data-card-style="ivory"] .card.back{background:oklch(0.94 0.015 85)}
+[data-card-style="ivory"] .card.back::before{background:repeating-linear-gradient(45deg,oklch(0.7 0.13 85 / .15) 0,oklch(0.7 0.13 85 / .15) 1.5px,transparent 1.5px,transparent 8px)}
+[data-card-style="ivory"] .card.back::after{color:oklch(0.7 0.13 85 / .5)}
+
+/* card-style picker: small swatch buttons, placed right next to the hand
+   at the bottom of the game screen per Saif's explicit ask ("this option
+   should be at the bottom next to his cards") */
+#card-style-picker{display:flex;gap:6px;align-items:center;justify-content:center}
+.cs-swatch{width:26px;height:26px;border-radius:8px;border:2px solid transparent;cursor:pointer;padding:0;overflow:hidden;flex:0 0 auto}
+.cs-swatch.sel{border-color:var(--gold)}
+.cs-swatch[data-cs="prism"]{background:linear-gradient(155deg,oklch(0.26 0.045 300),oklch(0.15 0.035 300));box-shadow:inset 0 0 0 1.5px oklch(0.78 0.15 210 / .5)}
+.cs-swatch[data-cs="foil"]{background:linear-gradient(115deg,var(--gold),var(--magenta),var(--teal))}
+.cs-swatch[data-cs="glass"]{background:oklch(0.3 0.04 300 / .6);box-shadow:inset 0 0 0 1px oklch(0.85 0.05 300 / .4)}
+.cs-swatch[data-cs="ivory"]{background:oklch(0.94 0.015 85)}
+
 /* ---------- my area ---------- */
 #my-area{width:100%;display:flex;flex-direction:column;align-items:center;gap:6px;
   padding:12px 8px calc(10px + env(safe-area-inset-bottom));border-top:1px solid rgba(255,184,77,.18);transition:box-shadow .25s;background:rgba(255,184,77,.02)}
@@ -573,9 +629,9 @@ body.dealing .card-count{visibility:hidden}
 [data-theme="neon"] .bg-deco span:nth-child(2){color:#00D4FF;opacity:.022}
 [data-theme="neon"] .bg-deco span:nth-child(3){color:#00D4FF;opacity:.018}
 [data-theme="neon"] .hero-wordmark{
-  background:linear-gradient(100deg,#00D4FF,#F0543C,#FFB5A0,#00D4FF);
+  background:linear-gradient(100deg,#00D4FF,#F0543C,#FFB5A0,#00D4FF);background-size:250% auto;
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  animation:neonShimmer 2.4s ease-in-out infinite!important
+  animation:shimmer 4s linear infinite!important
 }
 [data-theme="neon"] .tag{color:var(--gold)}
 [data-theme="neon"] .home-suits span:nth-child(1){color:#00D4FF}
@@ -642,7 +698,18 @@ body.dealing .card-count{visibility:hidden}
    ====================================================== */
 @keyframes noirShimmer{0%,100%{filter:drop-shadow(0 0 16px rgba(255,184,77,.4))}50%{filter:drop-shadow(0 0 36px rgba(255,158,207,.8))}}
 @keyframes neonShimmer{0%,100%{filter:drop-shadow(0 0 16px rgba(240,84,60,.4))}50%{filter:drop-shadow(0 0 36px rgba(240,84,60,.9))}}
-.hero-wordmark{animation:shimmer 4s linear infinite,noirShimmer 2.8s ease-in-out infinite}
+/* Real bug found from a screenshot (2026-07-20): this used to also layer
+   noirShimmer's pulsing drop-shadow (16px→36px blur) on top of the
+   gradient-clipped title text. A large soft drop-shadow behind text whose
+   own fill is already a moving gradient reads as genuinely blurry/low-
+   quality at the sizes this renders at — not a rendering bug, just the
+   wrong effect for this element (noirShimmer's glow-pulse is right for a
+   card-back suit icon or a solid-color banner, wrong for large display
+   type). The base .hero-wordmark rule's own `animation:shimmer` (plain
+   gradient-position sweep, no blur) is what the reference design actually
+   specified — removed the override here so that's the only animation
+   left on it. noirShimmer itself is untouched/still used elsewhere
+   (.announce-banner), this only stops it applying to the title. */
 
 @keyframes scrIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 @keyframes scrOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-10px)}}
@@ -1213,7 +1280,14 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
     <div id="status-bar"></div>
     <div id="turn-timer" class="hidden"></div>
     <div id="log-line"></div>
+    <div id="reveal-takeover" class="hidden"><button class="btn ghost small" onclick="uiTakeOverHost()">Take over as host</button></div>
     <div id="my-hand"></div>
+    <div id="card-style-picker">
+      <button class="cs-swatch sel" data-cs="prism" title="Prism (default)"></button>
+      <button class="cs-swatch" data-cs="foil" title="Foil"></button>
+      <button class="cs-swatch" data-cs="glass" title="Glass"></button>
+      <button class="cs-swatch" data-cs="ivory" title="Ivory"></button>
+    </div>
     <div id="actions">
       <button class="btn ghost" id="btn-show">SHOW</button>
       <button class="btn primary" id="btn-discard" disabled>Discard</button>
@@ -1729,6 +1803,31 @@ document.addEventListener('visibilitychange',()=>{
     document.body.classList.remove('dealing');
   }
   retryVoiceAudio();
+  /* Real gap found 2026-07-20, matching "voice keeps going dead,
+     inconsistent, need to refresh": retryVoiceAudio() only resumes
+     paused <audio> elements — actual dead peer connections were only
+     ever repaired by each RTCPeerConnection's own oniceconnectionstate-
+     change handler, an event-driven mechanism that mobile browsers can
+     throttle or fully suspend while backgrounded (screen lock, another
+     app in front, switching tabs) — exactly the scenario this listener
+     itself exists for. So a connection could die while backgrounded and
+     never get the chance to self-heal before the user comes back and
+     finds voice just isn't working from that point on. This actively
+     re-checks every peer's real ICE state the moment the tab becomes
+     visible again, instead of only ever reacting to an event that may
+     not have fired. Mirrors reconnectPeer()'s own logic/tie-break;
+     'reconnect-request' (see handleSignal) covers the case where *this*
+     side isn't the one that's supposed to re-offer. */
+  if(voice.joined){
+    Object.keys(voice.peers).forEach(uid=>{
+      const entry=voice.peers[uid];
+      const st=entry&&entry.pc&&entry.pc.iceConnectionState;
+      if(st&&st!=='connected'&&st!=='completed'){
+        if(myUid<uid){teardownPeer(uid);callPeer(uid);}
+        else{teardownPeer(uid);sendSignal(uid,{type:'reconnect-request'});}
+      }
+    });
+  }
   if(G)render();
 });
 /* standard popover UX: a tap anywhere outside the reaction picker (or
@@ -2601,6 +2700,21 @@ function render(){
      hide during the reveal, just via a different element that wasn't
      covered by that suppression. */
   $('#log-line').textContent=openShowRevealing?'🎴 Revealing the cards…':(G.log.length?G.log[G.log.length-1]:'');
+  /* Real bug found live (2026-07-19): the live Open Show reveal (tapping
+     the deck to flip cards one at a time) is a host-only action gated on
+     mp.isHost — but unlike the round-end modal, this phase has never had
+     a "take over as host" affordance anywhere. If the actual host's tab
+     backgrounds/disconnects mid-reveal (mobile browsers doing exactly
+     this is already documented elsewhere in this file as a real voice-
+     call failure mode — same underlying cause applies here), every other
+     client — real players *and* spectators — is stuck forever on "Host
+     is revealing cards…" with no way to recover except reloading and
+     hoping the host comes back. This is very likely the actual root
+     cause behind "the game gets stuck when someone calls a show" and
+     "spectator gets stuck" both being reported together — a spectator
+     watching a real stuck table just sees the same frozen state. */
+  const revealTakeover=$('#reveal-takeover');
+  if(revealTakeover)revealTakeover.classList.toggle('hidden',!(openShowRevealing&&G.mode==='mp'&&!mp.isHost));
   if(me){
     $('#my-rank-badge').textContent='#'+rankOf(myIdx);
     const myShownSum=myRevealCnt!=null?handSum(sortHand(me.hand).slice(0,myRevealCnt)):handSum(me.hand);
@@ -2825,10 +2939,18 @@ function showRoundModal(){
      Firebase, so the moment this writes, every other client (including
      the old host's, if it's actually still open) sees the same new host
      and stops offering its own Next Round button — no split-brain. */
-  /* Eliminated players (and spectators — me is undefined for them) don't
-     get to steer the table they're no longer actually competing at;
-     take-over stays available to whoever's still actually playing. */
-  const takeOverBtn=(G.mode==='mp'&&!iCanAdvance&&me&&!me.elim)?`<button class="btn ghost small" onclick="uiTakeOverHost()">Take over as host</button>`:'';
+  /* Eliminated players don't get to steer a match they're no longer
+     actually competing in. Spectators are the opposite case — this is
+     deliberately *included* for them (real bug found live, 2026-07-20:
+     it used to be excluded, since `me` is undefined for a spectator,
+     same as an eliminated player — but a spectator watching a genuinely
+     stuck table, host gone and every real player already excluded from
+     their own "waiting for host" screen the same way, had no way to
+     unstick it either, reported as "spectator mode gets stuck"). Any
+     player — or spectator — being able to claim host at any time is
+     exactly the intended escape hatch for this; uiTakeOverHost() itself
+     already tolerates myIdx=-1 correctly. */
+  const takeOverBtn=(G.mode==='mp'&&!iCanAdvance&&(clSpectating||(me&&!me.elim)))?`<button class="btn ghost small" onclick="uiTakeOverHost()">Take over as host</button>`:'';
   let extra,nextBtn;
   if(calledBy!=null){
     const callerName=esc(G.players[calledBy].name);
@@ -2844,8 +2966,22 @@ function showRoundModal(){
     extra=openNote;
     nextBtn=baseBtn+openBtn;
   }
+  /* Spectators specifically always get an explicit Close, regardless of
+     host status — this modal doesn't support tap-the-backdrop-to-dismiss
+     (only 'score'/'log'/'help'/'confirm' kinds do, see the modal-back
+     click handler), and it fully covers the topbar's own exit button
+     underneath it (#modal-back is a full-viewport overlay). Before the
+     takeOverBtn fix above, a spectator watching a "waiting for host"
+     round-end had *zero* buttons in this modal at all — well and truly
+     stuck with no way back to the hub short of a hard reload, reported
+     as "unable to come outside to the score screen." Real players still
+     don't get a bare Close here — advancing the round is the actual
+     point for them — but a spectator watching should always be able to
+     just leave regardless of whether they also choose to help unstick
+     the table via takeOverBtn. */
+  const closeBtn=clSpectating?`<button class="btn ghost small" onclick="closeModal()">Close</button>`:'';
   openModal('round',`<h2>Round ${G.round}${r.openShow?' · OPEN SHOW ⚠️':''}</h2>${head}${resultTable(r.rows,r.shower)}${extra}
-    <div class="mbtns">${nextBtn}</div>`);
+    <div class="mbtns">${nextBtn}${closeBtn}</div>`);
 }
 /* Metrics-as-rows, players-as-columns leaderboard — one column per
    player (sorted best→worst) so the full round-by-round history reads
@@ -4330,6 +4466,16 @@ async function handleSignal(fromUid,msg){
       if(entry.pc.remoteDescription)await entry.pc.addIceCandidate(msg.candidate).catch(()=>{});
       else entry.pending.push(msg.candidate);
     }
+  }else if(msg.type==='reconnect-request'){
+    /* See visibilitychange's proactive peer check for why this exists:
+       only the deterministically-lower uid ever calls callPeer() (same
+       tie-break used everywhere else here), so if the *higher*-uid side
+       is the one that notices a dead connection on returning to the tab,
+       it has no way to fix it by itself — it can only ask the actual
+       offerer to redo the offer. Safe to always honor: rebuilding an
+       already-fine connection is a harmless no-op glitch at worst, and
+       teardownPeer+callPeer here mirrors reconnectPeer() exactly. */
+    if(voice.joined&&myUid<fromUid){teardownPeer(fromUid);callPeer(fromUid);}
   }
 }
 function attachRemoteAudio(uid,stream){
@@ -4664,6 +4810,27 @@ function toggleTheme(){applyTheme(_currentTheme==='neon'?'noir':'neon');}
 $('#theme-btn').onclick=toggleTheme;
 $('#theme-btn-home').onclick=toggleTheme;
 applyTheme(_currentTheme);
+
+/* ======================================================
+   CARD DESIGN PICKER — "this option should be at the bottom
+   next to his cards" (Saif, 2026-07-20). Same [data-x]-attribute +
+   localStorage pattern as the theme toggle above, just scoped to
+   .card via [data-card-style] instead of the whole page via
+   [data-theme]. 'prism' (the game's existing default look) is stored
+   as an empty attribute, same convention [data-theme] already uses for
+   its own default ('noir') — no CSS override rules needed for it since
+   that's just .card's own un-overridden base styling. */
+let _cardStyle=localStorage.fcCardStyle||'prism';
+function applyCardStyle(s){
+  _cardStyle=s;
+  document.documentElement.setAttribute('data-card-style',s==='prism'?'':s);
+  document.querySelectorAll('.cs-swatch').forEach(b=>b.classList.toggle('sel',b.dataset.cs===s));
+  localStorage.fcCardStyle=s;
+}
+document.querySelectorAll('#card-style-picker .cs-swatch').forEach(b=>{
+  b.onclick=()=>applyCardStyle(b.dataset.cs);
+});
+applyCardStyle(_cardStyle);
 
 /* ======================================================
    SCREEN TRANSITIONS
@@ -5817,7 +5984,7 @@ function clmpAttach(code){
   clmpDetachAll();
   localStorage.fcClRoom=code;   // survives a refresh — see the auto-rejoin handler near the regular-MP one
   clmp.code=code;clmp.ref=db.ref(CLROOMS+code);clmp.matchesRef=clmp.ref.child('matches');
-  clmp.room=null;clmp.matches=null;clmp.everLoaded=false;
+  clmp.room=null;clmp.matches=null;clmp.everLoaded=false;clmp.autoResumeChecked=false;
   clChampionCelebrated=false;
   clStatsRecorded=new Set();
   if(clChat.ref)clChat.ref.off();
@@ -5847,6 +6014,15 @@ function clmpDetachAll(){
 }
 /* Rebuild the local CL entirely from synced room + matches data, then
    route to the right screen. Runs on every root/matches change. */
+/* Strictly "do I have a match already in progress right now" — unlike
+   clMyActive(), never returns a fixture that's merely eligible-to-start.
+   Only ever used to auto-resume an in-progress match after a refresh;
+   starting a brand-new match should always still need an explicit tap. */
+function clMyLiveFixture(){
+  if(!CL)return null;
+  const pool=CL.phase==='league'?clAllLeagueFixtures():clActiveMatches();
+  return pool.find(m=>(m.a===CL.myId||m.b===CL.myId)&&clIsLive(m.key))||null;
+}
 function clmpSync(){
   const room=clmp.room;
   if(!room)return;   // root listener owns closure detection; nothing to sync yet
@@ -5879,6 +6055,24 @@ function clmpSync(){
   // league / playoffs / done
   if(clSpectating){clRenderSpectate();return;}
   if(G&&G.clKey){clUpdateLiveStrip();return;}   // I'm inside my match — don't yank me out
+  /* Auto-resume straight into my own in-progress match on the first sync
+     after attaching (a fresh page load, or clmpAttach() from create/join)
+     — real gap found 2026-07-20: without this, refreshing mid-match only
+     ever landed back at the tournament hub, needing an extra manual
+     "Play my match" tap to actually get back into the game, reported as
+     "refreshing needs the room code again." Gated to fire *only once* per
+     attach (clmp.autoResumeChecked) specifically so this never fires
+     again later in the same session — without that guard, deliberately
+     leaving your own match via clGoHub() ("Back to tournament") would
+     immediately snap you right back into it on the very next sync, since
+     the match's Firebase state still exists and still looks "live" at
+     that point (only a genuine game-over result, not merely navigating
+     away, ever stops clIsLive() from considering it live). */
+  if(!clmp.autoResumeChecked){
+    clmp.autoResumeChecked=true;
+    const myLive=clMyLiveFixture();
+    if(myLive){clMpEnterMatch(myLive);return;}
+  }
   if(onScreen('scr-cl-watch')){clRenderSpectate();return;}
   if(!onScreen('scr-cl-hub'))goScr('scr-cl-hub');
   clRenderHub();
