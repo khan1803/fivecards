@@ -398,7 +398,7 @@ body.dealing .card-count{visibility:hidden}
    (10.5-11px) rather than jumping to status-bar's 14px serif — this is
    still a quieter, secondary line, just now a size someone can actually
    read without leaning in. */
-#log-line{font-size:20px;color:var(--labelmuted);min-height:26px;cursor:pointer;text-align:center;padding:0 14px;font-family:'DM Mono',monospace;letter-spacing:.3px;margin-top:-6px}
+#log-line{font-size:20px;color:var(--labelmuted);height:26px;line-height:26px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer;text-align:center;padding:0 14px;font-family:'DM Mono',monospace;letter-spacing:.3px;margin-top:-6px}
 
 /* ---------- cards ---------- */
 /* Prism card face (2026-07-19 round 2) — dark glass card matching the
@@ -801,9 +801,10 @@ body.dealing .card-count{visibility:hidden}
   #actions{gap:8px;width:100%;padding:0 8px}
   #actions .btn{flex:1;padding:13px 8px;font-size:12px;min-height:44px;letter-spacing:1px}
   #status-bar{font-size:13px}
-  #log-line{font-size:18px}   /* the exact ~20% cut Saif asked for, measured off the 22px this actually rendered at on his phone */
-  #my-area{gap:5px;padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
-  #my-hand{padding-top:20px}
+  #log-line{font-size:16px;height:20px;line-height:20px}   /* narrow-width is the reliable mobile signal — tall-but-narrow real phones (844px+ logical height) never matched the old max-height:700 breakpoint, so this tightening used to be dead code on real devices */
+  #my-area{gap:4px;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+  #my-hand{padding-top:12px}
+  #table{padding:30px 22px 4px}
   #my-meta{font-size:10px}
   #topbar{padding:8px 10px}
   .icon-btn{width:34px;height:34px;font-size:14px;border-radius:8px}
@@ -811,13 +812,11 @@ body.dealing .card-count{visibility:hidden}
   .cs-swatch{width:20px;height:20px;border-radius:6px}
   #card-style-picker{gap:5px}
 }
-@media(max-height:700px) and (max-width:480px){
-  #table{padding:30px 22px 4px}
-  #my-area{gap:4px;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
-  #my-hand{padding-top:18px}   /* keep enough clearance for the sel-lift/pop peak + NEW badge — see the base rule's comment */
+@media(max-height:640px) and (max-width:480px){
+  /* extra tightening only for genuinely short viewports (old/small phones, landscape) — on top of the max-width:480 block above, which now carries the main mobile tightening since width, not height, is what real tall phones actually match */
   #actions .btn{padding:10px 8px;font-size:12px;min-height:40px}
   #status-bar{font-size:12px;min-height:16px}
-  #log-line{font-size:14px;min-height:18px}
+  #log-line{font-size:14px;height:18px;line-height:18px}
 }
 
 /* ======================================================
