@@ -3933,8 +3933,22 @@ function renderRoomList(rooms){
   /* a room with no players left is stale — every real join/create writes
      onDisconnect().remove() on its own players/{uid} node (see
      attachRoom's root listener), so an abandoned room naturally empties
-     out on its own without needing separate cleanup logic here */
-  const entries=Object.entries(rooms).filter(([,r])=>r&&r.players&&Object.keys(r.players).length>0);
+     out on its own without needing separate cleanup logic here.
+     Real bug found live (2026-07-22): a finished match's room still shows
+     status:'playing' forever — nothing flips it back to 'lobby' unless
+     someone explicitly clicks "Back to Lobby" (mpBackToLobby), and
+     players who just close the tab after their game ends leave the room
+     looking permanently "in progress" even though nobody's actually
+     playing. status alone can't tell "in progress" from "finished, but
+     nobody clicked through yet" — only the live G itself (G.phase) knows
+     that, so this parses the room's own state blob (already present in
+     this same snapshot, no extra fetch) and excludes anything that's
+     actually reached matchEnd. */
+  const isReallyLive=r=>{
+    if(!r.state)return true;   // lobby, or a genuinely fresh match with no state yet
+    try{return JSON.parse(r.state).phase!=='matchEnd';}catch(e){return true;}
+  };
+  const entries=Object.entries(rooms).filter(([,r])=>r&&r.players&&Object.keys(r.players).length>0&&isReallyLive(r));
   if(!entries.length){wrap.innerHTML='<p class="tag" style="text-align:center">No rooms open right now — create one!</p>';return;}
   entries.sort((a,b)=>(b[1].created||0)-(a[1].created||0));
   wrap.innerHTML=entries.map(([code,r])=>{
