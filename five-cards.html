@@ -322,6 +322,15 @@ input:focus{border-color:var(--gold)}
 .emoji-pick-btn img{width:100%;height:100%;object-fit:cover}
 .emoji-pick-btn.sel{opacity:1;border-color:var(--gold);box-shadow:0 0 12px rgba(255,184,77,.4);transform:scale(1.06)}
 .emoji-pick-btn:active{transform:scale(.92)}
+/* profile avatar picker (2026-07-22) — same visual language as the
+   reaction-emoji picker above (grid of toggleable swatches), one pick
+   only rather than 5, plain emoji glyphs rather than image thumbnails */
+.avatar-picker{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:4px 0 10px;max-height:180px;overflow-y:auto}
+.avatar-swatch{width:38px;height:38px;border-radius:10px;font-size:19px;cursor:pointer;
+  border:2px solid rgba(255,184,77,.25);background:var(--panel);opacity:.55;display:flex;align-items:center;justify-content:center;
+  transition:transform .12s,opacity .12s,border-color .12s}
+.avatar-swatch.sel{opacity:1;border-color:var(--gold);box-shadow:0 0 12px rgba(255,184,77,.4);transform:scale(1.08)}
+.avatar-swatch:active{transform:scale(.92)}
 /* horizontal strip of a player's 5 chosen reaction thumbnails, shown next
    to their name in the lobby roster so everyone can see everyone else's
    picks before the match starts */
@@ -444,6 +453,14 @@ body.dealing .card-count{visibility:hidden}
 .card.back::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,oklch(0.78 0.15 210 / .08) 0,oklch(0.78 0.15 210 / .08) 1.5px,transparent 1.5px,transparent 8px)}
 .card.back::after{content:'♦';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:calc(var(--cw)*.5);color:oklch(0.85 0.16 95 / .3)}
 .card.sel{transform:translateY(-16px);box-shadow:0 0 0 2.5px var(--gold),0 0 22px oklch(0.85 0.16 95 / .55),0 10px 18px rgba(0,0,0,.6)}
+/* Tactile polish (2026-07-22) — Saif kept tap-select (reliable for
+   multi-card runs, unlike a pure swipe) but asked for it to feel less
+   flat. A quick press-down "squish" on the actual finger-down moment
+   (distinct from the existing spring-pop *after* selecting) gives
+   immediate feedback the tap registered, before render() even runs. */
+.card{transition:transform .1s ease-out,box-shadow .1s ease-out}
+.card:not(.sel):active{transform:scale(.93)}
+.card.sel:active{transform:translateY(-16px) scale(.93)}
 .card.pickable{box-shadow:0 0 0 2.5px var(--gold),0 0 16px oklch(0.85 0.16 95 / .4);cursor:pointer;animation:pulse 1.2s infinite}
 .card .newtag{position:absolute;top:-7px;left:-7px;z-index:5;background:var(--gold);color:var(--inkdark);
   font-size:8px;font-weight:900;letter-spacing:.4px;padding:2px 5px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.5);font-family:'DM Mono',monospace}
@@ -499,7 +516,6 @@ body.dealing .card-count{visibility:hidden}
 /* card-style picker: small swatch buttons, placed right next to the hand
    at the bottom of the game screen per Saif's explicit ask ("this option
    should be at the bottom next to his cards") */
-#card-style-picker{display:flex;gap:6px;align-items:center;justify-content:center}
 .cs-swatch{width:26px;height:26px;border-radius:8px;border:2px solid transparent;cursor:pointer;padding:0;overflow:hidden;flex:0 0 auto}
 .cs-swatch.sel{border-color:var(--gold)}
 .cs-swatch[data-cs="prism"]{background:linear-gradient(155deg,oklch(0.26 0.045 300),oklch(0.15 0.035 300));box-shadow:inset 0 0 0 1.5px oklch(0.78 0.15 210 / .5)}
@@ -535,7 +551,7 @@ body.dealing .card-count{visibility:hidden}
 /* laid out in normal flow beside the text (not absolutely positioned
    like the opponent badges) — guarantees no overlap by construction
    rather than by guessing pixel offsets */
-#my-meta-wrap{position:relative;display:inline-flex;align-items:center;gap:8px;margin-top:6px}
+#my-meta-wrap{position:relative;display:inline-flex;align-items:center;gap:8px;margin-top:2px}
 #my-meta{font-size:11px;color:var(--labelmuted);font-weight:500;font-family:'DM Mono',monospace}
 
 /* ---------- modal / toast ---------- */
@@ -620,8 +636,12 @@ body.dealing .card-count{visibility:hidden}
 .emoji-btn:active{transform:scale(1.25)}
 #chat-input-row{display:flex;gap:8px;padding:10px 16px calc(12px + env(safe-area-inset-bottom))}
 #chat-input-row input{flex:1}
-#chat-badge,#chat-badge-lobby,#spec-badge,#join-req-badge{position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:800;
+#chat-badge,#chat-badge-lobby,#join-req-badge{position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:800;
   border-radius:999px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px;line-height:1}
+/* the More button's own indicator is a plain dot, not a numbered pill —
+   it's just "something's worth a look in here" (spectators watching),
+   not an urgent count the way an unread chat badge is */
+#more-badge{position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:var(--gold)}
 /* spectator count is informational, not urgent like an unread chat count
    — same pill shape, but the calmer gold rather than red so it doesn't
    compete for attention */
@@ -834,8 +854,6 @@ body.dealing .card-count{visibility:hidden}
   #topbar{padding:8px 10px}
   .icon-btn{width:34px;height:34px;font-size:14px;border-radius:8px}
   #round-info{font-size:10px;letter-spacing:1.5px}
-  .cs-swatch{width:20px;height:20px;border-radius:6px}
-  #card-style-picker{gap:5px}
 }
 @media(max-height:640px) and (max-width:480px){
   /* extra tightening only for genuinely short viewports (old/small phones, landscape) — on top of the max-width:480 block above, which now carries the main mobile tightening since width, not height, is what real tall phones actually match */
@@ -1387,15 +1405,10 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
     <button class="icon-btn" id="btn-exit">✕</button>
     <div id="round-info"></div>
     <div>
-      <button class="icon-btn" id="btn-sound">🔊</button>
-      <button class="icon-btn" id="theme-btn" title="Switch theme">🌃</button>
       <button class="icon-btn hidden" id="btn-voice" title="Voice chat">🎤</button>
       <button class="icon-btn hidden" id="btn-chat" style="position:relative">💬<span id="chat-badge" class="hidden"></span></button>
-      <button class="icon-btn hidden" id="btn-spectators" title="Spectators" style="position:relative">👁<span id="spec-badge" class="hidden"></span></button>
       <button class="icon-btn hidden" id="btn-join-requests" title="Join requests" style="position:relative">🙋<span id="join-req-badge" class="hidden"></span></button>
-      <button class="icon-btn" id="btn-log">📜</button>
-      <button class="icon-btn" id="btn-score">🏆</button>
-      <button class="icon-btn" id="btn-help2">?</button>
+      <button class="icon-btn" id="btn-more" title="More" style="position:relative">⋯<span id="more-badge" class="hidden"></span></button>
     </div>
   </header>
   <div id="cl-live-strip" class="hidden"></div>
@@ -1431,12 +1444,6 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
     <div id="log-line"></div>
     <div id="reveal-takeover" class="hidden"><button class="btn ghost small" onclick="uiTakeOverHost()">Take over as host</button></div>
     <div id="my-hand"></div>
-    <div id="card-style-picker">
-      <button class="cs-swatch sel" data-cs="prism" title="Prism (default)"></button>
-      <button class="cs-swatch" data-cs="foil" title="Foil"></button>
-      <button class="cs-swatch" data-cs="glass" title="Glass"></button>
-      <button class="cs-swatch" data-cs="ivory" title="Ivory"></button>
-    </div>
     <div id="actions">
       <button class="btn ghost" id="btn-show">SHOW</button>
       <button class="btn primary" id="btn-discard" disabled>Discard</button>
@@ -1560,7 +1567,7 @@ let G=null,myIdx=0;
 
 function newMatch(defs,limit,mode,numDecks){
   return {mode,limit:+limit||240,numDecks:numDecks||1,round:0,starter:-1,starterDir:1,starterStep:0,directionChanged:false,
-    players:defs.map((d,i)=>({id:d.id||'p'+i,name:d.name,isBot:!!d.isBot,diff:d.diff||null,score:0,elim:false,hand:[],wins:0,roundPts:[],emojis:d.emojis||null})),
+    players:defs.map((d,i)=>({id:d.id||'p'+i,name:d.name,isBot:!!d.isBot,diff:d.diff||null,score:0,elim:false,hand:[],wins:0,roundPts:[],emojis:d.emojis||null,avatar:d.avatar||null})),
     deck:[],open:[],heap:[],pending:[],turn:0,attack:0,phase:'discard',
     turnCount:0,result:null,winner:null,log:[],logSeq:0,lastDrawn:null,openShow:null,pickedUpThisTurn:false,v:0};
 }
@@ -2395,6 +2402,7 @@ function sortHand(h){
 }
 function cardEl(c,opts={}){
   const d=document.createElement('div');
+  d.dataset.id=c.id;   // lets playDiscardFly() find a specific hand card's live position by id, not just DOM order
   if(isJoker(c)){
     d.className='card jk';
     d.innerHTML='<span class="tl">JK</span><span class="mid">🃏</span><span class="br">JK</span>';
@@ -2670,7 +2678,7 @@ function render(){
   const mpFeat=G.mode==='mp'&&!G.clKey;
   $('#btn-chat').classList.toggle('hidden',G.mode!=='mp');
   $('#btn-voice').classList.toggle('hidden',G.mode!=='mp');
-  $('#btn-spectators').classList.toggle('hidden',!mpFeat);
+  updateSpectatorBadge();
   updateJoinRequestBadge();
   updateTurnTimer();
   /* whose OPEN CARD it is lives right on their seat chip (see below),
@@ -2753,7 +2761,7 @@ function render(){
        may never respond again. Never shown for an opponent who's
        already out — nothing left to kick. */
     const canKick=G.mode==='mp'&&mp.isHost&&!p.elim&&!G.clKey;   // no kicking your opponent in a 1v1 CL match
-    d.innerHTML=`<div class="avatar">${esc((p.name[0]||'?').toUpperCase())}${rankBadgeHtml(i)}${inVoice?'<span class="voice-mic">🎙️</span>':''}${canKick?`<button class="kick-btn" title="Kick ${esc(p.name)}">✕</button>`:''}</div>
+    d.innerHTML=`<div class="avatar">${avatarFor(p)}${rankBadgeHtml(i)}${inVoice?'<span class="voice-mic">🎙️</span>':''}${canKick?`<button class="kick-btn" title="Kick ${esc(p.name)}">✕</button>`:''}</div>
       <div class="seat-card">
         <div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span>${(showOpenBadge&&i===G.starter)?'<span class="tagchip open-tag">Open card</span>'
           :(showOpenBadge&&i===nextStarterI)?'<span class="tagchip next-open-tag">Next Open Card</span>'
@@ -2788,7 +2796,7 @@ function render(){
        so its icon shouldn't look like it belongs to just one of them. */
     const reactionHtml=dispElimMe?'':`<button class="cough-btn" title="React">😊</button>
       <div class="reaction-picker${reactionPickerOpen?'':' hidden'}">${reactionWheelHtml()}</div>`;
-    d.innerHTML=`<div class="avatar">${esc((me.name[0]||'?').toUpperCase())}${rankBadgeHtml(myIdx)}${inVoice?'<span class="voice-mic">🎙️</span>':''}${reactionHtml}</div>
+    d.innerHTML=`<div class="avatar">${avatarFor(me)}${rankBadgeHtml(myIdx)}${inVoice?'<span class="voice-mic">🎙️</span>':''}${reactionHtml}</div>
       <div class="seat-card">
         <div class="opp-name"><span class="opp-name-text">${esc(me.name)} (you)</span>${(showOpenBadge&&myIdx===G.starter)?'<span class="tagchip open-tag">Open card</span>'
           :(showOpenBadge&&myIdx===nextStarterI)?'<span class="tagchip next-open-tag">Next Open Card</span>':''}</div>
@@ -3072,6 +3080,7 @@ function onCardClick(c){
     toast('Play a 2 / Joker or pick up');sndError();return;
   }
   if(alreadySelected)sel.delete(c.id);else sel.add(c.id);
+  if(navigator.vibrate)navigator.vibrate(8);   // tiny tick on both select and deselect — iOS Safari has no Vibration API at all, silently no-ops there
   render();
 }
 
@@ -3259,11 +3268,18 @@ function showLogModal(){
    — nothing persistent showed who's actually watching right now. The
    room's own root listener already keeps mp.room.spectators live and
    current, so this just needs to surface it, not track anything new. */
+/* Spectators moved off its own topbar icon and into the "More" modal
+   (2026-07-22 topbar cleanup — see showMoreModal()) — this now just
+   feeds the More button's own dot indicator, same ambient "something's
+   there" signal a dedicated badge used to give, without a whole icon
+   spent on a rarely-checked count. */
 function updateSpectatorBadge(){
-  const b=$('#spec-badge');if(!b)return;
+  updateMoreBadge();
+}
+function updateMoreBadge(){
+  const b=$('#more-badge');if(!b)return;
   const n=mp.room&&mp.room.spectators?Object.keys(mp.room.spectators).length:0;
-  if(n>0){b.textContent=n>9?'9+':n;b.classList.remove('hidden');}
-  else b.classList.add('hidden');
+  if(n>0)b.classList.remove('hidden');else b.classList.add('hidden');
 }
 function showSpectatorsModal(){
   const specs=Object.values((mp.room&&mp.room.spectators)||{}).sort((a,b)=>a.order-b.order);
@@ -3315,7 +3331,7 @@ function approveJoinRequest(uid){
   const req=mp.joinRequests&&mp.joinRequests[uid];if(!req)return;
   const active=activeIdxs(G);
   const avgScore=active.length?Math.round(active.reduce((s,i)=>s+G.players[i].score,0)/active.length):0;
-  G.players.push({id:uid,name:req.name,isBot:false,diff:null,score:avgScore,elim:true,pendingJoin:true,hand:[],wins:0,roundPts:[],emojis:null});
+  G.players.push({id:uid,name:req.name,isBot:false,diff:null,score:avgScore,elim:true,pendingJoin:true,hand:[],wins:0,roundPts:[],emojis:null,avatar:req.avatar||null});
   G.v++;
   mp.ref.child('players/'+uid).set({name:req.name,order:Date.now()});
   mp.ref.child('spectators/'+uid).remove();
@@ -3330,6 +3346,33 @@ function denyJoinRequest(uid){
   mp.ref.child('joinRequests/'+uid).remove();
   mp.ref.child('joinResponses/'+uid).set({approved:false,ts:firebase.database.ServerValue.TIMESTAMP});
   closeModal();
+}
+/* Topbar cleanup (2026-07-22): the in-game topbar had grown to 9-10
+   separate icon buttons (exit, sound, theme, voice, chat, spectators,
+   join-requests, log, score, help) one feature at a time, never
+   redesigned as a set — on a real phone width that's a lot of cramped
+   tap targets whose purpose isn't obvious to a new player. Voice/chat
+   stay on the bar directly since they're live social actions used
+   mid-hand; join-requests stays too since it's host-actionable and rare
+   but time-sensitive. Everything else (sound, theme, spectators, log,
+   score, help) — settings and occasional lookups, not moment-to-moment
+   actions — moved into this one "More" sheet instead. */
+function showMoreModal(){
+  const n=mp.room&&mp.room.spectators?Object.keys(mp.room.spectators).length:0;
+  const cur=THEMES.find(x=>x.id===_currentTheme)||THEMES[0];
+  const silent=masterVol.game===0&&masterVol.voice===0&&masterVol.emoji===0;
+  const rows=[
+    `<button class="btn ghost" onclick="closeModal();showVolumeModal();">${silent?'🔇':'🔊'} Sound &amp; volume</button>`,
+    `<button class="btn ghost" onclick="closeModal();themePickerModal();">${cur.icon} Theme — ${esc(cur.name)}</button>`,
+    `<button class="btn ghost" onclick="closeModal();showCardStyleModal();">🎴 Card style</button>`,
+  ];
+  if(G&&G.mode==='mp'&&!G.clKey)rows.push(`<button class="btn ghost" onclick="closeModal();showSpectatorsModal();">👁 Spectators${n?` (${n})`:''}</button>`);
+  rows.push(`<button class="btn ghost" onclick="closeModal();showLogModal();">📜 Game log</button>`);
+  rows.push(`<button class="btn ghost" onclick="closeModal();showScoreModal();">🏆 Standings</button>`);
+  rows.push(`<button class="btn ghost" onclick="closeModal();showHelpModal();">❓ How to play</button>`);
+  openModal('more',`<h2>More</h2>
+    <div class="mbtns" style="flex-direction:column;align-items:stretch">${rows.join('')}
+    <button class="btn ghost" onclick="closeModal()">Close</button></div>`);
 }
 function showHelpModal(){
   openModal('help',`<h2>How to play</h2><div class="help-list">
@@ -3569,7 +3612,25 @@ function fbInit(){
    an optional layer but Saif asked for it to gate play outright. The
    public leaderboard itself still doesn't require signing in to *view*,
    only to *play* — those are different asks. */
-let profile={id:null,name:null};
+let profile={id:null,name:null,avatar:null};
+/* Fun avatar system (2026-07-22) — every seat used to just show the
+   player's first initial in a colored circle, which read as a placeholder
+   rather than a finished feature for a game people play with the same
+   friends repeatedly. Two layers: a signed-in player can explicitly pick
+   one of these from their profile (persisted, carried into every match
+   the same way lobby-picked emojis already are — see the `avatar:`
+   fields mirroring `emojis:` throughout); anyone who *hasn't* picked one
+   (including every bot, which has no profile to pick from at all) still
+   gets a fun emoji instead of a bare letter, via a deterministic hash of
+   their id/name so it's at least stable across a session/match rather
+   than random-flickering on every render. */
+const AVATAR_EMOJIS=['🦊','🐼','🦁','🐸','🐙','🦄','🐢','🐺','🦉','🐯','🐨','🐵','🦋','🐬','🦅','🐲','🦖','🐝','🐧','🦩','🦚','🐳','🦈','🐴','🐰','🦔','🐹','🦥','🐿️','🦦'];
+function pickAvatar(seed){
+  seed=String(seed||'?');
+  let h=0;for(let i=0;i<seed.length;i++)h=(h*31+seed.charCodeAt(i))|0;
+  return AVATAR_EMOJIS[Math.abs(h)%AVATAR_EMOJIS.length];
+}
+const avatarFor=p=>(p&&p.avatar)||pickAvatar(p&&(p.id||p.name));
 let authReady=false;   // true once the initial onAuthStateChanged callback has fired — see updateProfileBadge()
 let needsNameSetup=false;   // true for a brand-new profile that hasn't picked a (unique) display name yet
 function authInit(){
@@ -3636,6 +3697,7 @@ async function profileEnsureDoc(){
     needsNameSetup=true;   // caller (authInit) shows the picker; nothing is written until a unique name is confirmed
   }else if(snap.val().name){
     profile.name=snap.val().name;   // an edited display name (see profileRename) always wins over Google's
+    profile.avatar=snap.val().avatar||null;
     needsNameSetup=false;
   }
 }
@@ -3720,6 +3782,12 @@ async function profileRename(newName){
   profile.name=newName;
   return{ok:true};
 }
+async function profileSetAvatar(emoji){
+  if(!profile.id||!db)return;
+  await db.ref('profiles/'+profile.id+'/avatar').set(emoji);
+  profile.avatar=emoji;
+  showProfileModal();   // re-render in place so the new pick highlights immediately
+}
 /* Gate for the three home-screen mode buttons — Saif asked that nobody
    be able to play at all without signing in first (this used to be an
    optional layer; the leaderboard can still be *viewed* without signing
@@ -3787,8 +3855,13 @@ function updateProfileBadge(){
 }
 function showProfileModal(){
   if(profile.id){
-    openModal('profile',`<h2>👤 ${esc(profile.name)}</h2>
+    const myAvatar=profile.avatar||pickAvatar(profile.id);
+    const swatches=AVATAR_EMOJIS.map(e=>
+      `<button class="avatar-swatch${e===myAvatar?' sel':''}" onclick="profileSetAvatar('${e}')">${e}</button>`).join('');
+    openModal('profile',`<h2>${myAvatar} ${esc(profile.name)}</h2>
       <p class="tag">Signed in with Google — your Champions League and online multiplayer games are being added to your lifetime stats. Sign in with the same Google account on any other device and this exact profile follows you there.</p>
+      <span class="lbl">Your avatar</span>
+      <div class="avatar-picker">${swatches}</div>
       <span class="lbl">Display name on the leaderboard</span>
       <input id="prof-rename" maxlength="16" placeholder="Your name" autocomplete="off" value="${esc(profile.name)}">
       <div class="mbtns" style="flex-direction:column;align-items:stretch">
@@ -4015,7 +4088,7 @@ function createRoom(){
     ref.set({host:myUid,status:'lobby',limit:240,numDecks:1,
       created:firebase.database.ServerValue.TIMESTAMP,
       lastActivity:firebase.database.ServerValue.TIMESTAMP,
-      players:{[myUid]:{name,order:Date.now()}}},
+      players:{[myUid]:{name,avatar:profile.avatar||null,order:Date.now()}}},
       err=>{if(err)toast('Could not create room');else attachRoom(code);});
   }).catch(()=>toast('Connection error — check internet'));
 }
@@ -4045,7 +4118,7 @@ function attemptJoinRoom(code){
     }
     if(!already&&Object.keys(r.players||{}).length>=10)return toast('Room is full (max 10)');
     ref.child('players/'+myUid)
-      .set({name,order:already?r.players[myUid].order:Date.now()})
+      .set({name,avatar:profile.avatar||null,order:already?r.players[myUid].order:Date.now()})
       .then(()=>attachRoom(code));
   }).catch(()=>toast('Connection error — check internet'));
 }
@@ -4082,7 +4155,7 @@ function spectateRoom(code,name){
 function requestJoinMidGame(code,name){
   closeModal();
   const ref=db.ref(ROOMS+code);
-  ref.child('joinRequests/'+myUid).set({name,ts:firebase.database.ServerValue.TIMESTAMP})
+  ref.child('joinRequests/'+myUid).set({name,avatar:profile.avatar||null,ts:firebase.database.ServerValue.TIMESTAMP})
     .then(()=>{
       toast('Request sent — waiting for the host to approve');
       ref.child('joinResponses/'+myUid).on('value',s=>{
@@ -4266,7 +4339,7 @@ function renderLobby(){
   const allReady=nonHost.length>0&&nonHost.every(p=>p.ready);
   const emojiStrip=p=>(p.emojis&&p.emojis.length)?`<span class="lp-emojis">${p.emojis.map(k=>REACTIONS[k]?`<img src="${REACTIONS[k].img}" alt="${esc(k)}">`:'').join('')}</span>`:'';
   $('#lobby-players').innerHTML=ps.map(p=>
-    `<div class="lp">${p.u===host?'⭐ ':''}${esc(p.name)}${p.u===myUid?' <span style="color:var(--dim)">(you)</span>':''}${voiceMicOn.has(p.u)?' <span class="lp-mic">🎙️</span>':''}${p.u!==host?(p.ready?' <span style="color:var(--gold);font-weight:800">✓ Ready</span>':' <span style="color:var(--dim)">Not ready</span>'):''}${emojiStrip(p)}${(mp.isHost&&p.u!==myUid)?`<button class="lp-kick" title="Remove ${esc(p.name)}" data-kick-uid="${esc(p.u)}" data-kick-name="${esc(p.name)}">✕</button>`:''}</div>`).join('');
+    `<div class="lp">${p.u===host?'⭐ ':''}${avatarFor({id:p.u,name:p.name,avatar:p.avatar})} ${esc(p.name)}${p.u===myUid?' <span style="color:var(--dim)">(you)</span>':''}${voiceMicOn.has(p.u)?' <span class="lp-mic">🎙️</span>':''}${p.u!==host?(p.ready?' <span style="color:var(--gold);font-weight:800">✓ Ready</span>':' <span style="color:var(--dim)">Not ready</span>'):''}${emojiStrip(p)}${(mp.isHost&&p.u!==myUid)?`<button class="lp-kick" title="Remove ${esc(p.name)}" data-kick-uid="${esc(p.u)}" data-kick-name="${esc(p.name)}">✕</button>`:''}</div>`).join('');
   const me=ps.find(p=>p.u===myUid);
   const myEmojiCount=(me&&me.emojis)?me.emojis.length:0;
   const btnReady=$('#btn-ready-mp');
@@ -4400,7 +4473,7 @@ function hostKickPlayer(targetUid){
 }
 function mpStart(){
   const r=mp.room;if(!r||!mp.isHost)return;
-  const ps=Object.entries(r.players||{}).map(([uid,p])=>({id:uid,name:p.name,isBot:false,order:p.order,ready:p.ready,emojis:p.emojis||null}));
+  const ps=Object.entries(r.players||{}).map(([uid,p])=>({id:uid,name:p.name,isBot:false,order:p.order,ready:p.ready,emojis:p.emojis||null,avatar:p.avatar||null}));
   if(ps.length<2)return toast('Need at least 2 players');
   if(ps.some(p=>p.id!==myUid&&!p.ready))return toast('Not everyone is ready yet');
   const myEmojiCount=((r.players&&r.players[myUid]&&r.players[myUid].emojis)||[]).length;
@@ -5233,7 +5306,6 @@ $('#seg-lobby-decks').addEventListener('click',e=>{
 $('#btn-gobot').onclick=()=>{if(requirePlaySignIn())goScr('scr-bot');};
 $('#btn-gomp').onclick=()=>{if(requirePlaySignIn()){goScr('scr-mp');roomListAttach();}};
 $('#btn-help').onclick=showHelpModal;
-$('#btn-help2').onclick=showHelpModal;
 document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>{
   if(onScreen('scr-mp'))roomListDetach();
   goScr(b.dataset.back||'scr-home');
@@ -5283,14 +5355,11 @@ $('#lobby-players').addEventListener('click',e=>{
 $('#btn-copy').onclick=()=>{
   if(navigator.clipboard&&mp.code)navigator.clipboard.writeText(mp.code).then(()=>toast('Code copied!'));
 };
-$('#btn-sound').onclick=showVolumeModal;
 updateSoundIcon();
 updateProfileBadge();   // shows the "Sign in" placeholder immediately; authInit() (below, on window load) fills in the real state once Firebase Auth resolves it
 $('#btn-profile').onclick=showProfileModal;
 $('#btn-leaderboard').onclick=openLeaderboard;
-$('#btn-score').onclick=showScoreModal;
-$('#btn-log').onclick=showLogModal;
-$('#btn-spectators').onclick=showSpectatorsModal;
+$('#btn-more').onclick=showMoreModal;
 $('#btn-join-requests').onclick=showJoinRequestsModal;
 $('#log-line').onclick=showLogModal;
 $('#btn-chat').onclick=openChat;
@@ -5335,8 +5404,31 @@ $('#btn-discard').onclick=()=>{
   const me=G.players[myIdx];if(!me)return;
   const cards=me.hand.filter(c=>sel.has(c.id));
   if(!validSet(cards))return;
+  playDiscardFly(cards);
+  if(navigator.vibrate)navigator.vibrate(15);
   applyMove({t:'discard',ids:cards.map(c=>c.id)});
 };
+/* Tactile polish (2026-07-22) — selecting a card already had a satisfying
+   spring-pop (see cardPop), but actually *playing* it was a flat instant
+   cut: the card just vanished from the hand and reappeared in the open
+   pile on the next render. This flies a real-looking clone of each
+   played card from wherever it currently sits in #my-hand to the open
+   pile, reusing flyCard() (the same primitive the deal animation already
+   uses) — the clones are independent DOM elements appended to
+   document.body, so applyMove() re-rendering the real hand/pile
+   underneath a moment later doesn't cut them off partway. */
+function playDiscardFly(cards){
+  const scr=$('#scr-game');if(!scr||!scr.classList.contains('on'))return;
+  const pileEl=$('#open-cards')||$('#deck-top');if(!pileEl)return;
+  const pr=pileEl.getBoundingClientRect();if(!pr.width)return;
+  const tx=pr.left+pr.width/2,ty=pr.top+pr.height/2;
+  cards.forEach((c,i)=>{
+    const el=[...document.querySelectorAll('#my-hand .card')].find(cd=>cd.dataset.id===String(c.id));
+    const r=el?el.getBoundingClientRect():null;
+    const x0=r?r.left+r.width/2:tx,y0=r?r.top+r.height/2:ty;
+    setTimeout(()=>flyCard(x0,y0,tx,ty,c),i*70);
+  });
+}
 $('#btn-pickup').onclick=()=>applyMove({t:'pickup'});
 $('#btn-show').onclick=()=>{
   if(!G)return;
@@ -5435,7 +5527,6 @@ function applyTheme(t){
   _currentTheme=t;
   document.documentElement.setAttribute('data-theme',t);
   const cur=THEMES.find(x=>x.id===t)||THEMES[0];
-  $('#theme-btn').textContent=cur.icon;
   $('#theme-btn-home').textContent=cur.icon+' '+cur.name;
   localStorage.fcTheme=t;
 }
@@ -5446,7 +5537,6 @@ function themePickerModal(){
     <div class="mbtns" style="flex-direction:column;align-items:stretch">${rows}
     <button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);
 }
-$('#theme-btn').onclick=themePickerModal;
 $('#theme-btn-home').onclick=themePickerModal;
 applyTheme(_currentTheme);
 
@@ -5466,9 +5556,24 @@ function applyCardStyle(s){
   document.querySelectorAll('.cs-swatch').forEach(b=>b.classList.toggle('sel',b.dataset.cs===s));
   localStorage.fcCardStyle=s;
 }
-document.querySelectorAll('#card-style-picker .cs-swatch').forEach(b=>{
-  b.onclick=()=>applyCardStyle(b.dataset.cs);
-});
+/* Moved off the always-visible game footer and into the More sheet
+   (2026-07-22 mobile real-estate pass) — card style is a rarely-changed
+   preference, not something worth its own permanent strip under the hand
+   every single game. Rebuilt fresh each time the modal opens (same
+   pattern themePickerModal already uses) rather than kept live in the
+   background, since it's now only ever in the DOM while its modal is
+   actually open. */
+function showCardStyleModal(){
+  const styles=[['prism','Prism (default)'],['foil','Foil'],['glass','Glass'],['ivory','Ivory']];
+  const swatches=styles.map(([id,label])=>
+    `<button class="cs-swatch${id===_cardStyle?' sel':''}" data-cs="${id}" title="${esc(label)}"></button>`).join('');
+  openModal('cardstyle',`<h2>Card style</h2>
+    <div style="display:flex;gap:14px;justify-content:center;padding:6px 0">${swatches}</div>
+    <div class="mbtns"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+  document.querySelectorAll('#modal .cs-swatch').forEach(b=>{
+    b.onclick=()=>applyCardStyle(b.dataset.cs);
+  });
+}
 applyCardStyle(_cardStyle);
 
 /* ======================================================
@@ -6647,7 +6752,7 @@ function clMpCreate(){
     if(s.exists())return clMpCreate();
     ref.set({host:myUid,status:'lobby',limit:240,numDecks:1,gamesLimit:0,
       created:firebase.database.ServerValue.TIMESTAMP,
-      players:{[myUid]:{name,order:Date.now()}}},
+      players:{[myUid]:{name,avatar:profile.avatar||null,order:Date.now()}}},
       err=>{if(err)toast('Could not create room');else clmpAttach(code);});
   }).catch(()=>toast('Connection error — check internet'));
 }
@@ -6664,7 +6769,7 @@ function clMpJoin(){
       return toast('That tournament has already started');
     if(!(r.players&&r.players[myUid])&&Object.keys(r.players||{}).length>=10)
       return toast('Room is full (10 max)');
-    ref.child('players/'+myUid).set({name,order:Date.now()},err=>{
+    ref.child('players/'+myUid).set({name,avatar:profile.avatar||null,order:Date.now()},err=>{
       if(err)toast('Could not join');else clmpAttach(code);
     });
   }).catch(()=>toast('Connection error'));
@@ -6741,7 +6846,7 @@ function clmpSync(){
   const myStatsRecorded=(room.players[myUid]&&room.players[myUid].statsRecorded)||{};
   Object.keys(myStatsRecorded).forEach(fbk=>clStatsRecorded.add(clUnFbKey(fbk)));
   const players=Object.entries(room.players).sort((a,b)=>(a[1].order||0)-(b[1].order||0))
-    .map(([uid,p])=>({id:uid,name:p.name,isBot:false,diff:null,emojis:p.emojis||null}));
+    .map(([uid,p])=>({id:uid,name:p.name,isBot:false,diff:null,emojis:p.emojis||null,avatar:p.avatar||null}));
   const results={},liveScores={};
   const matches=clmp.matches||room.matches||{};
   Object.entries(matches).forEach(([fbk,m])=>{
@@ -6936,8 +7041,8 @@ function clMpEnterMatch(m){
   mp.stateRef.transaction(cur=>{
     if(cur)return;                         // already created by the other player — abort
     const A=clPlayer(aId),B=clPlayer(bId);
-    const g=newMatch([{id:aId,name:A.name,isBot:false,diff:null,emojis:A.emojis||null},
-                      {id:bId,name:B.name,isBot:false,diff:null,emojis:B.emojis||null}],CL.limit,'mp',CL.numDecks);
+    const g=newMatch([{id:aId,name:A.name,isBot:false,diff:null,emojis:A.emojis||null,avatar:A.avatar||null},
+                      {id:bId,name:B.name,isBot:false,diff:null,emojis:B.emojis||null,avatar:B.avatar||null}],CL.limit,'mp',CL.numDecks);
     g.clKey=m.key;deal(g);
     return JSON.stringify(g);
   });
