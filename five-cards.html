@@ -5404,9 +5404,21 @@ $('#btn-discard').onclick=()=>{
   const me=G.players[myIdx];if(!me)return;
   const cards=me.hand.filter(c=>sel.has(c.id));
   if(!validSet(cards))return;
-  playDiscardFly(cards);
+  /* Real bug found live (2026-07-26, Saif's own screen recording): the
+     fly-out clones spawned correctly, but applyMove() ran *immediately*
+     right after — its render() call is synchronous, so the hand/pile
+     snapped to the final state instantly while the clones were still
+     mid-flight a moment later, arriving as visible "ghost" duplicates of
+     cards that had already vanished from the hand. That reads exactly as
+     "laggy/broken", not as a smooth play animation. Now the actual state
+     mutation is held until the fly animation's real arrival time (see
+     playDiscardFly's return value) instead of firing in parallel with it.
+     btn-discard is disabled for that same window so a fast double-tap
+     can't queue a second discard before render() re-evaluates it. */
+  const flyMs=playDiscardFly(cards);
   if(navigator.vibrate)navigator.vibrate(15);
-  applyMove({t:'discard',ids:cards.map(c=>c.id)});
+  $('#btn-discard').disabled=true;
+  setTimeout(()=>applyMove({t:'discard',ids:cards.map(c=>c.id)}),flyMs);
 };
 /* Tactile polish (2026-07-22) — selecting a card already had a satisfying
    spring-pop (see cardPop), but actually *playing* it was a flat instant
@@ -5418,16 +5430,25 @@ $('#btn-discard').onclick=()=>{
    document.body, so applyMove() re-rendering the real hand/pile
    underneath a moment later doesn't cut them off partway. */
 function playDiscardFly(cards){
-  const scr=$('#scr-game');if(!scr||!scr.classList.contains('on'))return;
-  const pileEl=$('#open-cards')||$('#deck-top');if(!pileEl)return;
-  const pr=pileEl.getBoundingClientRect();if(!pr.width)return;
+  const scr=$('#scr-game');if(!scr||!scr.classList.contains('on'))return 0;
+  const pileEl=$('#open-cards')||$('#deck-top');if(!pileEl)return 0;
+  const pr=pileEl.getBoundingClientRect();if(!pr.width)return 0;
   const tx=pr.left+pr.width/2,ty=pr.top+pr.height/2;
   cards.forEach((c,i)=>{
     const el=[...document.querySelectorAll('#my-hand .card')].find(cd=>cd.dataset.id===String(c.id));
     const r=el?el.getBoundingClientRect():null;
     const x0=r?r.left+r.width/2:tx,y0=r?r.top+r.height/2:ty;
-    setTimeout(()=>flyCard(x0,y0,tx,ty,c),i*70);
+    setTimeout(()=>{
+      /* hide the real hand card the instant its ghost launches — without
+         this both were visible at once (the untouched real card sitting
+         in the hand *and* a flying duplicate of it) since the actual
+         discard/render() is now deliberately delayed until the flight
+         lands (see btn-discard's onclick). */
+      if(el)el.style.opacity='0';
+      flyCard(x0,y0,tx,ty,c);
+    },i*70);
   });
+  return (cards.length-1)*70+420;   // last card's spawn delay + .deal-fly.face's .4s transform transition, plus a small buffer
 }
 $('#btn-pickup').onclick=()=>applyMove({t:'pickup'});
 $('#btn-show').onclick=()=>{
