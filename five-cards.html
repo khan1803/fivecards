@@ -143,6 +143,17 @@ input:focus{border-color:var(--gold)}
   font-size:12px;font-weight:800;line-height:1;cursor:pointer;transition:background .15s,color .15s}
 .lp-kick:active{background:var(--red);color:#fff;border-color:var(--red)}
 #lobby-players{display:flex;flex-direction:column;gap:8px}
+#mp-room-list{display:flex;flex-direction:column;gap:8px;width:100%;margin-top:6px}
+.room-row{background:rgba(255,184,77,.05);border:1px solid rgba(255,184,77,.14);border-radius:10px;
+  padding:10px 14px;display:flex;align-items:center;gap:10px;font-family:'Plus Jakarta Sans',sans-serif}
+.room-row .room-info{flex:1;min-width:0}
+.room-row .room-code{font-family:'DM Mono',monospace;color:var(--gold);font-weight:800;letter-spacing:1px}
+.room-row .room-meta{font-size:12px;color:var(--labelmuted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.room-row .room-status{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px;flex:0 0 auto}
+.room-row .room-status.lobby{background:rgba(120,200,140,.15);color:#7ED993}
+.room-row .room-status.live{background:rgba(255,184,77,.15);color:var(--gold)}
+.room-row .room-btns{display:flex;gap:6px;flex:0 0 auto}
+.room-row .btn{padding:6px 12px;font-size:12px;min-height:0}
 #lobby-voicebar{display:flex;gap:10px;width:100%}
 #lobby-voicebar .btn{flex:1}
 #cl-lobby-voicebar{display:flex;gap:10px;width:100%}
@@ -609,7 +620,7 @@ body.dealing .card-count{visibility:hidden}
 .emoji-btn:active{transform:scale(1.25)}
 #chat-input-row{display:flex;gap:8px;padding:10px 16px calc(12px + env(safe-area-inset-bottom))}
 #chat-input-row input{flex:1}
-#chat-badge,#chat-badge-lobby,#spec-badge{position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:800;
+#chat-badge,#chat-badge-lobby,#spec-badge,#join-req-badge{position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:800;
   border-radius:999px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px;line-height:1}
 /* spectator count is informational, not urgent like an unread chat count
    — same pill shape, but the calmer gold rather than red so it doesn't
@@ -1177,6 +1188,10 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
       </div>
     </div>
     <p class="tag">2–10 players · share the room code with friends</p>
+    <div id="mp-room-list-wrap" style="width:100%">
+      <span class="lbl">Live rooms</span>
+      <div id="mp-room-list"><p class="tag" style="text-align:center">No rooms open right now — create one!</p></div>
+    </div>
     <button class="btn ghost" data-back>← Back</button>
   </div>
 </section>
@@ -1377,6 +1392,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
       <button class="icon-btn hidden" id="btn-voice" title="Voice chat">🎤</button>
       <button class="icon-btn hidden" id="btn-chat" style="position:relative">💬<span id="chat-badge" class="hidden"></span></button>
       <button class="icon-btn hidden" id="btn-spectators" title="Spectators" style="position:relative">👁<span id="spec-badge" class="hidden"></span></button>
+      <button class="icon-btn hidden" id="btn-join-requests" title="Join requests" style="position:relative">🙋<span id="join-req-badge" class="hidden"></span></button>
       <button class="icon-btn" id="btn-log">📜</button>
       <button class="icon-btn" id="btn-score">🏆</button>
       <button class="icon-btn" id="btn-help2">?</button>
@@ -1579,6 +1595,13 @@ function glog(g,s){g.log.push(s);g.logSeq++;if(g.log.length>80)g.log.shift();}
    nothing and keeps them eligible to try again. openShowBy is the
    triggering player's index, or omitted/undefined for a normal round. */
 function deal(g,openShowBy){
+  /* mid-game joiners (see approveJoinRequest()) sat out as elim:true
+     since the moment they were approved — there's no way to hand someone
+     a hand out of thin air mid-round. The very next deal is what actually
+     seats them: flipping them active *before* activeIdxs()/the dealing
+     loop below run means they're included in starter rotation and get a
+     real hand like everyone else, from this round on. */
+  g.players.forEach(p=>{if(p.pendingJoin){p.elim=false;p.pendingJoin=false;}});
   g.round++;g.result=null;g.openShow=openShowBy!=null?openShowBy:null;
   g.openShowCalledBy=null;   // whatever was pending for *this* transition has now been acted on
   /* starter rotates one direction until every active player has gone
@@ -2648,6 +2671,7 @@ function render(){
   $('#btn-chat').classList.toggle('hidden',G.mode!=='mp');
   $('#btn-voice').classList.toggle('hidden',G.mode!=='mp');
   $('#btn-spectators').classList.toggle('hidden',!mpFeat);
+  updateJoinRequestBadge();
   updateTurnTimer();
   /* whose OPEN CARD it is lives right on their seat chip (see below),
      and stays there for the whole round — not just during their own
@@ -2734,7 +2758,7 @@ function render(){
         <div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span>${(showOpenBadge&&i===G.starter)?'<span class="tagchip open-tag">Open card</span>'
           :(showOpenBadge&&i===nextStarterI)?'<span class="tagchip next-open-tag">Next Open Card</span>'
           :(p.isBot?`<span class="tagchip">${esc(p.diff)}</span>`:'')}</div>
-        <div class="opp-sub">${dispElim?'OUT · ':''}score ${dispScore(p,i)}</div>
+        <div class="opp-sub">${dispElim?(p.pendingJoin?'Joining next round · ':'OUT · '):''}score ${dispScore(p,i)}</div>
         ${handHtml}
       </div>`;
     if(canKick)d.querySelector('.kick-btn').onclick=e=>{e.stopPropagation();uiKickPlayer(p.id,p.name);};
@@ -2768,7 +2792,7 @@ function render(){
       <div class="seat-card">
         <div class="opp-name"><span class="opp-name-text">${esc(me.name)} (you)</span>${(showOpenBadge&&myIdx===G.starter)?'<span class="tagchip open-tag">Open card</span>'
           :(showOpenBadge&&myIdx===nextStarterI)?'<span class="tagchip next-open-tag">Next Open Card</span>':''}</div>
-        <div class="opp-sub">${dispElimMe?'OUT · ':''}score ${dispScore(me,myIdx)}</div>
+        <div class="opp-sub">${dispElimMe?(me.pendingJoin?'Joining next round · ':'OUT · '):''}score ${dispScore(me,myIdx)}</div>
         ${myRevealHtml}
       </div>`;
     if(!dispElimMe){
@@ -2902,7 +2926,7 @@ function render(){
   if(me){
     $('#my-rank-badge').textContent='#'+rankOf(myIdx);
     const myShownSum=myRevealCnt!=null?handSum(sortHand(me.hand).slice(0,myRevealCnt)):handSum(me.hand);
-    $('#my-meta').textContent=dispElimMe2?`${me.name} · OUT · score ${dispScore(me,myIdx)}`
+    $('#my-meta').textContent=dispElimMe2?`${me.name} · ${me.pendingJoin?'Joining next round':'OUT'} · score ${dispScore(me,myIdx)}`
       :`${me.name} · hand ${myShownSum} pts · score ${dispScore(me,myIdx)}`;
   }else if(mp.isSpectator||clSpectating){
     $('#my-rank-badge').textContent='';
@@ -3248,6 +3272,64 @@ function showSpectatorsModal(){
     :`<p class="tag">No one's watching right now.</p>`;
   openModal('spectators',`<h2>Spectators${specs.length?` (${specs.length})`:''}</h2>${list}
     <div class="mbtns"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+}
+/* Mid-game join requests, host-approved (2026-07-22) — see
+   requestJoinMidGame() for the requester's side. Only ever meaningful for
+   the host of a real regular-MP room (never a CL 1v1 — G.clKey rules that
+   out, and CL matches never even attach this listener in the first place
+   since they bypass attachRoom() entirely — see clMpEnterMatch). */
+function updateJoinRequestBadge(){
+  const btn=$('#btn-join-requests'),b=$('#join-req-badge');
+  if(!btn||!b)return;
+  const show=mp.isHost&&G&&G.mode==='mp'&&!G.clKey;
+  btn.classList.toggle('hidden',!show);
+  const n=show?Object.keys(mp.joinRequests||{}).length:0;
+  if(n>0){b.textContent=n>9?'9+':n;b.classList.remove('hidden');}
+  else b.classList.add('hidden');
+}
+function showJoinRequestsModal(){
+  const entries=Object.entries(mp.joinRequests||{});
+  if(!entries.length)return;
+  const rows=entries.map(([uid,r])=>
+    `<div class="lp"><span>${esc(r.name)}</span>
+      <span style="margin-left:auto;display:flex;gap:6px">
+        <button class="btn primary small" onclick="approveJoinRequest('${esc(uid)}')">✓ Approve</button>
+        <button class="btn ghost small" onclick="denyJoinRequest('${esc(uid)}')">✕ Deny</button>
+      </span></div>`).join('');
+  openModal('joinreq',`<h2>🙋 Wants to join the game</h2>${rows}
+    <div class="mbtns"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+}
+/* Approving seats them starting the *next* round, not mid-hand — there's
+   no way to hand someone cards out of thin air mid-round without either
+   dealing them a hand nobody accounted for in the deck, or interrupting
+   play. pendingJoin:true keeps them elim:true (so activeIdxs/nextActive
+   correctly skip them in turn rotation and dealing) until deal()'s own
+   pendingJoin check flips them active right as the next round is dealt —
+   see deal()'s very first line. Their score starts at the average of
+   every currently-active player's score, per Saif's own spec — not 0,
+   which would make joining mid-game a big advantage, and not the average
+   including already-eliminated players, who aren't competitively
+   relevant anymore. */
+function approveJoinRequest(uid){
+  if(!mp.isHost||!G||G.mode!=='mp'||G.clKey)return;
+  const req=mp.joinRequests&&mp.joinRequests[uid];if(!req)return;
+  const active=activeIdxs(G);
+  const avgScore=active.length?Math.round(active.reduce((s,i)=>s+G.players[i].score,0)/active.length):0;
+  G.players.push({id:uid,name:req.name,isBot:false,diff:null,score:avgScore,elim:true,pendingJoin:true,hand:[],wins:0,roundPts:[],emojis:null});
+  G.v++;
+  mp.ref.child('players/'+uid).set({name:req.name,order:Date.now()});
+  mp.ref.child('spectators/'+uid).remove();
+  mp.ref.child('joinRequests/'+uid).remove();
+  mp.ref.child('joinResponses/'+uid).set({approved:true,ts:firebase.database.ServerValue.TIMESTAMP});
+  afterChange();
+  toast(`${req.name} will join at the start of next round — seeded at ${avgScore} pts`);
+  closeModal();
+}
+function denyJoinRequest(uid){
+  if(!mp.isHost)return;
+  mp.ref.child('joinRequests/'+uid).remove();
+  mp.ref.child('joinResponses/'+uid).set({approved:false,ts:firebase.database.ServerValue.TIMESTAMP});
+  closeModal();
 }
 function showHelpModal(){
   openModal('help',`<h2>How to play</h2><div class="help-list">
@@ -3828,6 +3910,55 @@ function effHost(r){
   const ps=Object.keys(r.players||{});
   return ps.includes(r.host)?r.host:ps.map(u=>[u,r.players[u].order]).sort((a,b)=>a[1]-b[1]).map(x=>x[0])[0];
 }
+/* Live room browser on scr-mp (2026-07-22) — before this, joining meant
+   knowing/being sent a code with no way to just see what's open. Reads
+   the whole ROOMS collection live while this screen is showing (small
+   scale — a handful of concurrent rooms at most, same assumption the CL
+   room list already makes) and re-renders on any change; detached the
+   instant the player leaves scr-mp (roomListDetach(), called from the
+   generic back-button handler and from attachRoom() itself) so it isn't
+   left running (and re-rendering a screen nobody's looking at) for the
+   rest of the session. */
+let roomListRef=null;
+function roomListAttach(){
+  if(!fbInit())return;
+  roomListRef=db.ref(ROOMS);
+  roomListRef.on('value',s=>renderRoomList(s.val()||{}));
+}
+function roomListDetach(){
+  if(roomListRef){roomListRef.off();roomListRef=null;}
+}
+function renderRoomList(rooms){
+  const wrap=$('#mp-room-list');if(!wrap)return;
+  /* a room with no players left is stale — every real join/create writes
+     onDisconnect().remove() on its own players/{uid} node (see
+     attachRoom's root listener), so an abandoned room naturally empties
+     out on its own without needing separate cleanup logic here */
+  const entries=Object.entries(rooms).filter(([,r])=>r&&r.players&&Object.keys(r.players).length>0);
+  if(!entries.length){wrap.innerHTML='<p class="tag" style="text-align:center">No rooms open right now — create one!</p>';return;}
+  entries.sort((a,b)=>(b[1].created||0)-(a[1].created||0));
+  wrap.innerHTML=entries.map(([code,r])=>{
+    const hostUid=effHost(r),hostName=(r.players[hostUid]&&r.players[hostUid].name)||'?';
+    const n=Object.keys(r.players).length;
+    const live=r.status!=='lobby';
+    return `<div class="room-row">
+      <div class="room-info">
+        <div class="room-code">${esc(code)}</div>
+        <div class="room-meta">${esc(hostName)}'s room · ${n} player${n===1?'':'s'}</div>
+      </div>
+      <span class="room-status ${live?'live':'lobby'}">${live?'In progress':'Lobby'}</span>
+      <div class="room-btns">
+        <button class="btn primary" data-room-join="${esc(code)}">Join</button>
+        ${live?`<button class="btn ghost" data-room-watch="${esc(code)}">Watch</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('[data-room-join]').forEach(b=>b.onclick=()=>attemptJoinRoom(b.dataset.roomJoin));
+  wrap.querySelectorAll('[data-room-watch]').forEach(b=>b.onclick=()=>{
+    const name=getName();if(!name)return;
+    spectateRoom(b.dataset.roomWatch,name);
+  });
+}
 function createRoom(){
   const name=getName();if(!name||!fbInit())return;
   const code=roomCode(),ref=db.ref(ROOMS+code);
@@ -3843,8 +3974,14 @@ function createRoom(){
   }).catch(()=>toast('Connection error — check internet'));
 }
 function joinRoom(){
-  const name=getName();if(!name)return;
   const code=($('#inp-code').value||'').trim().toUpperCase();
+  attemptJoinRoom(code);
+}
+/* Shared by the manual room-code input and every "Join"/"Watch" button in
+   the live room list (see roomListAttach()) — both funnel through here so
+   there's one place that decides lobby-vs-in-progress behavior. */
+function attemptJoinRoom(code){
+  const name=getName();if(!name)return;
   if(code.length!==4)return toast('Enter the 4-letter room code');
   if(!fbInit())return;
   const ref=db.ref(ROOMS+code);
@@ -3853,15 +3990,11 @@ function joinRoom(){
     if(!r)return toast('Room not found');
     const already=r.players&&r.players[myUid];
     if(r.status!=='lobby'&&!already){
-      /* match already in progress and we were never a player here —
-         join as a spectator instead of being turned away: can watch
-         the table, leaderboard, chat and voice chat, but never sees
-         anyone's hand */
-      const alreadySpec=r.spectators&&r.spectators[myUid];
-      toast('Game in progress — joining as a spectator');
-      ref.child('spectators/'+myUid)
-        .set({name,order:alreadySpec?r.spectators[myUid].order:Date.now()})
-        .then(()=>attachRoom(code));
+      /* match already in progress and we were never a player here — used
+         to force spectator mode outright; now offers a real choice (see
+         showJoinOrSpectateModal()), since "ask to join" (host-approved,
+         see requestJoinMidGame()) is a real option too. */
+      showJoinOrSpectateModal(code,name,r);
       return;
     }
     if(!already&&Object.keys(r.players||{}).length>=10)return toast('Room is full (max 10)');
@@ -3870,7 +4003,60 @@ function joinRoom(){
       .then(()=>attachRoom(code));
   }).catch(()=>toast('Connection error — check internet'));
 }
+function showJoinOrSpectateModal(code,name,r){
+  const hostUid=effHost(r),hostName=(r.players&&r.players[hostUid]&&r.players[hostUid].name)||'?';
+  const n=Object.keys(r.players||{}).length;
+  openModal('joinchoice',`<h2>Game in progress</h2>
+    <p class="tag" style="text-align:center">${esc(hostName)}'s room · ${n} player${n===1?'':'s'} · already playing</p>
+    <div class="mbtns" style="flex-direction:column;align-items:stretch">
+      <button class="btn primary" onclick="requestJoinMidGame('${esc(code)}','${esc(name)}')">🎮 Ask to join the game</button>
+      <button class="btn ghost" onclick="spectateRoom('${esc(code)}','${esc(name)}')">👁 Just watch</button>
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+    </div>`);
+}
+function spectateRoom(code,name){
+  closeModal();
+  const ref=db.ref(ROOMS+code);
+  ref.get().then(s=>{
+    const r=s.val();if(!r)return toast('Room not found');
+    const alreadySpec=r.spectators&&r.spectators[myUid];
+    ref.child('spectators/'+myUid)
+      .set({name,order:alreadySpec?r.spectators[myUid].order:Date.now()})
+      .then(()=>attachRoom(code));
+  }).catch(()=>toast('Connection error — check internet'));
+}
+/* Mid-game join, host-approved (2026-07-22): rather than being forced to
+   spectate, a player can ask to be seated. Writes a request the host sees
+   (attachRoom()'s joinRequests listener) and attaches as a spectator in
+   the meantime so they can actually watch while they wait, instead of
+   sitting on a blank "waiting" screen. joinResponses/{myUid} is how the
+   host's decision gets back to this specific client — see the listener
+   set up right below, which self-cleans the response node once read so a
+   stale old response can never resurface on a later, unrelated request. */
+function requestJoinMidGame(code,name){
+  closeModal();
+  const ref=db.ref(ROOMS+code);
+  ref.child('joinRequests/'+myUid).set({name,ts:firebase.database.ServerValue.TIMESTAMP})
+    .then(()=>{
+      toast('Request sent — waiting for the host to approve');
+      ref.child('joinResponses/'+myUid).on('value',s=>{
+        const v=s.val();if(!v)return;
+        ref.child('joinResponses/'+myUid).off();
+        ref.child('joinResponses/'+myUid).remove();
+        if(v.approved)toast('✅ '+"You're in! Joining next round…");
+        else toast('Host declined your request to join — still watching');
+      });
+      const alreadySpec=r=>r&&r.spectators&&r.spectators[myUid];
+      ref.get().then(s=>{
+        const r=s.val();
+        ref.child('spectators/'+myUid)
+          .set({name,order:alreadySpec(r)?r.spectators[myUid].order:Date.now()})
+          .then(()=>attachRoom(code));
+      });
+    }).catch(()=>toast('Connection error — check internet'));
+}
 function attachRoom(code){
+  roomListDetach();   // entering an actual room — the live-room browser on scr-mp is no longer relevant
   mp.code=code;mp.ref=db.ref(ROOMS+code);mp.lastV=-1;mp.odArmed=false;
   localStorage.fcRoom=code;
   ensureVoiceListening(mp.ref);   // hear whoever has their mic on from the moment the room is joined, no mic tap required (see ensureVoiceListening's comment)
@@ -3905,6 +4091,22 @@ function attachRoom(code){
   mp.specRef.on('child_added',s=>{
     const sp=s.val();if(!sp||s.key===myUid)return;
     if(sp.order&&sp.order>=attachTs-3000)toast(`👁 ${sp.name} joined to watch`);
+  });
+  /* Mid-game join requests (2026-07-22) — only meaningful to the host,
+     who's the one who can actually approve/deny (mirrors uiKickPlayer's
+     host-only convention). Kept live for every client anyway rather than
+     gated behind mp.isHost at attach time, since host status can change
+     mid-match (host takeover) — a fresh takeover host needs this listener
+     already running to see any request that arrived before they took
+     over, not just ones from after. joinRequests is small/short-lived
+     (each entry removed the moment it's approved/denied) so there's no
+     real cost to every client tracking it, only mp.isHost gates the UI. */
+  mp.joinReqRef=mp.ref.child('joinRequests');
+  mp.joinRequests={};
+  mp.joinReqRef.on('value',s=>{
+    mp.joinRequests=s.val()||{};
+    updateJoinRequestBadge();
+    if(mp.isHost&&onScreen('scr-game'))showJoinRequestsModal();
   });
   /* reaction broadcasts (still on the 'cough' path — no reason to churn
      the schema just because there's more than one reaction now) — same
@@ -3946,6 +4148,7 @@ function attachRoom(code){
     mp.isSpectator=!meInPlayers&&!!meInSpectators;
     if(mp.isSpectator&&!mp.odArmed){mp.ref.child('spectators/'+myUid).onDisconnect().remove();mp.odArmed=true;}
     updateSpectatorBadge();
+    updateJoinRequestBadge();
     if(r.status==='lobby'){
       if(!mp.isSpectator&&!mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().remove();mp.odArmed=true;}
       G=null;renderLobby();goScr('scr-lobby');closeModal();
@@ -3974,7 +4177,15 @@ function attachRoom(code){
     if(!mp.isSpectator&&mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().cancel();mp.odArmed=false;}
     if(G===null){announcedRound=-1;mp.statsRecorded=false;mp.wrongShowRound=null;}   // fresh entry from the lobby — this match's round 1 hasn't been announced yet, nothing recorded yet either
     G=g;G.mode='mp';
-    myIdx=mp.isSpectator?-1:G.players.findIndex(p=>p.id===myUid);
+    /* G.players itself (not mp.isSpectator) is the source of truth for
+       "am I actually seated" — findIndex naturally returns -1 for a real
+       spectator (never in G.players) same as the old ternary did, but
+       also self-corrects the instant a mid-game join gets approved
+       (see approveJoinRequest()) without depending on this listener and
+       the root players/spectators listener (which sets mp.isSpectator)
+       firing in any particular order relative to each other — Firebase
+       doesn't guarantee one over the other for a multi-path update. */
+    myIdx=G.players.findIndex(p=>p.id===myUid);
     const me=G.players[myIdx];
     sel=new Set(me?[...sel].filter(id=>me.hand.some(c=>c.id===id)):[]);
     goScr('scr-game');render();
@@ -4955,10 +5166,13 @@ $('#seg-lobby-decks').addEventListener('click',e=>{
 });
 
 $('#btn-gobot').onclick=()=>{if(requirePlaySignIn())goScr('scr-bot');};
-$('#btn-gomp').onclick=()=>{if(requirePlaySignIn())goScr('scr-mp');};
+$('#btn-gomp').onclick=()=>{if(requirePlaySignIn()){goScr('scr-mp');roomListAttach();}};
 $('#btn-help').onclick=showHelpModal;
 $('#btn-help2').onclick=showHelpModal;
-document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>goScr(b.dataset.back||'scr-home'));
+document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>{
+  if(onScreen('scr-mp'))roomListDetach();
+  goScr(b.dataset.back||'scr-home');
+});
 $('#btn-start-bot').onclick=startBotGame;
 $('#btn-create').onclick=createRoom;
 $('#btn-join').onclick=joinRoom;
@@ -5012,6 +5226,7 @@ $('#btn-leaderboard').onclick=openLeaderboard;
 $('#btn-score').onclick=showScoreModal;
 $('#btn-log').onclick=showLogModal;
 $('#btn-spectators').onclick=showSpectatorsModal;
+$('#btn-join-requests').onclick=showJoinRequestsModal;
 $('#log-line').onclick=showLogModal;
 $('#btn-chat').onclick=openChat;
 $('#btn-chat-lobby').onclick=openChat;
