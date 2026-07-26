@@ -3943,11 +3943,17 @@ function roomListDetach(){
    (same value, idempotent). Never touches a room that already has >1
    player or that's already marked inactive. */
 function killInactiveRooms(rooms){
-  const now=Date.now(),cutoff=15*60*1000;
+  /* 2026-07-22, revised: player count dropped from this entirely — Saif
+     found rooms with several players sitting idle (nobody discarding,
+     chatting, or on mic) still showing as active, since the original
+     <=1-player condition protected any full-ish table from ever being
+     judged inactive no matter how long everyone had gone silent. Now
+     purely activity-based: 5+ minutes since the last discard/chat/mic
+     (see bumpRoomActivity()) kills the room regardless of how many
+     people are sitting in it. */
+  const now=Date.now(),cutoff=5*60*1000;
   Object.entries(rooms).forEach(([code,r])=>{
     if(!r||r.status==='inactive')return;
-    const n=r.players?Object.keys(r.players).length:0;
-    if(n>1)return;
     const last=r.lastActivity||r.created||0;
     if(now-last>=cutoff)db.ref(ROOMS+code+'/status').set('inactive');
   });
