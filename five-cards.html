@@ -3424,6 +3424,7 @@ function applyMove(m){
   const err=rawApply(G,m);
   if(err){toast(err);sndError();return err;}
   sel.clear();
+  if(m.t==='discard'&&G.mode==='mp'&&!G.clKey)bumpRoomActivity();
   afterChange();
   return null;
 }
@@ -3928,6 +3929,29 @@ function roomListAttach(){
 function roomListDetach(){
   if(roomListRef){roomListRef.off();roomListRef=null;}
 }
+/* Auto-kill idle rooms (2026-07-22) — "activity" is a card discard, a
+   chat message, or a live mic (see bumpRoomActivity() and its call sites),
+   all landing on one shared lastActivity timestamp per room. There's no
+   server here to run this on a timer — it's a static page over Firebase,
+   no Cloud Functions — so it piggybacks on whichever client happens to
+   have the room list open (this function runs every time renderRoomList()
+   does, from the live .on('value') in roomListAttach()): opportunistic,
+   crowd-sourced janitorial cleanup rather than a dedicated cron, same
+   spirit as everything else host/permission-gated in this app already
+   being enforced client-side. Fire-and-forget writes — worst case two
+   clients both mark the same room inactive at once, which is harmless
+   (same value, idempotent). Never touches a room that already has >1
+   player or that's already marked inactive. */
+function killInactiveRooms(rooms){
+  const now=Date.now(),cutoff=15*60*1000;
+  Object.entries(rooms).forEach(([code,r])=>{
+    if(!r||r.status==='inactive')return;
+    const n=r.players?Object.keys(r.players).length:0;
+    if(n>1)return;
+    const last=r.lastActivity||r.created||0;
+    if(now-last>=cutoff)db.ref(ROOMS+code+'/status').set('inactive');
+  });
+}
 function renderRoomList(rooms){
   const wrap=$('#mp-room-list');if(!wrap)return;
   /* a room with no players left is stale — every real join/create writes
@@ -3948,7 +3972,8 @@ function renderRoomList(rooms){
     if(!r.state)return true;   // lobby, or a genuinely fresh match with no state yet
     try{return JSON.parse(r.state).phase!=='matchEnd';}catch(e){return true;}
   };
-  const entries=Object.entries(rooms).filter(([,r])=>r&&r.players&&Object.keys(r.players).length>0&&isReallyLive(r));
+  killInactiveRooms(rooms);
+  const entries=Object.entries(rooms).filter(([,r])=>r&&r.status!=='inactive'&&r.players&&Object.keys(r.players).length>0&&isReallyLive(r));
   if(!entries.length){wrap.innerHTML='<p class="tag" style="text-align:center">No rooms open right now — create one!</p>';return;}
   entries.sort((a,b)=>(b[1].created||0)-(a[1].created||0));
   wrap.innerHTML=entries.map(([code,r])=>{
@@ -3983,6 +4008,7 @@ function createRoom(){
        reason to ask for them before anyone's even joined */
     ref.set({host:myUid,status:'lobby',limit:240,numDecks:1,
       created:firebase.database.ServerValue.TIMESTAMP,
+      lastActivity:firebase.database.ServerValue.TIMESTAMP,
       players:{[myUid]:{name,order:Date.now()}}},
       err=>{if(err)toast('Could not create room');else attachRoom(code);});
   }).catch(()=>toast('Connection error — check internet'));
@@ -4380,6 +4406,22 @@ function mpStart(){
   mp.ref.update({status:'playing',state:JSON.stringify(G)});
 }
 function mpWrite(){if(mp.ref)mp.ref.child('state').set(JSON.stringify(G));}
+/* Room auto-kill (2026-07-22) — "activity" for this purpose is discarding
+   a card, sending a chat message, or having a live mic, tracked as one
+   shared lastActivity timestamp per room (see renderRoomList()'s
+   isRoomInactive() for the other half: a room with <=1 real player *and*
+   none of this in the last 15 minutes gets marked status:'inactive' and
+   drops out of the live room list). Regular-MP-only, same as the list
+   itself — never bumped for a Champions League room. */
+function bumpRoomActivity(){
+  /* every call site below gates this on already knowing it's a genuine
+     regular-MP context (not Champions League, not bot/solo play) before
+     calling — mp.ref alone isn't a safe signal on its own, since it gets
+     repointed at a CL match's own node for Champions League (see
+     clMpEnterMatch) and is left stale/pointing at a *previous* regular
+     room entirely during bot/solo play. */
+  if(mp.ref)mp.ref.child('lastActivity').set(firebase.database.ServerValue.TIMESTAMP);
+}
 function mpBackToLobby(){
   if(!mp.ref)return;
   /* promote anyone who was spectating into a real player for the next
@@ -4453,6 +4495,7 @@ function sendChat(text){
   if(!mp.ref)return;
   mp.ref.child('chat').push({uid:myUid,name:profile.name||'Player',text:text.slice(0,200),
     ts:firebase.database.ServerValue.TIMESTAMP});
+  bumpRoomActivity();
 }
 function renderChatLog(){
   const log=$('#chat-log');if(!log)return;
@@ -4834,6 +4877,7 @@ function joinVoiceRoom(ref,stream){
      voiceMicOn above for what actually drives that badge */
   const vRef=ref.child('voice/'+myUid);
   vRef.set({mic:!!stream,muted:false});vRef.onDisconnect().remove();
+  if(stream&&!CL)bumpRoomActivity();   // a real mic joining (not just listen-only) counts as activity — never for a CL room, which has no room-list entry to keep alive
   voicePresent.add(myUid);
   if(stream)voiceMicOn.add(myUid);
   voice.presenceRef=ref.child('voice');
@@ -4905,6 +4949,7 @@ async function joinVoice(){
     updateVoiceUI();
     voice.roomRef.child('voice/'+myUid).update({mic:true,muted:false});
     voiceMicOn.add(myUid);
+    if(!CL)bumpRoomActivity();
     Object.keys(voice.peers).forEach(uid=>{
       teardownPeer(uid);
       if(myUid<uid)callPeer(uid);
