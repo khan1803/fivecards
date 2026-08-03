@@ -232,7 +232,21 @@ input:focus{border-color:var(--gold)}
 .opp-name{display:flex;flex-direction:column;align-items:center;gap:1px;overflow:hidden}
 .opp-name-text{font-size:13.5px;font-weight:700;color:#FDF6E8;font-family:'Plus Jakarta Sans',sans-serif;
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.opp-name-text.whisperable{cursor:pointer;text-decoration:underline dotted rgba(255,184,77,.5);text-underline-offset:2px}
+/* Real bug found live (2026-07-26): "can't see any such option" —
+   #opponents (the whole opponent-ring overlay) is pointer-events:none by
+   design, so it never blocks clicks through to the felt underneath;
+   every other interactive element in there (.cough-btn, .kick-btn,
+   .reaction-opt) explicitly re-enables pointer-events:auto for itself,
+   and this one just never got that same treatment — the name was
+   visually styled as tappable (cursor, underline) but the tap itself
+   never reached it, at any zoom/device, not just mobile. */
+.opp-name-text.whisperable{text-decoration:underline dotted rgba(255,184,77,.5);text-underline-offset:2px}
+/* the real tap target is the whole card now (see the seat-building loop's
+   own comment for why) — pointer-events:auto here is what actually
+   matters; the underline above is purely a visual hint pointing at where
+   the tap-for-options affordance lives, not the hit area itself anymore */
+.seat-card.whisperable-card{cursor:pointer;pointer-events:auto;transition:background .12s}
+.seat-card.whisperable-card:active{background:rgba(255,184,77,.1)}
 .opp-name-text.whisperable:active{color:var(--gold)}
 .tagchip{font-size:9px;background:rgba(255,184,77,.16);color:var(--gold);border-radius:5px;padding:2px 7px;text-transform:uppercase;letter-spacing:.4px;font-family:'DM Mono',monospace}
 /* the starter's OPEN CARD marker now lives right on their seat chip,
@@ -2813,17 +2827,28 @@ function render(){
         ${handHtml}
       </div>`;
     if(canKick)d.querySelector('.kick-btn').onclick=e=>{e.stopPropagation();uiKickPlayer(p.id,p.name);};
-    /* Tap another real player's name for a small action menu (2026-07-26)
-       — private messaging (coordinate against a third player without
-       them seeing it in the shared chat) plus, for the host, emoji-mute
-       moderation. Regular MP only, never a bot — a CL 1v1 already has
-       exactly one other person, which is what the shared chat already
-       is, so there's no separate "private" concept worth adding there. */
+    /* Tap another real player's seat for a small action menu (2026-07-26,
+       widened 2026-08-04) — private messaging (coordinate against a
+       third player without them seeing it in the shared chat) plus, for
+       the host, emoji-mute moderation. Regular MP only, never a bot — a
+       CL 1v1 already has exactly one other person, which is what the
+       shared chat already is, so there's no separate "private" concept
+       worth adding there.
+       Real bug found live right after the pointer-events fix (2026-08-04):
+       Saif reported it was *still* unreachable by tapping even once the
+       name itself could receive clicks — the actual target was the bare
+       text glyphs of an auto-width inline <span>, not the visual row a
+       real thumb aims for. A short name ("Ace") produces a target maybe
+       25px wide; tapping the row's own padding, or between the name and
+       score, missed it entirely. The whole .seat-card is the tap target
+       now — same idea, just sized like an actual touch target instead of
+       exactly the width of the rendered letters. */
     if(G.mode==='mp'&&!G.clKey&&!p.isBot){
-      const nameEl=d.querySelector('.opp-name-text');
-      nameEl.classList.add('whisperable');
-      nameEl.title=`${p.name} — tap for options`;
-      nameEl.onclick=e=>{e.stopPropagation();showPlayerMenu(p.id,p.name);};
+      const cardEl2=d.querySelector('.seat-card');
+      cardEl2.classList.add('whisperable-card');
+      cardEl2.title=`${p.name} — tap for options`;
+      cardEl2.onclick=e=>{e.stopPropagation();showPlayerMenu(p.id,p.name);};
+      d.querySelector('.opp-name-text').classList.add('whisperable');
     }
     opp.appendChild(d);
   }
