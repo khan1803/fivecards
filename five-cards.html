@@ -232,6 +232,8 @@ input:focus{border-color:var(--gold)}
 .opp-name{display:flex;flex-direction:column;align-items:center;gap:1px;overflow:hidden}
 .opp-name-text{font-size:13.5px;font-weight:700;color:#FDF6E8;font-family:'Plus Jakarta Sans',sans-serif;
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opp-name-text.whisperable{cursor:pointer;text-decoration:underline dotted rgba(255,184,77,.5);text-underline-offset:2px}
+.opp-name-text.whisperable:active{color:var(--gold)}
 .tagchip{font-size:9px;background:rgba(255,184,77,.16);color:var(--gold);border-radius:5px;padding:2px 7px;text-transform:uppercase;letter-spacing:.4px;font-family:'DM Mono',monospace}
 /* the starter's OPEN CARD marker now lives right on their seat chip,
    not as a big badge floating over the felt center — same information,
@@ -292,6 +294,8 @@ input:focus{border-color:var(--gold)}
   box-shadow:0 2px 7px rgba(0,0,0,.45);transition:transform .1s,box-shadow .15s}
 .cough-btn img{width:100%;height:100%;object-fit:cover}
 .cough-btn:active{transform:scale(1.3)}
+.cough-btn.muted{border-color:rgba(253,246,232,.25);color:rgba(253,246,232,.4);cursor:default}
+.cough-btn.muted:active{transform:none}
 /* a ring, not a row — floats centered above the whole seat (avatar +
    name box below it), fanned out via reactionWheelHtml() at however
    many reactions REACTIONS currently holds, so the layout absorbs a
@@ -589,8 +593,16 @@ body.dealing .card-count{visibility:hidden}
 .rt .out{color:var(--red);font-weight:800;font-size:10px}
 .lb-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px}
 .lb-matrix{width:auto;min-width:100%}
-.lb-matrix th,.lb-matrix td{white-space:nowrap;text-align:center;padding:6px 10px}
-.lb-matrix th{color:#FDF6E8;font-size:12px;text-transform:none;letter-spacing:0;font-weight:800;border-bottom:1.5px solid rgba(255,184,77,.25);font-family:'Unbounded',sans-serif}
+.lb-matrix th,.lb-matrix td{white-space:nowrap;text-align:center;padding:6px 6px}
+/* 2026-07-26: Saif asked to fit more players without scrolling — long
+   names (e.g. "Dhildar Niyaz") were forcing every column wide enough to
+   fit the whole name, the actual bottleneck, not the padding. Capping
+   header width + ellipsis truncates the display only; the full name is
+   still there as a title tooltip (long-press/hover), and every other
+   column (stats, per-round scores) is only ever a couple characters wide
+   regardless of name length. */
+.lb-matrix th{color:#FDF6E8;font-size:11.5px;text-transform:none;letter-spacing:0;font-weight:800;border-bottom:1.5px solid rgba(255,184,77,.25);font-family:'Unbounded',sans-serif;
+  max-width:52px;overflow:hidden;text-overflow:ellipsis}
 .lb-matrix td:first-child,.lb-matrix th:first-child{position:sticky;left:0;background:#1C0D33;
   text-align:left;color:var(--labelmuted);font-size:10px;text-transform:uppercase;letter-spacing:.5px;padding-right:14px;font-family:'DM Mono',monospace}
 .deal-fly{position:fixed;width:34px;height:48px;border-radius:7px;
@@ -862,6 +874,8 @@ body.dealing .card-count{visibility:hidden}
   #topbar{padding:8px 10px}
   .icon-btn{width:34px;height:34px;font-size:14px;border-radius:8px}
   #round-info{font-size:10px;letter-spacing:1.5px}
+  .lb-matrix th,.lb-matrix td{padding:5px 4px;font-size:10.5px}
+  .lb-matrix th{font-size:10px;max-width:40px}
 }
 @media(max-height:640px) and (max-width:480px){
   /* extra tightening only for genuinely short viewports (old/small phones, landscape) — on top of the max-width:480 block above, which now carries the main mobile tightening since width, not height, is what real tall phones actually match */
@@ -1413,6 +1427,9 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
     <button class="icon-btn" id="btn-exit">✕</button>
     <div id="round-info"></div>
     <div>
+      <button class="icon-btn" id="btn-sound">🔊</button>
+      <button class="icon-btn" id="theme-btn" title="Switch theme">🌃</button>
+      <button class="icon-btn" id="btn-score">🏆</button>
       <button class="icon-btn hidden" id="btn-voice" title="Voice chat">🎤</button>
       <button class="icon-btn hidden" id="btn-chat" style="position:relative">💬<span id="chat-badge" class="hidden"></span></button>
       <button class="icon-btn hidden" id="btn-join-requests" title="Join requests" style="position:relative">🙋<span id="join-req-badge" class="hidden"></span></button>
@@ -1615,8 +1632,26 @@ function deal(g,openShowBy){
      a hand out of thin air mid-round. The very next deal is what actually
      seats them: flipping them active *before* activeIdxs()/the dealing
      loop below run means they're included in starter rotation and get a
-     real hand like everyone else, from this round on. */
-  g.players.forEach(p=>{if(p.pendingJoin){p.elim=false;p.pendingJoin=false;}});
+     real hand like everyone else, from this round on.
+     Real bug found live (2026-07-26): the average-score seeding used to
+     happen at *approval* time (see approveJoinRequest()'s old comment),
+     which is wrong whenever the host approves mid-round rather than
+     between rounds — Saif's own example: approve during round 1 (nobody
+     has scored anything yet, everyone's still 0) → joiner correctly
+     starts round 2, but got seeded at the average of round-1-not-yet-
+     resolved scores (0), instead of the average *after* round 1 actually
+     finished. The fix is computing the average here instead, right now,
+     the instant they're actually being seated — activeIdxs(g) at this
+     exact point (before the pendingJoin flip below) is exactly "everyone
+     who played through the round that just ended", which is the correct
+     baseline regardless of when during the *previous* round the host
+     happened to click approve. */
+  const joiners=g.players.filter(p=>p.pendingJoin);
+  if(joiners.length){
+    const activeNow=activeIdxs(g).map(i=>g.players[i]);
+    const avg=activeNow.length?Math.round(activeNow.reduce((s,p)=>s+p.score,0)/activeNow.length):0;
+    joiners.forEach(p=>{p.elim=false;p.pendingJoin=false;p.score=avg;});
+  }
   g.round++;g.result=null;g.openShow=openShowBy!=null?openShowBy:null;
   g.openShowCalledBy=null;   // whatever was pending for *this* transition has now been acted on
   /* starter rotates one direction until every active player has gone
@@ -2778,6 +2813,18 @@ function render(){
         ${handHtml}
       </div>`;
     if(canKick)d.querySelector('.kick-btn').onclick=e=>{e.stopPropagation();uiKickPlayer(p.id,p.name);};
+    /* Tap another real player's name for a small action menu (2026-07-26)
+       — private messaging (coordinate against a third player without
+       them seeing it in the shared chat) plus, for the host, emoji-mute
+       moderation. Regular MP only, never a bot — a CL 1v1 already has
+       exactly one other person, which is what the shared chat already
+       is, so there's no separate "private" concept worth adding there. */
+    if(G.mode==='mp'&&!G.clKey&&!p.isBot){
+      const nameEl=d.querySelector('.opp-name-text');
+      nameEl.classList.add('whisperable');
+      nameEl.title=`${p.name} — tap for options`;
+      nameEl.onclick=e=>{e.stopPropagation();showPlayerMenu(p.id,p.name);};
+    }
     opp.appendChild(d);
   }
   /* my own seat chip closes the circle at the bottom of the rim (skipped
@@ -2802,8 +2849,17 @@ function render(){
        smiley at rest, not either specific reaction's own image — it
        opens a picker of both now rather than firing one fixed reaction,
        so its icon shouldn't look like it belongs to just one of them. */
-    const reactionHtml=dispElimMe?'':`<button class="cough-btn" title="React">😊</button>
-      <div class="reaction-picker${reactionPickerOpen?'':' hidden'}">${reactionWheelHtml()}</div>`;
+    /* Emoji-mute (2026-07-26) — host moderation for reaction spam/abuse,
+       toggled per-player via uiToggleEmojiMute() (tap their name → Player
+       menu). Lives on the room's own players/{uid}, not G, since it's
+       moderation metadata, not game state. Shows a struck-through icon
+       instead of just silently removing the button, so a muted player
+       knows *why* reacting stopped working rather than assuming it broke. */
+    const iAmMuted=G.mode==='mp'&&mp.room&&mp.room.players&&mp.room.players[me.id]&&mp.room.players[me.id].emojiMuted;
+    const reactionHtml=dispElimMe?'':(iAmMuted
+      ?`<button class="cough-btn muted" title="Reactions disabled by the host" disabled>🔇</button>`
+      :`<button class="cough-btn" title="React">😊</button>
+      <div class="reaction-picker${reactionPickerOpen?'':' hidden'}">${reactionWheelHtml()}</div>`);
     d.innerHTML=`<div class="avatar">${avatarFor(me)}${rankBadgeHtml(myIdx)}${inVoice?'<span class="voice-mic">🎙️</span>':''}${reactionHtml}</div>
       <div class="seat-card">
         <div class="opp-name"><span class="opp-name-text">${esc(me.name)} (you)</span>${(showOpenBadge&&myIdx===G.starter)?'<span class="tagchip open-tag">Open card</span>'
@@ -3227,7 +3283,7 @@ function leaderboardMatrix(){
   const dispWins=(p,i)=>suppressElim(i)&&p.roundPts.length&&p.roundPts[p.roundPts.length-1]===0?p.wins-1:p.wins;
   const ranked=rankRows(G.players.map((p,i)=>({i,name:p.name,total:dispScore(p,i),elim:p.elim&&!suppressElim(i),wins:dispWins(p,i),roundPts:p.roundPts})),'total');
   const maxRounds=Math.max(0,...G.players.map(p=>p.roundPts.length));
-  let rows=`<tr><th></th>${ranked.map(r=>`<th>${esc(r.name)}${r.i===myIdx?' <span style="color:var(--dim)">(you)</span>':''}</th>`).join('')}</tr>`;
+  let rows=`<tr><th></th>${ranked.map(r=>`<th title="${esc(r.name)}${r.i===myIdx?' (you)':''}">${esc(r.name)}${r.i===myIdx?' <span style="color:var(--dim)">•</span>':''}</th>`).join('')}</tr>`;
   rows+=`<tr><td>Status</td>${ranked.map(r=>`<td>${r.elim?'<span class="out">Eliminated</span>':'Active'}</td>`).join('')}</tr>`;
   rows+=`<tr><td>Wins</td>${ranked.map(r=>`<td>${r.wins}</td>`).join('')}</tr>`;
   rows+=`<tr><td>Rank</td>${ranked.map(r=>`<td>#${r.rank}</td>`).join('')}</tr>`;
@@ -3337,16 +3393,22 @@ function showJoinRequestsModal(){
 function approveJoinRequest(uid){
   if(!mp.isHost||!G||G.mode!=='mp'||G.clKey)return;
   const req=mp.joinRequests&&mp.joinRequests[uid];if(!req)return;
-  const active=activeIdxs(G);
-  const avgScore=active.length?Math.round(active.reduce((s,i)=>s+G.players[i].score,0)/active.length):0;
-  G.players.push({id:uid,name:req.name,isBot:false,diff:null,score:avgScore,elim:true,pendingJoin:true,hand:[],wins:0,roundPts:[],emojis:null,avatar:req.avatar||null});
+  /* Score is deliberately NOT computed here — see deal()'s own comment
+     for the real bug this fixes. Approving mid-round (the common case —
+     hosts don't wait for a convenient moment) used to snapshot the
+     average right now, which is the *previous* round's already-stale
+     scores, not the round that's actually still in progress. The real
+     average gets computed the instant they're actually seated, in
+     deal(), off whatever activeIdxs() looks like at that exact moment —
+     0 here is just a harmless placeholder until then. */
+  G.players.push({id:uid,name:req.name,isBot:false,diff:null,score:0,elim:true,pendingJoin:true,hand:[],wins:0,roundPts:[],emojis:null,avatar:req.avatar||null});
   G.v++;
   mp.ref.child('players/'+uid).set({name:req.name,order:Date.now()});
   mp.ref.child('spectators/'+uid).remove();
   mp.ref.child('joinRequests/'+uid).remove();
   mp.ref.child('joinResponses/'+uid).set({approved:true,ts:firebase.database.ServerValue.TIMESTAMP});
   afterChange();
-  toast(`${req.name} will join at the start of next round — seeded at ${avgScore} pts`);
+  toast(`${req.name} will join at the start of next round, seeded at the average score`);
   closeModal();
 }
 function denyJoinRequest(uid){
@@ -3366,17 +3428,16 @@ function denyJoinRequest(uid){
    score, help) — settings and occasional lookups, not moment-to-moment
    actions — moved into this one "More" sheet instead. */
 function showMoreModal(){
+  /* 2026-07-26: Sound/Theme/Standings moved back out to their own topbar
+     icons per Saif's own usage — turns out those three get checked often
+     enough mid-game that burying them a tap deeper wasn't the right call,
+     even though the original crowding complaint was real. What's left in
+     here (card style, spectators, game log, help) are all genuinely
+     occasional lookups, unlike those three. */
   const n=mp.room&&mp.room.spectators?Object.keys(mp.room.spectators).length:0;
-  const cur=THEMES.find(x=>x.id===_currentTheme)||THEMES[0];
-  const silent=masterVol.game===0&&masterVol.voice===0&&masterVol.emoji===0;
-  const rows=[
-    `<button class="btn ghost" onclick="closeModal();showVolumeModal();">${silent?'🔇':'🔊'} Sound &amp; volume</button>`,
-    `<button class="btn ghost" onclick="closeModal();themePickerModal();">${cur.icon} Theme — ${esc(cur.name)}</button>`,
-    `<button class="btn ghost" onclick="closeModal();showCardStyleModal();">🎴 Card style</button>`,
-  ];
+  const rows=[`<button class="btn ghost" onclick="closeModal();showCardStyleModal();">🎴 Card style</button>`];
   if(G&&G.mode==='mp'&&!G.clKey)rows.push(`<button class="btn ghost" onclick="closeModal();showSpectatorsModal();">👁 Spectators${n?` (${n})`:''}</button>`);
   rows.push(`<button class="btn ghost" onclick="closeModal();showLogModal();">📜 Game log</button>`);
-  rows.push(`<button class="btn ghost" onclick="closeModal();showScoreModal();">🏆 Standings</button>`);
   rows.push(`<button class="btn ghost" onclick="closeModal();showHelpModal();">❓ How to play</button>`);
   openModal('more',`<h2>More</h2>
     <div class="mbtns" style="flex-direction:column;align-items:stretch">${rows.join('')}
@@ -4256,6 +4317,27 @@ function attachRoom(code){
     updateJoinRequestBadge();
     if(mp.isHost&&onScreen('scr-game'))showJoinRequestsModal();
   });
+  /* Private 1:1 messages (2026-07-26) — every client subscribes to the
+     same flat whispers list but only ever acts on ones addressed to them
+     (w.to===myUid); same replay-guard (isFresh) as chat/spectator-join
+     above so reconnecting doesn't pop a modal for every whisper that was
+     ever sent to me in this room, only ones that land from here on. */
+  mp.whisperRef=mp.ref.child('whispers');
+  mp.whisperRef.limitToLast(30).on('child_added',s=>{
+    const w=s.val();if(!w||w.to!==myUid)return;
+    const isFresh=w.ts&&w.ts>=attachTs-3000;
+    if(isFresh)showWhisperReceived(w.fromName,w.text);
+  });
+  /* Live-updates my own emoji-mute status (2026-07-26) the instant a host
+     toggles it — the root mp.ref listener deliberately never calls
+     render() on its own (see its own big comment on why: reprocessing
+     game state on every unrelated write risks stomping an in-flight
+     move), so without this a muted/unmuted player's reaction button
+     would only catch up on their next *other* render trigger, not
+     immediately. Scoped to just my own player node changing, and only
+     ever calls render() (never touches G), so it can't hit that same
+     stomping risk. */
+  mp.ref.child('players/'+myUid).on('child_changed',()=>{if(G)render();});
   /* reaction broadcasts (still on the 'cough' path — no reason to churn
      the schema just because there's more than one reaction now) — same
      replay-guard as chat/spectator-join above. Skip our own uid:
@@ -4605,6 +4687,76 @@ function sendChat(text){
     ts:firebase.database.ServerValue.TIMESTAMP});
   bumpRoomActivity();
 }
+/* Private 1:1 messaging (2026-07-26) — separate from the shared group
+   chat above, deliberately: the whole point is coordinating with one
+   player without the rest of the table (or whoever you're coordinating
+   *against*) seeing it. Lives at rooms/{code}/whispers, a flat list every
+   client subscribes to but only ever acts on entries addressed to them
+   (see attachRoom()'s whisperRef listener) — small-scale, same pattern
+   already used for joinRequests. */
+/* Player action menu (2026-07-26) — one entry point (tap a name) for
+   everything you can do to/with another player: message them, and if
+   you're the host, moderate their reactions. Rebuilt fresh each open
+   rather than kept live, same pattern as every other picker/menu modal
+   in this app. */
+function showPlayerMenu(uid,name){
+  const rows=[`<button class="btn primary" onclick="closeModal();showWhisperComposer('${esc(uid)}','${esc(name)}');">💬 Message ${esc(name)}</button>`];
+  if(mp.isHost){
+    const p=mp.room&&mp.room.players&&mp.room.players[uid];
+    const muted=!!(p&&p.emojiMuted);
+    rows.push(`<button class="btn ghost" onclick="uiToggleEmojiMute('${esc(uid)}','${esc(name)}')">${muted?'🔊 Unmute emojis':'🔇 Mute emojis'}</button>`);
+  }
+  rows.push(`<button class="btn ghost" onclick="closeModal()">Cancel</button>`);
+  openModal('playermenu',`<h2>${esc(name)}</h2>
+    <div class="mbtns" style="flex-direction:column;align-items:stretch">${rows.join('')}</div>`);
+}
+/* Emoji-mute moderation (2026-07-26) — host-only, toggleable any time
+   mid-game, for reaction spam/abuse. Lives on the room's own
+   players/{uid} (mirrors uiKickPlayer's host-only convention) rather than
+   in G, since it's moderation metadata about a person, not game state —
+   it has to survive/apply across rounds the same way regardless of
+   whatever G looks like at the moment it's toggled. Enforced both in the
+   muted player's own render() (see the iAmMuted check building their
+   reaction button) and defensively again in triggerReaction() itself. */
+function uiToggleEmojiMute(uid,name){
+  if(!mp.isHost||!mp.ref)return;
+  const p=mp.room&&mp.room.players&&mp.room.players[uid];
+  const currentlyMuted=!!(p&&p.emojiMuted);
+  mp.ref.child('players/'+uid+'/emojiMuted').set(!currentlyMuted);
+  toast(currentlyMuted?`Unmuted ${name}'s emojis`:`Muted ${name}'s emojis`);
+  closeModal();
+}
+function showWhisperComposer(uid,name){
+  openModal('whisper',`<h2>💬 Message ${esc(name)}</h2>
+    <p class="tag">Only ${esc(name)} will see this — not the rest of the table.</p>
+    <input id="whisper-text" maxlength="200" placeholder="Type a message…" autocomplete="off">
+    <div class="mbtns">
+      <button class="btn primary" onclick="sendWhisperUi('${esc(uid)}','${esc(name)}')">Send</button>
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+    </div>`);
+  setTimeout(()=>{const i=$('#whisper-text');if(i)i.focus();},50);
+}
+function sendWhisperUi(uid,name){
+  const input=$('#whisper-text');if(!input)return;
+  const text=input.value.trim();
+  if(!text)return toast('Type a message first');
+  if(!mp.ref)return;
+  mp.ref.child('whispers').push({to:uid,from:myUid,fromName:profile.name||'Player',text:text.slice(0,200),
+    ts:firebase.database.ServerValue.TIMESTAMP});
+  bumpRoomActivity();
+  closeModal();
+  toast(`Sent to ${name}`);
+}
+/* Shown as a real modal, not a toast — toasts get silently overwritten by
+   the next unrelated one (a spectator joining, a reaction, anything), and
+   a private message that quietly vanished before being read would defeat
+   the entire point of this feature. Same "too important to risk missing"
+   reasoning already applied to join-request approval prompts. */
+function showWhisperReceived(fromName,text){
+  openModal('whisper-recv',`<h2>🤫 Message from ${esc(fromName)}</h2>
+    <p class="tag" style="font-size:15px;color:var(--ink)">${esc(text)}</p>
+    <div class="mbtns"><button class="btn primary" onclick="closeModal()">Got it</button></div>`);
+}
 function renderChatLog(){
   const log=$('#chat-log');if(!log)return;
   const list=chatIsCL()?clChat.log:mp.chatLog;
@@ -4751,6 +4903,14 @@ function triggerReaction(type){
   render();
   const me=G&&myIdx>=0?G.players[myIdx]:null;
   if(!me||me.elim)return;
+  /* defensive re-check, not just trusting the button being hidden — see
+     the emoji-mute feature (uiToggleEmojiMute) — the trigger UI already
+     doesn't render when muted, but this is what actually stops a stale
+     picker (e.g. one that was already open the instant a host mutes
+     someone mid-interaction) from still firing. */
+  if(G.mode==='mp'&&mp.room&&mp.room.players&&mp.room.players[me.id]&&mp.room.players[me.id].emojiMuted){
+    toast('Reactions disabled by the host');return;
+  }
   playReactionEffect(me.id,type);   // immediate local feedback, no round-trip wait
   if(mp.ref)mp.ref.child('cough').push({uid:myUid,type,ts:firebase.database.ServerValue.TIMESTAMP});
 }
@@ -5388,6 +5548,8 @@ updateSoundIcon();
 updateProfileBadge();   // shows the "Sign in" placeholder immediately; authInit() (below, on window load) fills in the real state once Firebase Auth resolves it
 $('#btn-profile').onclick=showProfileModal;
 $('#btn-leaderboard').onclick=openLeaderboard;
+$('#btn-sound').onclick=showVolumeModal;
+$('#btn-score').onclick=showScoreModal;
 $('#btn-more').onclick=showMoreModal;
 $('#btn-join-requests').onclick=showJoinRequestsModal;
 $('#log-line').onclick=showLogModal;
@@ -5549,6 +5711,7 @@ function applyTheme(t){
   document.documentElement.setAttribute('data-theme',t);
   const cur=THEMES.find(x=>x.id===t)||THEMES[0];
   $('#theme-btn-home').textContent=cur.icon+' '+cur.name;
+  const tb=$('#theme-btn');if(tb)tb.textContent=cur.icon;
   localStorage.fcTheme=t;
 }
 function themePickerModal(){
@@ -5559,6 +5722,7 @@ function themePickerModal(){
     <button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);
 }
 $('#theme-btn-home').onclick=themePickerModal;
+$('#theme-btn').onclick=themePickerModal;
 applyTheme(_currentTheme);
 
 /* ======================================================
