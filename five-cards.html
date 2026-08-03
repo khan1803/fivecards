@@ -411,7 +411,15 @@ input:focus{border-color:var(--gold)}
 .pile{display:flex;flex-direction:column;align-items:center;gap:8px}
 .pile-cap{font-size:9px;letter-spacing:2.5px;color:rgba(255,255,255,.6);font-weight:700;font-family:'DM Mono',monospace;text-transform:uppercase}
 #open-cards,#pending-cards{display:flex;gap:6px;min-height:var(--ch)}
-#pending-cards .card{opacity:.88}
+#pending-cards .card{opacity:.88;animation:cardPlayPop .26s cubic-bezier(.34,1.56,.64,1)}
+/* Tactile polish, take 3 (2026-07-26) — the zero-latency replacement for
+   the flying-clone attempts above: #pending-cards is rebuilt fresh from
+   G.pending on every render() (see render()'s own comment near
+   #pending-pile), so a card landing here is *always* one that was just
+   discarded this instant — a plain pop-in keyframe on the element itself
+   gives the "you just played that" feedback for free, with no JS timing,
+   no delay on the actual discard, and nothing that can arrive late. */
+@keyframes cardPlayPop{0%{transform:scale(.55) translateY(8px);opacity:0}65%{transform:scale(1.08) translateY(-3px);opacity:1}100%{transform:scale(1) translateY(0);opacity:.88}}
 #attack-badge{position:relative;z-index:5;align-self:center;
   background:linear-gradient(180deg,#E0668A,#8F2F4E);color:#fff;font-weight:800;font-size:14px;letter-spacing:.5px;
   border-radius:999px;padding:7px 18px;box-shadow:0 4px 18px rgba(143,47,78,.55);animation:pulse 1s infinite;font-family:'DM Mono',monospace}
@@ -3496,7 +3504,7 @@ function pump(){
   },G.phase==='draw'?950:1350);
 }
 function startBotGame(){
-  const myName=getName();if(!myName)return;
+  const myName=(profile.id&&profile.name)?profile.name:guestName();
   const names=shuffle(['Ace','Ruby','Jax','Queenie','Kingsley','Maverick','Diesel','Scout','Nash','Piper']);
   const defs=[{name:myName,isBot:false}];
   for(let i=0;i<setup.nbots;i++)defs.push({name:names[i],isBot:true,diff:setup.diff});
@@ -3788,17 +3796,31 @@ async function profileSetAvatar(emoji){
   profile.avatar=emoji;
   showProfileModal();   // re-render in place so the new pick highlights immediately
 }
-/* Gate for the three home-screen mode buttons — Saif asked that nobody
-   be able to play at all without signing in first (this used to be an
-   optional layer; the leaderboard can still be *viewed* without signing
-   in, but starting a game now requires it). A pending name-setup counts
-   as "not ready yet" too, since a profile with no confirmed unique name
-   shouldn't be able to start racking up stats under it. */
+/* Gate for the online-multiplayer and Champions League home-screen mode
+   buttons — Saif asked that nobody be able to play *those* at all without
+   signing in first (the leaderboard can still be *viewed* without signing
+   in, but starting an online game requires it, since it writes real
+   lifetime stats to a real profile). A pending name-setup counts as "not
+   ready yet" too, since a profile with no confirmed unique name shouldn't
+   be able to start racking up stats under it. Single Player is
+   deliberately exempt from this — see guestName()/btn-gobot's own
+   handler — bot games never touch Firebase or lifetime stats regardless
+   of sign-in state (profileRecordMatch already only ever fires for
+   G.mode==='mp'), so there's nothing here actually worth gating. */
 function requirePlaySignIn(){
   if(profile.id&&!needsNameSetup)return true;
   toast('Sign in with Google to play');
   showProfileModal();
   return false;
+}
+/* Guest/demo mode for Single Player (2026-07-26) — a name that's local
+   only (never a real Firebase profile), generated once and remembered
+   per-browser so a guest's bot-mode seat doesn't change name every game.
+   If they later actually sign in, profile.name naturally takes over
+   everywhere getName() is used instead — this is only ever a fallback. */
+function guestName(){
+  if(!localStorage.fcGuestName)localStorage.fcGuestName='Guest'+Math.floor(1000+Math.random()*9000);
+  return localStorage.fcGuestName;
 }
 /* outcome: 'won'|'lost'|'forfeited'|'draw'. A draw only counts toward
    "played" (matches real-world convention — it's neither a win nor a
@@ -3975,10 +3997,17 @@ function getName(){
    rename or a sign-out/sign-in as someone else. */
 function updatePlayingAsLabels(){
   const name=profile.name||'';
-  ['playing-as-bot','playing-as-mp','playing-as-cl-solo','playing-as-cl-mp'].forEach(id=>{
+  ['playing-as-mp','playing-as-cl-solo','playing-as-cl-mp'].forEach(id=>{
     const el=document.getElementById(id);if(!el)return;
     const b=el.querySelector('b');if(b)b.textContent=name;
   });
+  /* Single Player shows the guest name when not signed in, not a blank —
+     see guestName()/startBotGame(). guestName() itself only ever mints a
+     new one the first time it's called (checks localStorage first), so
+     calling it here on every render is harmless — same one comes back
+     every time after the first. */
+  const botEl=document.getElementById('playing-as-bot');
+  if(botEl){const b=botEl.querySelector('b');if(b)b.textContent=(profile.id&&profile.name)?profile.name:guestName();}
 }
 function effHost(r){
   const ps=Object.keys(r.players||{});
@@ -5303,7 +5332,7 @@ $('#seg-lobby-decks').addEventListener('click',e=>{
   mp.ref.update({numDecks:+b.dataset.v});
 });
 
-$('#btn-gobot').onclick=()=>{if(requirePlaySignIn())goScr('scr-bot');};
+$('#btn-gobot').onclick=()=>goScr('scr-bot');   // no sign-in required — see requirePlaySignIn()'s comment on why Single Player is exempt
 $('#btn-gomp').onclick=()=>{if(requirePlaySignIn()){goScr('scr-mp');roomListAttach();}};
 $('#btn-help').onclick=showHelpModal;
 document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>{
@@ -5404,52 +5433,23 @@ $('#btn-discard').onclick=()=>{
   const me=G.players[myIdx];if(!me)return;
   const cards=me.hand.filter(c=>sel.has(c.id));
   if(!validSet(cards))return;
-  /* Real bug found live (2026-07-26, Saif's own screen recording): the
-     fly-out clones spawned correctly, but applyMove() ran *immediately*
-     right after — its render() call is synchronous, so the hand/pile
-     snapped to the final state instantly while the clones were still
-     mid-flight a moment later, arriving as visible "ghost" duplicates of
-     cards that had already vanished from the hand. That reads exactly as
-     "laggy/broken", not as a smooth play animation. Now the actual state
-     mutation is held until the fly animation's real arrival time (see
-     playDiscardFly's return value) instead of firing in parallel with it.
-     btn-discard is disabled for that same window so a fast double-tap
-     can't queue a second discard before render() re-evaluates it. */
-  const flyMs=playDiscardFly(cards);
+  /* Tactile-polish history, both attempts real bugs Saif caught live:
+     v1 fired a flying clone in parallel with an *instant* state update,
+     so the clone arrived late as a visible duplicate of a card that had
+     already vanished. v2 "fixed" that by delaying the actual discard
+     until the flight landed (~420-500ms) — which took a previously
+     instant action and made *every single discard* wait half a second,
+     reported right back as "still a lot of lag" because that's exactly
+     what it was: the delay itself, not a rendering glitch. Any approach
+     that holds up applyMove() to sync with a separate animation is the
+     wrong shape for this — discarding has to stay instant, full stop.
+     Dropped the flying-clone entirely; see the plain CSS pop-in on
+     #pending-cards below instead — zero added latency by construction,
+     since it's just a keyframe on cards that were going to render there
+     anyway, not a delay gating real gameplay. */
   if(navigator.vibrate)navigator.vibrate(15);
-  $('#btn-discard').disabled=true;
-  setTimeout(()=>applyMove({t:'discard',ids:cards.map(c=>c.id)}),flyMs);
+  applyMove({t:'discard',ids:cards.map(c=>c.id)});
 };
-/* Tactile polish (2026-07-22) — selecting a card already had a satisfying
-   spring-pop (see cardPop), but actually *playing* it was a flat instant
-   cut: the card just vanished from the hand and reappeared in the open
-   pile on the next render. This flies a real-looking clone of each
-   played card from wherever it currently sits in #my-hand to the open
-   pile, reusing flyCard() (the same primitive the deal animation already
-   uses) — the clones are independent DOM elements appended to
-   document.body, so applyMove() re-rendering the real hand/pile
-   underneath a moment later doesn't cut them off partway. */
-function playDiscardFly(cards){
-  const scr=$('#scr-game');if(!scr||!scr.classList.contains('on'))return 0;
-  const pileEl=$('#open-cards')||$('#deck-top');if(!pileEl)return 0;
-  const pr=pileEl.getBoundingClientRect();if(!pr.width)return 0;
-  const tx=pr.left+pr.width/2,ty=pr.top+pr.height/2;
-  cards.forEach((c,i)=>{
-    const el=[...document.querySelectorAll('#my-hand .card')].find(cd=>cd.dataset.id===String(c.id));
-    const r=el?el.getBoundingClientRect():null;
-    const x0=r?r.left+r.width/2:tx,y0=r?r.top+r.height/2:ty;
-    setTimeout(()=>{
-      /* hide the real hand card the instant its ghost launches — without
-         this both were visible at once (the untouched real card sitting
-         in the hand *and* a flying duplicate of it) since the actual
-         discard/render() is now deliberately delayed until the flight
-         lands (see btn-discard's onclick). */
-      if(el)el.style.opacity='0';
-      flyCard(x0,y0,tx,ty,c);
-    },i*70);
-  });
-  return (cards.length-1)*70+420;   // last card's spawn delay + .deal-fly.face's .4s transform transition, plus a small buffer
-}
 $('#btn-pickup').onclick=()=>applyMove({t:'pickup'});
 $('#btn-show').onclick=()=>{
   if(!G)return;
