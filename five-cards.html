@@ -1683,6 +1683,33 @@ function deal(g,openShowBy){
     const avg=activeNow.length?Math.round(activeNow.reduce((s,p)=>s+p.score,0)/activeNow.length):0;
     joiners.forEach(p=>{p.elim=false;p.pendingJoin=false;p.score=avg;});
   }
+  /* Auto-downgrade to 1 deck once the table thins out (2026-08-05) — 2
+     decks makes sense for a big table, but Saif's own complaint: start
+     at 6+ players, people get eliminated down to 5-or-fewer, and now
+     everyone's still drowning in a hand-count/pile built for twice as
+     many players as are actually left. Checked here (right after the
+     mid-game-join flip above, so a joiner landing this exact round is
+     counted) rather than scattered across every elimination code path —
+     every single round gets dealt through this one function regardless
+     of what caused the elimination (a normal Show, an Open Show, a host
+     kick, a forfeit), so this is the one place guaranteed to see it.
+     Deliberately one-directional: never switches back to 2 decks if a
+     6th player joins after the downgrade — jumping the deck size back up
+     mid-tournament would be a far more surprising change than just
+     staying at 1, and nobody asked for that direction. */
+  /* Real gap caught before shipping: glog()-ing this here on its own
+     gets immediately buried — the "— Round N: ... starts, open card ... —"
+     line a few lines down in this same function overwrites #log-line's
+     single-line display in the very same render(), so a standalone
+     message here would never actually be seen, only recoverable later in
+     the full game-log modal. deckJustSwitched instead gets folded into
+     that round-start line itself below, so the notice rides along on the
+     one line that's actually guaranteed to stay on screen. */
+  let deckJustSwitched=false;
+  if(g.numDecks>1&&activeIdxs(g).length<=5){
+    g.numDecks=1;
+    deckJustSwitched=true;
+  }
   g.round++;g.result=null;g.openShow=openShowBy!=null?openShowBy:null;
   g.openShowCalledBy=null;   // whatever was pending for *this* transition has now been acted on
   /* starter rotates one direction until every active player has gone
@@ -1718,8 +1745,9 @@ function deal(g,openShowBy){
   for(let k=0;k<5;k++)for(const i of dealOrder)g.players[i].hand.push(g.deck.pop());
   g.open=[g.deck.pop()];g.heap=[];g.pending=[];g.lastDrawn=null;
   g.turn=g.starter;g.attack=0;g.phase='discard';g.turnCount=0;g.pickedUpThisTurn=false;g.v++;
+  const deckNote=deckJustSwitched?' · ♻️ switched to 1 deck, 5 or fewer players remain':'';
   if(g.openShow!=null){
-    glog(g,`— Round ${g.round}: ${g.players[g.openShow].name} calls an OPEN SHOW! —`);
+    glog(g,`— Round ${g.round}: ${g.players[g.openShow].name} calls an OPEN SHOW!${deckNote} —`);
     /* Open Show's reveal is now host-click-driven, not a timer: this just
        records who's in it (dealOrder — same starter-first, direction-
        stepped order the deal itself just used) and that nobody's card
@@ -1737,7 +1765,7 @@ function deal(g,openShowBy){
     resolveShow(g,g.openShow,true);
   }else{
     g.openShowParticipants=null;g.openShowRevealed=null;g.openShowRevealDone=true;
-    glog(g,`— Round ${g.round}: ${g.players[g.starter].name} starts, open card ${lbl(g.open[0])} —`);
+    glog(g,`— Round ${g.round}: ${g.players[g.starter].name} starts, open card ${lbl(g.open[0])}${deckNote} —`);
   }
 }
 function drawDeck(g){
@@ -4477,7 +4505,20 @@ function renderLobby(){
   $('#lobby-settings-edit').classList.toggle('hidden',!mp.isHost);
   if(mp.isHost){
     $('#seg-lobby-limit').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',+b.dataset.v===(r.limit||240)));
-    $('#seg-lobby-decks').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',+b.dataset.v===(r.numDecks||1)));
+    /* 2 decks only makes sense with a real crowd — Saif's own complaint:
+       start at 6+ players with 2 decks, people get eliminated down to
+       5-or-fewer, and now everyone's drowning in a deck built for twice
+       as many players. Not offered as a choice at all for a lobby that's
+       already at 5 or fewer (see auto-switch's own comment in deal() for
+       the matching mid-game case — same "not what any player would
+       actually pick" reasoning). */
+    const playerCount=Object.keys(r.players||{}).length;
+    $('#seg-lobby-decks').querySelectorAll('button').forEach(b=>{
+      const v=+b.dataset.v,tooFewFor2=v===2&&playerCount<=5;
+      b.classList.toggle('sel',v===(r.numDecks||1));
+      b.classList.toggle('hidden',tooFewFor2);
+    });
+    if(playerCount<=5&&(r.numDecks||1)===2&&mp.ref)mp.ref.update({numDecks:1});
   }
   const ps=Object.entries(r.players||{}).map(([u,p])=>({u,...p})).sort((a,b)=>a.order-b.order);
   const host=effHost(r);
@@ -5668,7 +5709,56 @@ $('#btn-show').onclick=()=>{
     <div class="mbtns"><button class="btn primary" onclick="confirmShow()">👁 Show!</button>
     <button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);
 };
-function confirmShow(){closeModal();applyMove({t:'show',pi:myIdx});}
+/* Real bug found live (2026-08-09): "whenever someone shows before the
+   first person plays, the game freezes and everyone has to refresh" —
+   canSnapShow() deliberately lets *every* active player Show right off
+   the raw deal, not just whoever's turn it is (see its own comment) —
+   the one and only move in this whole engine where more than one
+   player can be simultaneously eligible to act from the identical
+   starting state. Every other move (discard, draw) is gated to
+   G.turn===pi, so exactly one player is ever eligible at a time — no
+   race possible there by construction.
+   But every move, snap-show included, used to go through applyMove()→
+   afterChange()→mpWrite(), which is a raw mp.ref.child('state').set() —
+   a full overwrite, no merge, no transaction. Two players tapping Show
+   within the same snap-show window (very plausible — that's exactly the
+   moment everyone's looking at their fresh hand at once) each compute
+   resolveShow() off the *same* pre-show state, each increment g.v to
+   the *same* number, and each .set() a full — and different — result.
+   Whichever write lands last on Firebase silently wins; the client-side
+   staleness guard (g.v<mp.lastV) doesn't catch it either, since a tie
+   isn't "less than". Every client ends up with mismatched, sometimes
+   self-contradicting state, which is exactly what a "frozen, needs a
+   refresh" report looks like from the player's side.
+   Fixed by routing Show specifically through a Firebase transaction —
+   re-validated against whatever the *actual latest* server state is,
+   not this client's possibly-already-stale local G. Firebase retries a
+   transaction automatically if the data changed since it read it: the
+   loser's retry sees phase already flipped to 'roundEnd' by the winner,
+   mvShow() correctly returns 'not your turn' against that fresh read,
+   and the callback aborts cleanly (return with no value) instead of
+   ever writing a conflicting result. Discard/draw don't need this same
+   treatment — they're already single-writer by construction. */
+function confirmShow(){
+  closeModal();
+  if(G&&G.mode==='mp'&&mp.stateRef){
+    mp.stateRef.transaction(raw=>{
+      if(!raw)return raw;
+      let g;try{g=JSON.parse(raw);}catch(e){return raw;}
+      const err=mvShow(g,myIdx);
+      if(err)return;   // abort — someone else's show (or another move) already landed first
+      return JSON.stringify(g);
+    },(error,committed)=>{
+      if(error){toast('Could not show — try again');return;}
+      if(!committed)toast('Too slow — someone else already acted this turn');
+      // committed transactions land through the existing mp.stateRef
+      // .on('value',...) listener same as any other write — no separate
+      // local G update needed here.
+    });
+    return;
+  }
+  applyMove({t:'show',pi:myIdx});
+}
 $('#deck-pile').onclick=()=>{
   if(!G)return;
   if(G.openShow!=null&&!G.openShowRevealDone){uiRevealNextCard();return;}
