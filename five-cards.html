@@ -155,6 +155,7 @@ input:focus{border-color:var(--gold)}
 .lp{background:rgba(255,184,77,.05);border:1px solid rgba(255,184,77,.14);border-radius:10px;padding:12px 14px;font-weight:700;font-family:'Plus Jakarta Sans',sans-serif;color:#FDF6E8;
   display:flex;align-items:center;gap:6px}
 .lp-mic{font-size:12px;opacity:.85}
+.lp-mic.muted{opacity:.5}
 .lp-kick{margin-left:auto;width:24px;height:24px;border-radius:50%;flex:0 0 auto;
   background:transparent;border:1.5px solid rgba(214,69,107,.45);color:rgba(253,246,232,.5);
   font-size:12px;font-weight:800;line-height:1;cursor:pointer;transition:background .15s,color .15s}
@@ -351,7 +352,7 @@ input:focus{border-color:var(--gold)}
 /* lobby emoji picker — each player picks 5 of REACTIONS to carry into
    their own in-game reaction wheel (see reactionWheelHtml()'s myEmojiPicks
    branch) instead of the full, ever-growing set showing at once mid-game */
-#emoji-pick-grid,#cl-emoji-pick-grid{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:4px 0 8px}
+#emoji-pick-grid,#cl-emoji-pick-grid,#midjoin-emoji-grid{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:4px 0 8px}
 .emoji-pick-btn{width:40px;height:40px;border-radius:10px;overflow:hidden;padding:0;cursor:pointer;
   border:2px solid rgba(255,184,77,.25);background:var(--panel);opacity:.55;transition:transform .12s,opacity .12s,border-color .12s}
 .emoji-pick-btn img{width:100%;height:100%;object-fit:cover}
@@ -1623,9 +1624,9 @@ let G=null,myIdx=0;
 
 function newMatch(defs,limit,mode,numDecks){
   return {mode,limit:+limit||240,numDecks:numDecks||1,round:0,starter:-1,starterDir:1,starterStep:0,directionChanged:false,
-    players:defs.map((d,i)=>({id:d.id||'p'+i,name:d.name,isBot:!!d.isBot,diff:d.diff||null,score:0,elim:false,hand:[],wins:0,roundPts:[],emojis:d.emojis||null,avatar:d.avatar||null})),
+    players:defs.map((d,i)=>({id:d.id||'p'+i,name:d.name,isBot:!!d.isBot,diff:d.diff||null,score:0,elim:false,elimOrder:null,hand:[],wins:0,roundPts:[],emojis:d.emojis||null,avatar:d.avatar||null})),
     deck:[],open:[],heap:[],pending:[],turn:0,attack:0,phase:'discard',
-    turnCount:0,result:null,winner:null,log:[],logSeq:0,lastDrawn:null,openShow:null,pickedUpThisTurn:false,v:0};
+    turnCount:0,result:null,winner:null,log:[],logSeq:0,lastDrawn:null,openShow:null,pickedUpThisTurn:false,elimSeq:0,v:0};
 }
 const activeIdxs=g=>g.players.map((p,i)=>p.elim?-1:i).filter(i=>i>=0);
 /* Steps by g.starterDir, not a hardcoded +1 — the actual turn-by-turn
@@ -1858,7 +1859,7 @@ function resolveShow(g,pi,openShow){
     p.roundPts.push(pts);
     rows.push({i,name:p.name,cards:sortHand(p.hand).map(lbl).join(' '),sum:sums[i],pts,total:p.score});
   });
-  act.forEach(i=>{if(g.players[i].score>=g.limit)g.players[i].elim=true;});
+  act.forEach(i=>{if(g.players[i].score>=g.limit){g.players[i].elim=true;g.players[i].elimOrder=++g.elimSeq;}});
   rows.forEach(r=>r.elim=g.players[r.i].elim);
   const winners=rows.filter(r=>r.pts===0);
   if(ok)winners.forEach(w=>g.players[w.i].wins++);
@@ -2812,7 +2813,7 @@ function render(){
   const dispScore=(p,i)=>suppressElim(i)?p.score-(p.roundPts[p.roundPts.length-1]||0):p.score;
 
   /* rank badges next to every username, always visible */
-  const ranked=rankRows(G.players.map((p,i)=>({i,total:p.score})),'total');
+  const ranked=rankFinalRows(G.players.map((p,i)=>({i,total:p.score,elim:p.elim,elimOrder:p.elimOrder})));
   const rankOf=i=>{const r=ranked.find(x=>x.i===i);return r?r.rank:1;};
   /* top-3 badges get their own modifier class (bigger + medal-colored,
      see the CSS) and rank 1 gets a crown instead of a number — visible
@@ -2845,6 +2846,7 @@ function render(){
     d.className='opp'+(i===G.turn&&!isEnd()&&!dispElim?' turn':'')+(dispElim?' elim':'');
     d.dataset.uid=p.id;
     const inVoice=voiceMicOn.has(p.id);
+    const inVoiceMuted=voiceMuted.has(p.id);
     /* Open Show reveal in progress: show the actual cards that have
        landed so far (face up) plus a running point total, instead of
        the usual card-count text — this is the whole point of an Open
@@ -2863,7 +2865,7 @@ function render(){
        may never respond again. Never shown for an opponent who's
        already out — nothing left to kick. */
     const canKick=G.mode==='mp'&&mp.isHost&&!p.elim&&!G.clKey;   // no kicking your opponent in a 1v1 CL match
-    d.innerHTML=`<div class="avatar">${avatarFor(p)}${rankBadgeHtml(i)}${inVoice?'<span class="voice-mic">🎙️</span>':''}${canKick?`<button class="kick-btn" title="Kick ${esc(p.name)}">✕</button>`:''}</div>
+    d.innerHTML=`<div class="avatar">${avatarFor(p)}${rankBadgeHtml(i)}${inVoice?'<span class="voice-mic">🎙️</span>':inVoiceMuted?'<span class="voice-mic muted">🔇</span>':''}${canKick?`<button class="kick-btn" title="Kick ${esc(p.name)}">✕</button>`:''}</div>
       <div class="seat-card">
         <div class="opp-name"><span class="opp-name-text">${esc(p.name)}</span>${(showOpenBadge&&i===G.starter)?'<span class="tagchip open-tag">Open card</span>'
           :(showOpenBadge&&i===nextStarterI)?'<span class="tagchip next-open-tag">Next Open Card</span>'
@@ -2905,6 +2907,7 @@ function render(){
     d.className='opp me'+(myTurn?' turn':'')+(dispElimMe?' elim':'');
     d.id='my-seat';d.dataset.uid=me.id;
     const inVoice=voiceMicOn.has(me.id);
+    const inVoiceMuted=voiceMuted.has(me.id);
     /* my own running total during an Open Show reveal, right next to my
        own name, same as every opponent gets — my actual cards still only
        show in #my-hand below (already reveal-gated there), this is just
@@ -2930,7 +2933,7 @@ function render(){
       ?`<button class="cough-btn muted" title="Reactions disabled by the host" disabled>🔇</button>`
       :`<button class="cough-btn" title="React">😊</button>
       <div class="reaction-picker${reactionPickerOpen?'':' hidden'}">${reactionWheelHtml()}</div>`);
-    d.innerHTML=`<div class="avatar">${avatarFor(me)}${rankBadgeHtml(myIdx)}${inVoice?'<span class="voice-mic">🎙️</span>':''}${reactionHtml}</div>
+    d.innerHTML=`<div class="avatar">${avatarFor(me)}${rankBadgeHtml(myIdx)}${inVoice?'<span class="voice-mic">🎙️</span>':inVoiceMuted?'<span class="voice-mic muted">🔇</span>':''}${reactionHtml}</div>
       <div class="seat-card">
         <div class="opp-name"><span class="opp-name-text">${esc(me.name)} (you)</span>${(showOpenBadge&&myIdx===G.starter)?'<span class="tagchip open-tag">Open card</span>'
           :(showOpenBadge&&myIdx===nextStarterI)?'<span class="tagchip next-open-tag">Next Open Card</span>':''}</div>
@@ -3225,6 +3228,31 @@ function rankRows(items,key){
   sorted.forEach((r,idx)=>{if(prev===null||r[key]!==prev){rank=idx+1;prev=r[key];}r.rank=rank;});
   return sorted;
 }
+/* Standings ranking for an in-progress or finished match. Active players
+   always outrank eliminated ones and are ordered by current score
+   (ascending, lower is better) same as rankRows. Eliminated players are
+   ordered by elimOrder (a monotonic per-match counter stamped the instant
+   each one crosses the limit — see resolveShow()/hostKickPlayer()/
+   leaveRoom()) — later-eliminated is a better placement than
+   earlier-eliminated, regardless of final score. Ranking eliminated
+   players by score instead used to let a player who busted out later at a
+   higher score outrank one who busted out earlier at a lower score, which
+   silently reshuffled everyone's final placement as the match went on —
+   real placement should never move once you're out. */
+function rankFinalRows(items){
+  const sorted=items.slice().sort((a,b)=>{
+    if(!!a.elim!==!!b.elim)return a.elim?1:-1;
+    if(a.elim)return (b.elimOrder||0)-(a.elimOrder||0);
+    return a.total-b.total;
+  });
+  let rank=0,prevKey=null;
+  sorted.forEach((r,idx)=>{
+    const key=r.elim?'e'+(r.elimOrder||0):'a'+r.total;
+    if(prevKey===null||key!==prevKey){rank=idx+1;prevKey=key;}
+    r.rank=rank;
+  });
+  return sorted;
+}
 function resultTable(rows,showerIdx){
   const ranked=rankRows(rows,'total');
   return `<table class="rt"><tr><th>Rank</th><th>Player</th><th>Cards</th><th>Round</th><th>Total</th></tr>`+
@@ -3351,7 +3379,7 @@ function leaderboardMatrix(){
   const suppressElim=i=>openShowRevealing&&G.openShowParticipants&&G.openShowParticipants.includes(i);
   const dispScore=(p,i)=>suppressElim(i)?p.score-(p.roundPts[p.roundPts.length-1]||0):p.score;
   const dispWins=(p,i)=>suppressElim(i)&&p.roundPts.length&&p.roundPts[p.roundPts.length-1]===0?p.wins-1:p.wins;
-  const ranked=rankRows(G.players.map((p,i)=>({i,name:p.name,total:dispScore(p,i),elim:p.elim&&!suppressElim(i),wins:dispWins(p,i),roundPts:p.roundPts})),'total');
+  const ranked=rankFinalRows(G.players.map((p,i)=>({i,name:p.name,total:dispScore(p,i),elim:p.elim&&!suppressElim(i),elimOrder:p.elimOrder,wins:dispWins(p,i),roundPts:p.roundPts})));
   const maxRounds=Math.max(0,...G.players.map(p=>p.roundPts.length));
   let rows=`<tr><th></th>${ranked.map(r=>`<th title="${esc(r.name)}${r.i===myIdx?' (you)':''}">${esc(r.name)}${r.i===myIdx?' <span style="color:var(--dim)">•</span>':''}</th>`).join('')}</tr>`;
   rows+=`<tr><td>Status</td>${ranked.map(r=>`<td>${r.elim?'<span class="out">Eliminated</span>':'Active'}</td>`).join('')}</tr>`;
@@ -3471,9 +3499,17 @@ function approveJoinRequest(uid){
      average gets computed the instant they're actually seated, in
      deal(), off whatever activeIdxs() looks like at that exact moment —
      0 here is just a harmless placeholder until then. */
-  G.players.push({id:uid,name:req.name,isBot:false,diff:null,score:0,elim:true,pendingJoin:true,hand:[],wins:0,roundPts:[],emojis:null,avatar:req.avatar||null});
+  /* Real bug found live (2026-08-09): a mid-game joiner never passes
+     through the regular lobby, so they never hit its emoji-picker step —
+     this used to just hardcode emojis:null, and reactionWheelHtml()'s
+     own fallback for "nobody picked 5" is the *full* reaction set, so a
+     mid-game joiner ended up with every single reaction instead of 5
+     chosen ones. req.emojis now comes from the picker requestJoinMidGame()
+     added in front of the join request itself — see showMidJoinEmojiPicker(). */
+  const joinEmojis=(req.emojis&&req.emojis.length===5)?req.emojis:null;
+  G.players.push({id:uid,name:req.name,isBot:false,diff:null,score:0,elim:true,pendingJoin:true,hand:[],wins:0,roundPts:[],emojis:joinEmojis,avatar:req.avatar||null});
   G.v++;
-  mp.ref.child('players/'+uid).set({name:req.name,order:Date.now()});
+  mp.ref.child('players/'+uid).set({name:req.name,order:Date.now(),emojis:joinEmojis,avatar:req.avatar||null});
   mp.ref.child('spectators/'+uid).remove();
   mp.ref.child('joinRequests/'+uid).remove();
   mp.ref.child('joinResponses/'+uid).set({approved:true,ts:firebase.database.ServerValue.TIMESTAMP});
@@ -4288,10 +4324,60 @@ function showJoinOrSpectateModal(code,name,r){
   openModal('joinchoice',`<h2>Game in progress</h2>
     <p class="tag" style="text-align:center">${esc(hostName)}'s room · ${n} player${n===1?'':'s'} · already playing</p>
     <div class="mbtns" style="flex-direction:column;align-items:stretch">
-      <button class="btn primary" onclick="requestJoinMidGame('${esc(code)}','${esc(name)}')">🎮 Ask to join the game</button>
+      <button class="btn primary" onclick="showMidJoinEmojiPicker('${esc(code)}','${esc(name)}')">🎮 Ask to join the game</button>
       <button class="btn ghost" onclick="spectateRoom('${esc(code)}','${esc(name)}')">👁 Just watch</button>
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
     </div>`);
+}
+/* Real bug found live (2026-08-09): a mid-game joiner never went through
+   the regular lobby (they skip straight from spectating to requesting a
+   seat — see requestJoinMidGame()), so they never hit the normal lobby's
+   emoji-picker step at all. approveJoinRequest() hardcoded emojis:null
+   for them as a result, and reactionWheelHtml()'s own fallback for "no 5
+   picked" is the *full* 14-reaction set — so a mid-game joiner ended up
+   with every reaction instead of 5 chosen ones, exactly backwards from
+   what picking-5 is supposed to mean. Fixed by adding this same "pick 5"
+   step before a join request is ever sent, mirroring the regular lobby's
+   picker (renderEmojiPicker()/toggleEmojiPick()) but self-contained —
+   there's no mp.ref yet at this point (not in the room), so picks live
+   in a plain local Set until they're bundled into the actual join
+   request itself, not written to Firebase incrementally like the lobby
+   version does. */
+let midJoinEmojiPicks=new Set();
+function showMidJoinEmojiPicker(code,name){
+  midJoinEmojiPicks=new Set();
+  renderMidJoinEmojiPicker(code,name);
+}
+function renderMidJoinEmojiPicker(code,name){
+  const swatches=Object.entries(REACTIONS).map(([key,rx])=>
+    `<button class="emoji-pick-btn${midJoinEmojiPicks.has(key)?' sel':''}" data-key="${esc(key)}" title="${esc(rx.label)}"><img src="${rx.img}" alt="${esc(key)}"></button>`).join('');
+  openModal('midjoinemoji',`<h2>Pick 5 reaction emojis</h2>
+    <p class="tag" style="text-align:center">These are the reactions you'll have once you're seated&ensp;<span id="midjoin-emoji-count">(${midJoinEmojiPicks.size}/5)</span></p>
+    <div id="midjoin-emoji-grid">${swatches}</div>
+    <div class="mbtns" style="flex-direction:column;align-items:stretch">
+      <button class="btn primary" ${midJoinEmojiPicks.size===5?'':'disabled'} onclick="requestJoinMidGame('${esc(code)}','${esc(name)}')">🎮 Ask to join the game</button>
+      <button class="btn ghost" onclick="showJoinOrSpectateModalAgain('${esc(code)}','${esc(name)}')">← Back</button>
+    </div>`);
+  document.querySelectorAll('#midjoin-emoji-grid .emoji-pick-btn').forEach(b=>{
+    b.onclick=()=>{
+      const key=b.dataset.key;
+      if(midJoinEmojiPicks.has(key))midJoinEmojiPicks.delete(key);
+      else{
+        if(midJoinEmojiPicks.size>=5){toast('Only 5 allowed — tap one to remove it first');return;}
+        midJoinEmojiPicks.add(key);
+      }
+      renderMidJoinEmojiPicker(code,name);
+    };
+  });
+}
+/* "Back" needs the room snapshot again to rebuild the host-name/player-
+   count line — cheap enough to just re-fetch rather than thread the
+   whole r object through every step for this rarely-used path. */
+function showJoinOrSpectateModalAgain(code,name){
+  db.ref(ROOMS+code).get().then(s=>{
+    const r=s.val();if(!r)return toast('Room not found');
+    showJoinOrSpectateModal(code,name,r);
+  }).catch(()=>toast('Connection error — check internet'));
 }
 function spectateRoom(code,name){
   closeModal();
@@ -4313,9 +4399,11 @@ function spectateRoom(code,name){
    set up right below, which self-cleans the response node once read so a
    stale old response can never resurface on a later, unrelated request. */
 function requestJoinMidGame(code,name){
+  if(midJoinEmojiPicks.size!==5)return toast('Pick exactly 5 reaction emojis first');
   closeModal();
   const ref=db.ref(ROOMS+code);
-  ref.child('joinRequests/'+myUid).set({name,avatar:profile.avatar||null,ts:firebase.database.ServerValue.TIMESTAMP})
+  const emojis=[...midJoinEmojiPicks];
+  ref.child('joinRequests/'+myUid).set({name,avatar:profile.avatar||null,emojis,ts:firebase.database.ServerValue.TIMESTAMP})
     .then(()=>{
       toast('Request sent — waiting for the host to approve');
       ref.child('joinResponses/'+myUid).on('value',s=>{
@@ -4533,7 +4621,7 @@ function renderLobby(){
   const allReady=nonHost.length>0&&nonHost.every(p=>p.ready);
   const emojiStrip=p=>(p.emojis&&p.emojis.length)?`<span class="lp-emojis">${p.emojis.map(k=>REACTIONS[k]?`<img src="${REACTIONS[k].img}" alt="${esc(k)}">`:'').join('')}</span>`:'';
   $('#lobby-players').innerHTML=ps.map(p=>
-    `<div class="lp">${p.u===host?'⭐ ':''}${avatarFor({id:p.u,name:p.name,avatar:p.avatar})} ${esc(p.name)}${p.u===myUid?' <span style="color:var(--dim)">(you)</span>':''}${voiceMicOn.has(p.u)?' <span class="lp-mic">🎙️</span>':''}${p.u!==host?(p.ready?' <span style="color:var(--gold);font-weight:800">✓ Ready</span>':' <span style="color:var(--dim)">Not ready</span>'):''}${emojiStrip(p)}${(mp.isHost&&p.u!==myUid)?`<button class="lp-kick" title="Remove ${esc(p.name)}" data-kick-uid="${esc(p.u)}" data-kick-name="${esc(p.name)}">✕</button>`:''}</div>`).join('');
+    `<div class="lp">${p.u===host?'⭐ ':''}${avatarFor({id:p.u,name:p.name,avatar:p.avatar})} ${esc(p.name)}${p.u===myUid?' <span style="color:var(--dim)">(you)</span>':''}${voiceMicOn.has(p.u)?' <span class="lp-mic">🎙️</span>':voiceMuted.has(p.u)?' <span class="lp-mic muted">🔇</span>':''}${p.u!==host?(p.ready?' <span style="color:var(--gold);font-weight:800">✓ Ready</span>':' <span style="color:var(--dim)">Not ready</span>'):''}${emojiStrip(p)}${(mp.isHost&&p.u!==myUid)?`<button class="lp-kick" title="Remove ${esc(p.name)}" data-kick-uid="${esc(p.u)}" data-kick-name="${esc(p.name)}">✕</button>`:''}</div>`).join('');
   const me=ps.find(p=>p.u===myUid);
   const myEmojiCount=(me&&me.emojis)?me.emojis.length:0;
   const btnReady=$('#btn-ready-mp');
@@ -4650,12 +4738,7 @@ function hostKickPlayer(targetUid){
   if(ti<0||ti===myIdx)return;
   const tp=G.players[ti];
   if(tp.elim)return;
-  /* a normal elimination only ever happens once score>=limit (see deal()),
-     so it always ranks near the bottom — a kick/leave can happen at any
-     score, so without this bump a player kicked early with a low score
-     would rank as if they were winning instead of being out. */
-  tp.score=Math.max(tp.score,G.limit);
-  tp.elim=true;tp.forfeited=true;glog(G,`${tp.name} was kicked by the host`);
+  tp.elim=true;tp.elimOrder=++G.elimSeq;tp.forfeited=true;glog(G,`${tp.name} was kicked by the host`);
   if(G.turn===ti&&G.pending.length){G.heap.push(...G.pending);G.pending=[];}
   const left=activeIdxs(G);
   if(left.length<=1&&G.phase!=='matchEnd'){
@@ -5115,6 +5198,15 @@ let voicePresent=new Set();  // uids currently mesh-connected (listening), per F
    drives the 🎙️ badge — voicePresent alone no longer implies anyone can
    hear that player, so it can't be reused for the badge. */
 let voiceMicOn=new Set();
+/* Real bug found live (2026-08-09): "the mic badge doesn't change if
+   someone mutes or unmutes" — true, because voiceMicOn was the only
+   thing tracked, and muting just deletes a uid from it, same as if they
+   left voice entirely. The seat badge disappeared instead of switching
+   to a muted icon, so there was no way to tell "not in voice" apart from
+   "in voice but muted" at a glance. voiceMuted tracks that second state
+   separately now — same presence listeners, just also recording mic:true
+   with muted:true here instead of only ever deleting from voiceMicOn. */
+let voiceMuted=new Set();
 /* real mic / mic-with-strike glyphs (every other platform's mute icon is
    a struck-through mic, never a speaker) — inline SVG using currentColor
    so the existing gold/red button state colors keep working for free */
@@ -5239,10 +5331,18 @@ function joinVoiceRoom(ref,stream){
      Every one of these render calls safely no-ops when its own screen
      isn't the relevant one, so firing all of them on every presence
      change is always safe regardless of which screen is currently up. */
+  /* mic:true&&muted:true (still in voice, just muted) now sets voiceMuted
+     instead of just falling through to "delete from voiceMicOn and show
+     nothing" — see voiceMuted's own comment for the bug this fixes. */
+  const applyPresenceVal=(uid,v)=>{
+    if(v.mic&&!v.muted){voiceMicOn.add(uid);voiceMuted.delete(uid);}
+    else if(v.mic&&v.muted){voiceMicOn.delete(uid);voiceMuted.add(uid);}
+    else{voiceMicOn.delete(uid);voiceMuted.delete(uid);}
+  };
   voice.presenceRef.on('child_added',s=>{
     const uid=s.key,v=s.val()||{};
     voicePresent.add(uid);
-    if(v.mic&&!v.muted)voiceMicOn.add(uid);else voiceMicOn.delete(uid);
+    applyPresenceVal(uid,v);
     render();renderLobby();updateClVoiceCount();
     if(CL&&CL.mode==='mp'&&onScreen('scr-cl-lobby'))clRenderMpLobby();
     if(uid===myUid||voice.peers[uid])return;
@@ -5254,12 +5354,12 @@ function joinVoiceRoom(ref,stream){
      tearing down and rebuilding the (already-fine) peer connection */
   voice.presenceRef.on('child_changed',s=>{
     const uid=s.key,v=s.val()||{};
-    if(v.mic&&!v.muted)voiceMicOn.add(uid);else voiceMicOn.delete(uid);
+    applyPresenceVal(uid,v);
     render();renderLobby();updateClVoiceCount();
     if(CL&&CL.mode==='mp'&&onScreen('scr-cl-lobby'))clRenderMpLobby();
   });
   voice.presenceRef.on('child_removed',s=>{
-    voicePresent.delete(s.key);voiceMicOn.delete(s.key);teardownPeer(s.key);render();renderLobby();updateClVoiceCount();
+    voicePresent.delete(s.key);voiceMicOn.delete(s.key);voiceMuted.delete(s.key);teardownPeer(s.key);render();renderLobby();updateClVoiceCount();
     if(CL&&CL.mode==='mp'&&onScreen('scr-cl-lobby'))clRenderMpLobby();
   });
   voice.sigRef=ref.child('rtc/'+myUid);
@@ -5299,7 +5399,7 @@ async function joinVoice(){
     voice.localStream=stream;
     updateVoiceUI();
     voice.roomRef.child('voice/'+myUid).update({mic:true,muted:false});
-    voiceMicOn.add(myUid);
+    voiceMicOn.add(myUid);voiceMuted.delete(myUid);
     if(!CL)bumpRoomActivity();
     Object.keys(voice.peers).forEach(uid=>{
       teardownPeer(uid);
@@ -5323,7 +5423,8 @@ function toggleMute(){
   voice.muted=!voice.muted;
   voice.localStream.getAudioTracks().forEach(t=>t.enabled=!voice.muted);
   if(voice.roomRef)voice.roomRef.child('voice/'+myUid+'/muted').set(voice.muted);
-  if(voice.muted)voiceMicOn.delete(myUid);else voiceMicOn.add(myUid);
+  if(voice.muted){voiceMicOn.delete(myUid);voiceMuted.add(myUid);}
+  else{voiceMicOn.add(myUid);voiceMuted.delete(myUid);}
   updateVoiceUI();render();renderLobby();
 }
 /* Detaches from the current room (presence + signaling + peers) but
@@ -5444,9 +5545,26 @@ function attachRemoteAudio(uid,stream){
      element on every mobile browser, especially once ontrack fires from
      deep inside an async ICE-negotiation callback chain rather than
      directly inside a click handler — an explicit .play() call is the
-     more reliable path, and retryVoiceAudio() (wired to the next tap or
-     tab-foreground event) mops up the rare case it still gets blocked. */
-  el.play().catch(()=>{});
+     more reliable path.
+     Real bug found live (2026-08-09): "speakers don't work unless we
+     unmute ourselves" — everyone auto-connects to voice listen-only now
+     (see ensureVoiceListening), with no mic tap required, but a remote
+     track can arrive at literally any moment — including well before the
+     listener's first tap anywhere in the app — and if the very first
+     .play() attempt gets blocked by the browser's autoplay policy, the
+     old code just gave up silently and waited for retryVoiceAudio() to
+     be triggered by *some* future tap. Tapping the mic/mute button was
+     one such tap — it "fixed" audio, but so would any other tap; muting
+     yourself was never actually what unblocked it, it just happened to
+     be the first thing players reached for. Self-retrying a few times
+     here closes that gap without depending on the user doing anything
+     at all — most players are tapping *something* (a card, the deck)
+     within a couple seconds of joining anyway, but this stops "everyone
+     hears nothing until someone happens to tap" from being a real
+     failure mode on its own. */
+  const tryPlay=()=>el.play().catch(()=>{});
+  tryPlay();
+  [400,1200,3000].forEach(ms=>setTimeout(()=>{if(el.paused)tryPlay();},ms));
   const entry=voice.peers[uid];if(entry)entry.stream=stream;
 }
 /* recovers any remote voice-chat audio element that's silently sitting
@@ -5526,8 +5644,7 @@ function leaveRoom(remote){
         }
       }else if(G&&myIdx>=0&&G.players[myIdx]&&!G.players[myIdx].elim){
         const me=G.players[myIdx];
-        me.score=Math.max(me.score,G.limit);
-        me.elim=true;me.forfeited=true;glog(G,`${me.name} left the game`);
+        me.elim=true;me.elimOrder=++G.elimSeq;me.forfeited=true;glog(G,`${me.name} left the game`);
         if(G.pending.length){G.heap.push(...G.pending);G.pending=[];}
         const left=activeIdxs(G);
         if(left.length<=1&&G.phase!=='matchEnd'){
@@ -7228,8 +7345,9 @@ function clRenderMpLobby(){
   $('#cl-lobby-players').innerHTML=ps.map(([uid,p])=>{
     const isHost=uid===hostUid,me=uid===myUid;
     const inVoice=voiceMicOn.has(uid);
+    const inVoiceMuted=voiceMuted.has(uid);
     const kick=(clmp.isHost&&!me)?`<button class="cl-lp-kick" data-cl-kick="${uid}">✕</button>`:'';
-    return `<div class="cl-lp"><span>${esc(p.name)}${me?' <span style="color:var(--teal);font-size:11px">(you)</span>':''}${inVoice?' <span class="lp-mic">🎙️</span>':''}${emojiStrip(p)}</span>
+    return `<div class="cl-lp"><span>${esc(p.name)}${me?' <span style="color:var(--teal);font-size:11px">(you)</span>':''}${inVoice?' <span class="lp-mic">🎙️</span>':inVoiceMuted?' <span class="lp-mic muted">🔇</span>':''}${emojiStrip(p)}</span>
       <span>${isHost?'<span class="cl-lp-host">HOST</span> ':''}${kick}</span></div>`;
   }).join('');
   const n=ps.length;
