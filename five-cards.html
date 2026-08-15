@@ -5810,6 +5810,41 @@ $('#btn-discard').onclick=()=>{
      since it's just a keyframe on cards that were going to render there
      anyway, not a delay gating real gameplay. */
   if(navigator.vibrate)navigator.vibrate(15);
+  /* Real bug, reported multiple times, still reproducing after the
+     2026-08-09 snap-show-transaction fix: "someone shows before the
+     first person plays and the game freezes." That fix only made
+     Show-vs-Show races safe (see confirmShow()'s comment) — but the
+     starter's very first discard of a fresh round is *also* eligible
+     during that exact same window (canSnapShow — turnCount===0,
+     turn===starter, phase 'discard', no pending attack) and it still
+     went through the old raw-overwrite mpWrite() path with zero
+     conflict protection. Sequence: another player's snap-show
+     transaction commits first (round already over, phase:'roundEnd')
+     — then the starter's discard, computed from their now-stale local
+     G, does a full .set() that silently stomps the just-committed
+     round-end state back to a half-finished mid-round state nobody
+     else's client agrees with. That mismatch is exactly what shows up
+     as "frozen, needs a refresh." Every *other* discard in the game is
+     provably race-free by construction (exactly one player is ever
+     eligible to move at a time — see mvDiscard's own g.turn!==pi gate)
+     so only this one specific discard — the one that overlaps the
+     snap-show window — needs the same transaction treatment Show
+     already got; every other discard stays on the fast instant
+     raw-overwrite path per the "must stay instant" rule above. */
+  if(G.mode==='mp'&&mp.stateRef&&canSnapShow(G,myIdx)){
+    const ids=cards.map(c=>c.id);
+    mp.stateRef.transaction(raw=>{
+      if(!raw)return raw;
+      let g;try{g=JSON.parse(raw);}catch(e){return raw;}
+      const err=mvDiscard(g,g.turn,ids);
+      if(err)return;   // abort — someone's snap-show (or this same discard from another tab) already landed first
+      return JSON.stringify(g);
+    },(error,committed)=>{
+      if(error){toast('Could not discard — try again');return;}
+      if(!committed){sel.clear();toast('Too slow — the round already ended');render();}
+    });
+    return;
+  }
   applyMove({t:'discard',ids:cards.map(c=>c.id)});
 };
 $('#btn-pickup').onclick=()=>applyMove({t:'pickup'});
