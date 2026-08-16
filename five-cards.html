@@ -182,8 +182,30 @@ input:focus{border-color:var(--gold)}
 
 /* ---------- game screen ---------- */
 #topbar{width:100%;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;gap:8px}
-#topbar>div{display:flex;gap:8px;align-items:center}
+#topbar>div{display:flex;gap:8px;align-items:center;flex-shrink:0}
+/* Real bug found live (2026-08-16): the right-hand icon cluster can now
+   hold 7 buttons at once (sound/theme/score/power-ups/voice/chat/more —
+   power-ups added a 7th that was never there when this row was last
+   tuned for mobile), and adding the diamond badge into the left group
+   pushed it over the edge on a real phone — the ⋯ More button (the only
+   way to reach Card Style) got squeezed off-screen entirely, not just
+   visually cramped. Two-part fix: tightened sizes further at the
+   existing mobile breakpoint below so the common case fits without any
+   scrolling, AND gave the icon cluster its own overflow-x:auto as a
+   permanent safety net — so however many icons end up in it in the
+   future, the row can be swiped instead of silently losing one off the
+   edge the way More just did. round-info also gets its own shrink
+   instead of wrapping to two stacked lines (the other visible symptom
+   in Saif's screenshot) — ellipsis beats an ugly multi-line wrap in a
+   header this short. */
+#topbar>div:last-child{flex-shrink:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+#topbar>div:last-child::-webkit-scrollbar{display:none}
+#topbar>div:last-child .icon-btn{flex-shrink:0}
 #round-info{font-size:11px;color:var(--labelmuted);font-weight:700;letter-spacing:2.5px;font-family:'DM Mono',monospace}
+/* higher specificity than the generic #topbar>div rule above (which
+   would otherwise win and force flex-shrink:0 back on) — needs to
+   actually override it, not just declare alongside it */
+#topbar>#round-info{flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* ---------- circular seating ----------
    #arena stacks #opponents (an absolute overlay) on top of #table. Each
    .opp — including your own seat, .opp.me, which closes the circle at
@@ -942,9 +964,11 @@ body.dealing .card-count{visibility:hidden}
   #my-hand{padding-top:12px}
   #table{padding:30px 22px 4px}
   #my-meta{font-size:10px}
-  #topbar{padding:8px 10px}
-  .icon-btn{width:34px;height:34px;font-size:14px;border-radius:8px}
-  #round-info{font-size:10px;letter-spacing:1.5px}
+  #topbar{padding:8px 8px;gap:3px}
+  #topbar>div{gap:4px}
+  .icon-btn{width:30px;height:30px;font-size:12px;border-radius:7px}
+  #round-info{font-size:9px;letter-spacing:.5px}
+  .diamonds-badge{padding:3px 6px;font-size:9px}
   .lb-matrix th,.lb-matrix td{padding:5px 4px;font-size:10.5px}
   .lb-matrix th{font-size:10px;max-width:40px}
 }
@@ -4100,7 +4124,7 @@ const POWERUPS={
   cutoff:{icon:'✂️',label:'Cut Off',desc:'Target can’t play 2s/Jokers next round',cost:20,target:'player',timing:'next',
     longDesc:'Pick an opponent, any time mid-round — great for cutting them off the instant you see a +2 chain starting to build. For the whole of the next round, they can’t play a 2 or a Joker at all — if they’re facing an active attack chain with nothing else to answer it, they’ll simply have to pick up.'}
 };
-const POWERUP_MATCH_CAP=3;   // per player, per match — the guardrail against one wealthy player dominating a whole game
+const POWERUP_MATCH_CAP=5;   // per player, per match (raised from 3, 2026-08-16) — the guardrail against one wealthy player dominating a whole game
 /* Diamond economy — separate from the lifetime `points` stat that drives
    the leaderboard, deliberately: spending diamonds on cosmetics/power-ups
    should never lower your competitive rank. Signed-in players keep a
