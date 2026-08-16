@@ -1240,6 +1240,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
       <button class="btn cl-tile big" id="btn-gocl">🏆&ensp;Champions League</button>
       <button class="btn ghost big" id="btn-leaderboard">🏅&ensp;Leaderboard</button>
       <button class="btn ghost" id="btn-help" style="border:0;background:none">How to play</button>
+      <button class="btn ghost" id="btn-powerup-guide" style="border:0;background:none">⚡ Power-ups guide</button>
     </div>
     <div class="hero-table-peek" aria-hidden="true">
       <span class="peek-dot" style="top:-5px;left:50%;margin-left:-4px"></span>
@@ -3757,6 +3758,7 @@ function showMoreModal(){
   if(G&&G.mode==='mp'&&!G.clKey)rows.push(`<button class="btn ghost" onclick="closeModal();showSpectatorsModal();">👁 Spectators${n?` (${n})`:''}</button>`);
   rows.push(`<button class="btn ghost" onclick="closeModal();showLogModal();">📜 Game log</button>`);
   rows.push(`<button class="btn ghost" onclick="closeModal();showHelpModal();">❓ How to play</button>`);
+  rows.push(`<button class="btn ghost" onclick="closeModal();showPowerUpGuideModal();">⚡ Power-ups guide</button>`);
   openModal('more',`<h2>More</h2>
     <div class="mbtns" style="flex-direction:column;align-items:stretch">${rows.join('')}
     <button class="btn ghost" onclick="closeModal()">Close</button></div>`);
@@ -3770,6 +3772,23 @@ function showHelpModal(){
     <div><b>Show:</b> on your turn, declare! If you truly have the lowest hand you score <b>0</b> and everyone else scores their hand (capped at <b>60</b>). If anyone is equal or lower — <b>+60 penalty</b> for you, and the real lowest scores 0.</div>
     <div><b>Elimination:</b> reach the point limit (120/180/240/360) and you're out. Last player standing wins.</div>
   </div><div class="mbtns"><button class="btn primary" onclick="closeModal()">Got it</button></div>`);
+}
+/* Power-ups guide (2026-08-16) — same "How to play" idea, one level
+   deeper: since POWERUPS already carries a longDesc for every entry
+   (written for exactly this modal, distinct from the short `desc` shown
+   on the compact shop card), this just lists all ten in one place.
+   Reachable from two spots per Saif's own ask — "in the menu" (the home
+   screen, next to the existing How to play button, always visible so
+   someone can read up before ever turning power-ups on) "and inside the
+   game" (showMoreModal's ⋯ menu, and a direct link from the shop modal
+   itself for whoever's already mid-purchase and wants a refresher). */
+function showPowerUpGuideModal(){
+  const rows=Object.entries(POWERUPS).map(([key,def])=>
+    `<div><b>${def.icon} ${esc(def.label)}</b> <span style="color:var(--gold)">💎 ${def.cost}</span> — ${esc(def.longDesc||def.desc)}</div>`).join('');
+  openModal('powerup-guide',`<h2>⚡ Power-ups guide</h2>
+    <p class="tag">Opt-in per match (a host or the bot-setup screen turns them on) — off by default. Each player gets up to <b>${POWERUP_MATCH_CAP} uses per match</b>, paid for with <b>💎 diamonds</b> earned from real online/Champions League games (a small free starting balance covers your first few tries in bot mode too).</p>
+    <div class="help-list">${rows}</div>
+    <div class="mbtns"><button class="btn primary" onclick="closeModal()">Got it</button></div>`);
 }
 
 /* ================= 5. GAME FLOW (local + shared) ================= */
@@ -4004,16 +4023,26 @@ function pumpBadgeBanner(){
    matches' worth of saving, matching Saif's own "should be the most
    expensive one" framing for Peek specifically. */
 const POWERUPS={
-  gagorder:{icon:'🤐',label:'Gag Order',desc:'Target can’t call Show next round',cost:20,target:'player',timing:'next'},
-  icedout:{icon:'🧊',label:'Iced Out',desc:'Target skips their next turn',cost:20,target:'player',timing:'next'},
-  lockdown:{icon:'🔒',label:'Lockdown',desc:'No Open Show for 2 rounds — everyone',cost:25,target:'all',timing:'next'},
-  blackout:{icon:'🌑',label:'Blackout',desc:'No snap-Show for 2 rounds — everyone',cost:25,target:'all',timing:'next'},
-  thetell:{icon:'👁️',label:'The Tell',desc:'See everyone’s single highest card',cost:60,target:'all',timing:'now'},
-  loanshark:{icon:'🦈',label:'Loan Shark',desc:'Target draws 1 extra card this round',cost:12,target:'player',timing:'now'},
-  bodyguard:{icon:'🛡️',label:'Bodyguard',desc:'Immune to every power-up, rest of match',cost:55,target:'self',timing:'permanent'},
-  insurance:{icon:'📋',label:'Insurance Policy',desc:'Halves your points from this round',cost:15,target:'self',timing:'now'},
-  allin:{icon:'🎰',label:'All In',desc:'Win this round as shower → everyone’s points double (still capped 60)',cost:30,target:'self',timing:'now'},
-  cutoff:{icon:'✂️',label:'Cut Off',desc:'Target can’t play 2s/Jokers next round',cost:20,target:'player',timing:'next'}
+  gagorder:{icon:'🤐',label:'Gag Order',desc:'Target can’t call Show next round',cost:20,target:'player',timing:'next',
+    longDesc:'Pick an opponent. For the whole of the next round, they cannot call a normal Show or an Open Show — best used on someone sitting dangerously close to the lowest hand.'},
+  icedout:{icon:'🧊',label:'Iced Out',desc:'Target skips their next turn',cost:20,target:'player',timing:'next',
+    longDesc:'Pick an opponent. The next time it becomes their turn (in the next round), it’s skipped automatically — no discard, no draw, straight to the following player.'},
+  lockdown:{icon:'🔒',label:'Lockdown',desc:'No Open Show for 2 rounds — everyone',cost:25,target:'all',timing:'next',
+    longDesc:'Table-wide, starting next round: nobody — including you — can call an Open Show for 2 full rounds. Good for shutting down a table full of players sitting near the elimination limit.'},
+  blackout:{icon:'🌑',label:'Blackout',desc:'No snap-Show for 2 rounds — everyone',cost:25,target:'all',timing:'next',
+    longDesc:'Table-wide, starting next round: nobody — including you — can snap-Show straight off a fresh deal for 2 full rounds. Forces every round to actually be played out instead of ending instantly.'},
+  thetell:{icon:'👁️',label:'The Tell',desc:'See everyone’s single highest card',cost:60,target:'all',timing:'now',
+    longDesc:'Instantly reveals just the single highest-value card in every opponent’s hand right now — not their whole hand, not their total. The most expensive power-up, for a reason: it’s pure information with no downside.'},
+  loanshark:{icon:'🦈',label:'Loan Shark',desc:'Target draws 1 extra card this round',cost:12,target:'player',timing:'now',
+    longDesc:'Pick an opponent. The next time they draw a card this round, they draw one extra on top of it — a bigger hand to manage, and a bigger penalty if someone shows against them. The cheapest power-up.'},
+  bodyguard:{icon:'🛡️',label:'Bodyguard',desc:'Immune to every power-up, rest of match',cost:55,target:'self',timing:'permanent',
+    longDesc:'Protects you for the rest of the match — nobody can target you with Gag Order, Iced Out, Loan Shark, or Cut Off ever again this game. Whether you own one, and how many, is never shown to anyone else — an opponent only finds out the hard way, when their purchase against you fails.'},
+  insurance:{icon:'📋',label:'Insurance Policy',desc:'Halves your points from this round',cost:15,target:'self',timing:'now',
+    longDesc:'Protects yourself. Whatever points you’re about to take this round — from losing the Show, or from a big hand you got stuck holding — are halved. Best bought right after you’ve been hit with a chain of 2s/Jokers and are dreading the round’s outcome.'},
+  allin:{icon:'🎰',label:'All In',desc:'Win this round as shower → everyone’s points double (still capped 60)',cost:30,target:'self',timing:'now',
+    longDesc:'A gamble on yourself. If you call Show this round and actually win it, everyone else’s points from that round are doubled (the usual 60-point cap still applies) instead of the normal amount. If you don’t end up winning the round, it’s simply spent with no effect.'},
+  cutoff:{icon:'✂️',label:'Cut Off',desc:'Target can’t play 2s/Jokers next round',cost:20,target:'player',timing:'next',
+    longDesc:'Pick an opponent. For the whole of the next round, they can’t play a 2 or a Joker at all — if they’re facing an active attack chain with nothing else to answer it, they’ll simply have to pick up.'}
 };
 const POWERUP_MATCH_CAP=3;   // per player, per match — the guardrail against one wealthy player dominating a whole game
 /* Diamond economy — separate from the lifetime `points` stat that drives
@@ -4200,7 +4229,8 @@ function showPowerUpShopModal(){
   openModal('powerups',`<h2>⚡ Power-ups</h2>
     <p class="tag" style="text-align:center">💎 ${getDiamonds()} diamonds · ${usesLeft} use${usesLeft===1?'':'s'} left this match</p>
     <div class="powerup-grid">${grid}</div>
-    <div class="mbtns"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+    <div class="mbtns"><button class="btn ghost" onclick="showPowerUpGuideModal()">❓ How these work</button>
+    <button class="btn ghost" onclick="closeModal()">Close</button></div>`);
   $('#modal').querySelectorAll('.power-card-btn').forEach(b=>{
     b.onclick=()=>powerUpShopPick(b.dataset.key);
   });
@@ -6529,6 +6559,7 @@ $('#seg-lobby-powerups').addEventListener('click',e=>{
 $('#btn-gobot').onclick=()=>goScr('scr-bot');   // no sign-in required — see requirePlaySignIn()'s comment on why Single Player is exempt
 $('#btn-gomp').onclick=()=>{if(requirePlaySignIn()){goScr('scr-mp');roomListAttach();}};
 $('#btn-help').onclick=showHelpModal;
+$('#btn-powerup-guide').onclick=showPowerUpGuideModal;
 document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>{
   if(onScreen('scr-mp'))roomListDetach();
   goScr(b.dataset.back||'scr-home');
