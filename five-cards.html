@@ -905,22 +905,22 @@ body.dealing .card-count{visibility:hidden}
   border:1px solid rgba(255,184,77,.25);border-radius:20px;padding:7px 14px;color:var(--labelmuted);
   font-size:11px;letter-spacing:2px;cursor:pointer;font-family:inherit;font-style:italic;backdrop-filter:blur(6px)}
 [data-theme="neon"] #theme-btn-home{background:rgba(240,84,60,.07);border-color:rgba(240,84,60,.22);color:rgba(240,84,60,.55)}
-#btn-profile{position:fixed;top:14px;left:14px;z-index:10;background:rgba(255,184,77,.08);
+/* Wrapper carries the fixed top-left positioning; #btn-profile and
+   #home-diamonds are plain flex children inside it so they sit inline
+   next to each other regardless of how long the player's name is —
+   two independently fixed-positioned elements would need to guess at
+   each other's rendered width to line up, which is exactly the "ended
+   up stacked instead of inline" bug Saif caught live on the deployed
+   site. */
+#home-topleft{position:fixed;top:14px;left:14px;z-index:10;display:flex;align-items:center;gap:8px}
+#btn-profile{background:rgba(255,184,77,.08);
   border:1px solid rgba(255,184,77,.25);border-radius:20px;padding:7px 14px;color:var(--labelmuted);
   font-size:11px;letter-spacing:.5px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;backdrop-filter:blur(6px);max-width:150px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 [data-theme="neon"] #btn-profile{background:rgba(240,84,60,.07);border-color:rgba(240,84,60,.22);color:rgba(240,84,60,.75)}
-/* Diamond balance display (2026-08-16) — same visual language as
-   #btn-profile (which it's deliberately stacked directly under on the
-   home screen, top-left corner per Saif's own spec), reused as-is
-   in-game via .diamonds-badge instead of a second fixed-position element
-   there — the topbar already has a natural top-left slot (grouped with
-   #btn-exit) so it can just be a normal flex child, no fixed positioning
-   needed for that one. */
-#home-diamonds{position:fixed;top:52px;left:14px;z-index:10}
 .diamonds-badge{background:rgba(255,184,77,.08);border:1px solid rgba(255,184,77,.25);border-radius:20px;
   padding:6px 12px;color:var(--gold);font-size:11px;font-weight:700;letter-spacing:.5px;
-  font-family:'DM Mono',monospace;white-space:nowrap;backdrop-filter:blur(6px)}
+  font-family:'DM Mono',monospace;white-space:nowrap;backdrop-filter:blur(6px);flex:0 0 auto}
 
 /* ======================================================
    MOBILE — cleaner layout
@@ -1232,8 +1232,10 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
 <!-- ============ HOME ============ -->
 <section class="screen on" id="scr-home">
   <button id="theme-btn-home">🌃 Tokyo Neon</button>
-  <button id="btn-profile">👤 Sign in</button>
-  <span id="home-diamonds" class="diamonds-badge">💎 0</span>
+  <div id="home-topleft">
+    <button id="btn-profile">👤 Sign in</button>
+    <span id="home-diamonds" class="diamonds-badge">💎 0</span>
+  </div>
   <div class="home-box">
     <div class="home-suits"><span>♠</span><span>♥</span><span>♦</span><span>♣</span></div>
     <div class="hero-wordmark">5 CARDS</div>
@@ -4615,7 +4617,21 @@ async function profileEnsureDoc(){
   }else if(snap.val().name){
     profile.name=snap.val().name;   // an edited display name (see profileRename) always wins over Google's
     profile.avatar=snap.val().avatar||null;
-    profile.diamonds=snap.val().diamonds||0;
+    /* Real bug found live (2026-08-16): every profile created *before*
+       the diamond economy shipped has no diamonds field in Firebase at
+       all — reading it as ||0 (the safe default for a genuinely-spent-
+       down balance) was silently indistinguishable from "never had a
+       starting grant in the first place," which is exactly what Saif
+       saw on his own real account on the deployed site. One-time
+       backfill: a profile doc that predates this feature (diamonds
+       field missing entirely, not just zero) gets the same starting
+       grant a brand-new signup gets, written once so it sticks. */
+    if(snap.val().diamonds==null){
+      profile.diamonds=STARTING_DIAMONDS;
+      ref.child('diamonds').set(STARTING_DIAMONDS);
+    }else{
+      profile.diamonds=snap.val().diamonds;
+    }
     needsNameSetup=false;
   }
 }
