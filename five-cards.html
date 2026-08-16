@@ -910,6 +910,17 @@ body.dealing .card-count{visibility:hidden}
   font-size:11px;letter-spacing:.5px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;backdrop-filter:blur(6px);max-width:150px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 [data-theme="neon"] #btn-profile{background:rgba(240,84,60,.07);border-color:rgba(240,84,60,.22);color:rgba(240,84,60,.75)}
+/* Diamond balance display (2026-08-16) — same visual language as
+   #btn-profile (which it's deliberately stacked directly under on the
+   home screen, top-left corner per Saif's own spec), reused as-is
+   in-game via .diamonds-badge instead of a second fixed-position element
+   there — the topbar already has a natural top-left slot (grouped with
+   #btn-exit) so it can just be a normal flex child, no fixed positioning
+   needed for that one. */
+#home-diamonds{position:fixed;top:52px;left:14px;z-index:10}
+.diamonds-badge{background:rgba(255,184,77,.08);border:1px solid rgba(255,184,77,.25);border-radius:20px;
+  padding:6px 12px;color:var(--gold);font-size:11px;font-weight:700;letter-spacing:.5px;
+  font-family:'DM Mono',monospace;white-space:nowrap;backdrop-filter:blur(6px)}
 
 /* ======================================================
    MOBILE — cleaner layout
@@ -1222,6 +1233,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
 <section class="screen on" id="scr-home">
   <button id="theme-btn-home">🌃 Tokyo Neon</button>
   <button id="btn-profile">👤 Sign in</button>
+  <span id="home-diamonds" class="diamonds-badge">💎 0</span>
   <div class="home-box">
     <div class="home-suits"><span>♠</span><span>♥</span><span>♦</span><span>♣</span></div>
     <div class="hero-wordmark">5 CARDS</div>
@@ -1513,7 +1525,10 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
 <!-- ============ GAME ============ -->
 <section class="screen" id="scr-game">
   <header id="topbar">
-    <button class="icon-btn" id="btn-exit">✕</button>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="icon-btn" id="btn-exit">✕</button>
+      <span id="game-diamonds" class="diamonds-badge">💎 0</span>
+    </div>
     <div id="round-info"></div>
     <div>
       <button class="icon-btn" id="btn-sound">🔊</button>
@@ -2994,6 +3009,7 @@ function render(){
   checkBadgeNotifications();
   checkPowerUpNotifications();
   checkTurnSkip();
+  updateDiamondDisplay();
   /* whose OPEN CARD it is lives right on their seat chip (see below),
      and stays there for the whole round — not just during their own
      turn — so everyone can keep track of who started the rotation
@@ -3782,11 +3798,32 @@ function showHelpModal(){
    someone can read up before ever turning power-ups on) "and inside the
    game" (showMoreModal's ⋯ menu, and a direct link from the shop modal
    itself for whoever's already mid-purchase and wants a refresher). */
+/* The full earning rate card (2026-08-16, Saif's explicit ask) — every
+   number here is read straight from where it's actually awarded
+   (profileRecordMatch's formula, BADGES' own diamonds field), so this
+   can never quietly drift out of sync with what the game really pays
+   out the way a hand-copied second list could. Reused as its own
+   section in the guide below; kept as a standalone function in case a
+   future screen (e.g. a rewards tab) wants just this half without the
+   spending half. */
+function diamondEarnRateCardHtml(){
+  const badgeRows=Object.values(BADGES).map(b=>
+    `<div>${b.icon} ${esc(b.label)} <span style="color:var(--gold)">💎 ${b.diamonds}</span> <span style="color:var(--dim)">— ${esc(b.desc)}</span></div>`).join('');
+  return `<div><b>Win a round</b> <span style="color:var(--gold)">💎 2</span> — every round you personally win, whether or not you win the match.</div>
+    <div><b>Win the match</b> <span style="color:var(--gold)">💎 10 + 1 per round played</span> — a full win in a 6-round match pays 16, on top of the 💎2/round above.</div>
+    <div><b>Lose, forfeit, or draw</b> <span style="color:var(--gold)">💎 1</span> — a small flat reward so a match is never worth nothing, on top of any rounds you still won along the way.</div>
+    <div style="margin-top:6px"><b>Badges</b> — each one earned pays out once per match, on top of everything above:</div>
+    ${badgeRows}
+    <div style="margin-top:6px;color:var(--dim)">Real online multiplayer and Champions League matches only — same as the lifetime leaderboard, bot-mode games don't pay out (you start with a free balance instead, just to try things out solo).</div>`;
+}
 function showPowerUpGuideModal(){
   const rows=Object.entries(POWERUPS).map(([key,def])=>
     `<div><b>${def.icon} ${esc(def.label)}</b> <span style="color:var(--gold)">💎 ${def.cost}</span> — ${esc(def.longDesc||def.desc)}</div>`).join('');
   openModal('powerup-guide',`<h2>⚡ Power-ups guide</h2>
-    <p class="tag">Opt-in per match (a host or the bot-setup screen turns them on) — off by default. Each player gets up to <b>${POWERUP_MATCH_CAP} uses per match</b>, paid for with <b>💎 diamonds</b> earned from real online/Champions League games (a small free starting balance covers your first few tries in bot mode too).</p>
+    <p class="tag">Opt-in per match (a host or the bot-setup screen turns them on) — off by default. Each player gets up to <b>${POWERUP_MATCH_CAP} uses per match</b>, paid for with <b>💎 diamonds</b>. Everyone starts with <b>💎 ${STARTING_DIAMONDS}</b>.</p>
+    <span class="lbl">💎 How to earn diamonds</span>
+    <div class="help-list">${diamondEarnRateCardHtml()}</div>
+    <span class="lbl" style="margin-top:10px">⚡ How to spend them</span>
     <div class="help-list">${rows}</div>
     <div class="mbtns"><button class="btn primary" onclick="closeModal()">Got it</button></div>`);
 }
@@ -4056,11 +4093,12 @@ const POWERUP_MATCH_CAP=3;   // per player, per match — the guardrail against 
    of grinding first — see Saif's own "in single player mode also to
    test them out" ask. A brand-new signed-in profile gets the identical
    starting balance too (see profileNameSetupSubmit()'s doc creation) —
-   60 is deliberately enough for at least 3 matches' worth of power-up
-   use even at the cheapest price point (Loan Shark, 12 each — 5 full
-   uses on day one), per Saif's explicit "realistic... minimum 3
-   matches" spec, without needing to grind a real win first. */
-const STARTING_DIAMONDS=60;
+   100 (2026-08-16, Saif's explicit "give all players 100 diamonds by
+   default") comfortably covers well over 3 matches' worth of power-up
+   use even at the priciest end (The Tell, 60, still leaves change; the
+   cheapest, Loan Shark at 12, buys 8 full uses on day one), without
+   needing to grind a real win first. */
+const STARTING_DIAMONDS=100;
 const GUEST_STARTING_DIAMONDS=STARTING_DIAMONDS;
 function getDiamonds(){
   if(profile.id)return profile.diamonds||0;
@@ -4075,6 +4113,7 @@ function addDiamonds(n){
   }else{
     localStorage.fcGuestDiamonds=String(getDiamonds()+n);
   }
+  updateDiamondDisplay();
 }
 function spendDiamonds(n){
   if(getDiamonds()<n)return false;
@@ -4838,6 +4877,16 @@ function updateProfileBadge(){
   const b=$('#btn-profile');
   if(b)b.textContent=profile.id?('👤 '+profile.name):'👤 Sign in';
   updatePlayingAsLabels();
+  updateDiamondDisplay();
+}
+/* Called from here (auth state changes), from addDiamonds/spendDiamonds
+   directly (every single earn/spend already routes through those two —
+   see the diamond economy above), and once per render() while in-game —
+   between the three, both the home-screen badge and the in-game topbar
+   one stay correct with no dedicated "diamonds changed" event needed. */
+function updateDiamondDisplay(){
+  const home=$('#home-diamonds');if(home)home.textContent='💎 '+getDiamonds();
+  const game=$('#game-diamonds');if(game)game.textContent='💎 '+getDiamonds();
 }
 function showProfileModal(){
   if(profile.id){
