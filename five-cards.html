@@ -686,6 +686,13 @@ body.dealing .card-count{visibility:hidden}
 #badge-banner .badge-text{font-size:12px;line-height:1.4;text-align:left}
 #badge-banner .badge-text b{color:var(--gold)}
 #badge-banner .badge-desc{display:block;font-size:10.5px;color:var(--dim);font-weight:400;margin-top:2px}
+#powerup-banner{position:fixed;top:116px;left:50%;transform:translateX(-50%) translateY(-14px);opacity:0;pointer-events:none;
+  background:linear-gradient(135deg,#2A1748,#160C28);border:1px solid rgba(255,184,77,.5);color:#FDF6E8;
+  padding:8px 18px 8px 8px;border-radius:14px;z-index:85;box-shadow:0 12px 34px rgba(0,0,0,.55);
+  display:flex;align-items:center;gap:10px;transition:opacity .25s ease,transform .25s ease;max-width:88vw;font-family:'Unbounded',sans-serif}
+#powerup-banner.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#powerup-banner .pu-banner-text{font-size:12px;line-height:1.4;text-align:left}
+#powerup-banner .pu-banner-text b{color:var(--gold)}
 /* ---------- power-up "cards" — a small tarot/spell-card look, gold-on-
    navy per the standing Monte Carlo Noir palette, reused identically in
    the shop grid (full size) and the usage banner (compact) so a player
@@ -1605,6 +1612,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
 <div id="modal-back" class="hidden"><div id="modal"></div></div>
 <div id="toast" class="hidden"></div>
 <div id="badge-banner"></div>
+<div id="powerup-banner"></div>
 
 <div id="chat-back" class="hidden">
   <div id="chat-panel">
@@ -4317,6 +4325,32 @@ function uiUsePowerUp(key,targetIdx,cb){
    banner — see showShieldPromptModal(). */
 let knownPowerUpLogLen=0,knownPowerUpBlocked={};
 const SHIELD_REVERSIBLE=['gagorder','icedout','cutoff','loanshark'];
+/* Real bug found live (2026-08-16): refreshing mid-match replayed every
+   power-up ever used in that match as a fresh notification, all at once.
+   Root cause: the "fresh entry" reset at each G===null transition
+   (attachRoom's/clMpMatchStateHandler's/clSpectateGame's own state sync
+   handlers) fires identically whether G was null because the match is
+   genuinely just starting (log/badges empty — resetting to "nothing
+   seen" is correct) OR because *this client* just refreshed mid-match
+   and is seeing an already-long-running G for the first time (log/
+   badges very much NOT empty) — the two cases are indistinguishable
+   from G===null alone. Resetting to "nothing seen yet" in the second
+   case meant every already-happened event looked brand new the instant
+   this client's first sync landed. Same class of bug this app already
+   solved once for chat bubbles/spectator-join toasts (gated on
+   attachTs) — same fix shape here: seed the "already seen" trackers to
+   *everything already present* in the freshly-arrived g, not to empty,
+   so only events from this point forward ever notify. Bot-mode/genuine-
+   fresh-match reset sites (deal() call sites, startBotGame, mpStart,
+   etc.) don't need this — a truly new G always has an empty log/no
+   badges anyway, so resetting to empty there is already correct. */
+function seedNotificationTrackers(g){
+  knownPowerUpLogLen=(g.powerUpLog||[]).length;
+  knownPowerUpBlocked={};
+  (g.powerUpLog||[]).forEach((ev,i)=>{knownPowerUpBlocked[i]=!!ev.blocked;});
+  knownBadges={};
+  (g.players||[]).forEach((p,i)=>{knownBadges[i]=new Set(p.badges||[]);});
+}
 function checkPowerUpNotifications(){
   if(!G){knownPowerUpLogLen=0;knownPowerUpBlocked={};return;}
   const log=G.powerUpLog||[];
@@ -4343,7 +4377,16 @@ function checkPowerUpNotifications(){
   }
   knownPowerUpLogLen=log.length;
 }
-let powerUpBannerQueue=[],powerUpBannerBusy=false;
+/* Back to the original small corner-badge treatment (2026-08-16) — the
+   big centered .announce-banner version was tried per Saif's own
+   earlier ask, but he preferred the original compact style once he'd
+   actually seen both live, so reverted. Non-blocking, doesn't cover the
+   table, uses the same #powerup-banner element/queue this app had
+   before that detour. The Shield decision prompt is a separate concern
+   (see showShieldPromptModal below) and stays a real modal either way —
+   it has to pause for an actual answer, which a passive corner badge
+   can't do. */
+let powerUpBannerQueue=[],powerUpBannerBusy=false,powerUpBannerTimer=null;
 function showPowerUpBanner(buyerName,targetName,key){
   powerUpBannerQueue.push({buyerName,targetName,key});
   pumpPowerUpBanner();
@@ -4359,15 +4402,16 @@ function pumpPowerUpBanner(){
   if(!def)return pumpPowerUpBanner();
   powerUpBannerBusy=true;
   sndPowerUp();
-  const html=item.shieldBlockedTargetName
-    ?`<div class="announce-banner">🛡️ ${esc(item.shieldBlockedTargetName)}’s Shield blocked ${def.icon} ${esc(def.label)}!</div>`
-    :`<div class="announce-banner">${def.icon} ${esc(item.buyerName)} used ${esc(def.label)}${item.targetName?' on '+esc(item.targetName):''}!</div>`;
-  openModal('powerup-announce',html);
-  setTimeout(()=>{
-    closeModalIf('powerup-announce');
-    powerUpBannerBusy=false;
-    pumpPowerUpBanner();
-  },1800);
+  const el=$('#powerup-banner');
+  el.innerHTML=item.shieldBlockedTargetName
+    ?`<span class="pu-banner-text">🛡️ <b>${esc(item.shieldBlockedTargetName)}’s</b> Shield blocked ${def.icon} ${esc(def.label)}</span>`
+    :powerCardHtml(item.key,{compact:true})+`<span class="pu-banner-text"><b>${esc(item.buyerName)}</b> used ${esc(def.label)}${item.targetName?' on <b>'+esc(item.targetName)+'</b>':''}</span>`;
+  requestAnimationFrame(()=>el.classList.add('show'));
+  clearTimeout(powerUpBannerTimer);
+  powerUpBannerTimer=setTimeout(()=>{
+    el.classList.remove('show');
+    setTimeout(()=>{powerUpBannerBusy=false;pumpPowerUpBanner();},260);
+  },3400);
 }
 /* The Shield decision prompt — deliberately does NOT auto-dismiss (this
    one needs a real answer, not a flash-and-fade) and deliberately does
@@ -5674,7 +5718,7 @@ function attachRoom(code){
     if(typeof g.v==='number'&&g.v<mp.lastV)return;   // stale echo
     mp.lastV=g.v||0;
     if(!mp.isSpectator&&mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().cancel();mp.odArmed=false;}
-    if(G===null){announcedRound=-1;knownBadges={};mp.statsRecorded=false;mp.placementRecorded=false;mp.wrongShowRound=null;}   // fresh entry from the lobby — this match's round 1 hasn't been announced yet, nothing recorded yet either
+    if(G===null){announcedRound=-1;seedNotificationTrackers(g);mp.statsRecorded=false;mp.placementRecorded=false;mp.wrongShowRound=null;}   // fresh entry from the lobby, or a mid-match reconnect — either way, seedNotificationTrackers(g) catches badges/power-ups up to whatever's already in g without replaying any of it
     G=g;G.mode='mp';
     /* G.players itself (not mp.isSpectator) is the source of truth for
        "am I actually seated" — findIndex naturally returns -1 for a real
@@ -7982,7 +8026,7 @@ function clRenderSpectate(){
      without any new polling of its own. */
   G=g;G.mode='mp';G.clKey=clSpectateKey;myIdx=-1;
   sel.clear();
-  if(!onScreen('scr-game')){announcedRound=-1;knownBadges={};goScr('scr-game');}
+  if(!onScreen('scr-game')){announcedRound=-1;seedNotificationTrackers(g);goScr('scr-game');}   // landing on an already-ongoing spectated match — catch up silently, same reasoning as the two reconnect branches above
   render();
 }
 
@@ -8652,7 +8696,7 @@ function clMpMatchStateHandler(s){
   let g;try{g=JSON.parse(raw);}catch(e){return;}
   if(typeof g.v==='number'&&g.v<mp.lastV)return;   // stale echo
   mp.lastV=g.v||0;
-  if(G===null){announcedRound=-1;knownBadges={};mp.placementRecorded=false;mp.wrongShowRound=null;}   // CL match win/loss/forfeit is tracked separately (clStatsRecorded), but placement diamonds share the mp-level guard above, so it needs the same reset here
+  if(G===null){announcedRound=-1;seedNotificationTrackers(g);mp.placementRecorded=false;mp.wrongShowRound=null;}   // CL match win/loss/forfeit is tracked separately (clStatsRecorded); this also covers a mid-match reconnect the same way the regular-MP branch above does
   G=g;G.mode='mp';G.clKey=clMyMatchKey;
   myIdx=G.players.findIndex(p=>p.id===myUid);
   const me=G.players[myIdx];
