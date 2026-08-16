@@ -683,13 +683,6 @@ body.dealing .card-count{visibility:hidden}
 .power-card-btn{background:none;border:none;padding:0;cursor:pointer}
 .power-card-btn:disabled{cursor:not-allowed}
 .power-card-btn:disabled .power-card{opacity:.4}
-#powerup-banner{position:fixed;top:116px;left:50%;transform:translateX(-50%) translateY(-14px);opacity:0;pointer-events:none;
-  background:linear-gradient(135deg,#2A1748,#160C28);border:1px solid rgba(255,184,77,.5);color:#FDF6E8;
-  padding:8px 18px 8px 8px;border-radius:14px;z-index:85;box-shadow:0 12px 34px rgba(0,0,0,.55);
-  display:flex;align-items:center;gap:10px;transition:opacity .25s ease,transform .25s ease;max-width:88vw;font-family:'Unbounded',sans-serif}
-#powerup-banner.show{opacity:1;transform:translateX(-50%) translateY(0)}
-#powerup-banner .pu-banner-text{font-size:12px;line-height:1.4;text-align:left}
-#powerup-banner .pu-banner-text b{color:var(--gold)}
 .logbox{font-size:12px;line-height:1.7;color:var(--labelmuted);max-height:50dvh;overflow:auto;display:flex;flex-direction:column-reverse;font-family:'DM Mono',monospace}
 
 /* ---------- chat ---------- */
@@ -1588,7 +1581,6 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
 <div id="modal-back" class="hidden"><div id="modal"></div></div>
 <div id="toast" class="hidden"></div>
 <div id="badge-banner"></div>
-<div id="powerup-banner"></div>
 
 <div id="chat-back" class="hidden">
   <div id="chat-panel">
@@ -1711,7 +1703,7 @@ function newMatch(defs,limit,mode,numDecks,powerUpsEnabled){
          needing any dedicated Firebase channel of its own). */
       pickupCount:0,showStreak:0,hadWrongShow:false,wasLastAtRoundStart:false,everNearLimit:false,badges:[],
       powerUpUses:0})),
-    deck:[],open:[],heap:[],pending:[],turn:0,attack:0,phase:'discard',
+    deck:[],open:[],heap:[],pending:[],turn:0,attack:0,phase:'discard',attackChainStarterIdx:null,
     turnCount:0,result:null,winner:null,log:[],logSeq:0,lastDrawn:null,openShow:null,pickedUpThisTurn:false,elimSeq:0,
     /* Power-ups (2026-08-16) — opt-in per match (see lobby/bot-setup
        toggle), off by default. `effects` is the single source of truth
@@ -1726,8 +1718,8 @@ function newMatch(defs,limit,mode,numDecks,powerUpsEnabled){
        one exception to both: permanent for the rest of the match once
        bought, never reset by deal(). */
     powerUpsEnabled:!!powerUpsEnabled,
-    effects:{showBlock:{},turnSkipRound:{},noOpenShow:{from:0,until:0},noSnapShow:{from:0,until:0},
-      noTwos:{},extraDraw:{},shield:{},scoreInsurance:{},doubleDown:{}},
+    effects:{showBlock:{},turnSkip:{},noOpenShow:{from:0,until:0},noSnapShow:{from:0,until:0},
+      noTwos:{},extraDraw:{},shieldCharges:{},scoreInsurance:{},doubleDown:{}},
     powerUpLog:[],v:0};
 }
 const activeIdxs=g=>g.players.map((p,i)=>p.elim?-1:i).filter(i=>i>=0);
@@ -1913,14 +1905,24 @@ function mvDiscard(g,pi,ids){
        existing open pile — an attack chain never draws, so open just
        sits untouched until whoever finally picks up takes their own
        normal turn afterward and it naturally cycles then. */
+    /* "Chain Reaction" badge — credited to whoever *started* this chain
+       (played the single 2/Joker that first took g.attack from 0), not
+       whoever happens to be the one who eventually pushes it over +8 —
+       the starter is the one who actually took the risk of opening the
+       attack in the first place, matching Saif's explicit correction
+       (2026-08-16) of the badge's original "credit whoever crosses the
+       threshold" design. attackChainStarterIdx is set the instant a
+       fresh chain begins (g.attack was 0 before this play) and read back
+       — never reset mid-chain — right up until it actually crosses 8,
+       however many players' turns that takes; mvPickup() clears it once
+       the chain resolves so the next chain starts clean. */
+    if(g.attack===0)g.attackChainStarterIdx=pi;
     g.heap.push(...cards);
     g.attack+=2*cards.length;
-    /* "Chain Reaction" badge — credited to whoever's play pushes the
-       cumulative chain to +8 or more (4+ stacked 2s/Jokers across
-       however many turns/players built it), not just the one who
-       started it — they're the one who actually delivered the big hit
-       the pickup victim is about to feel. */
-    if(g.attack>=8&&!p.badges.includes('chain'))p.badges.push('chain');
+    if(g.attack>=8){
+      const starter=g.players[g.attackChainStarterIdx!=null?g.attackChainStarterIdx:pi];
+      if(!starter.badges.includes('chain'))starter.badges.push('chain');
+    }
     g.turn=nextActive(g,pi);g.turnCount++;g.pickedUpThisTurn=false;
   }else{
     g.pending=cards;g.phase='draw';
@@ -1975,7 +1977,7 @@ function mvPickup(g,pi){
      player stays put (still 'discard' phase, attack now 0) and takes
      their own normal discard+draw turn right after, same as anyone
      else. turnCount is left for that following draw to bump. */
-  g.attack=0;g.v++;
+  g.attack=0;g.attackChainStarterIdx=null;g.v++;
   return null;
 }
 /* "Iced Out" — auto-triggered (see checkTurnSkip()) the instant it
@@ -1986,8 +1988,8 @@ function mvPickup(g,pi){
    fires. */
 function mvSkipTurn(g,pi){
   if(g.phase!=='discard'||g.turn!==pi)return 'not your turn';
-  if(!g.effects||g.effects.turnSkipRound[pi]!==g.round)return 'no skip pending';
-  delete g.effects.turnSkipRound[pi];
+  if(!g.effects||!g.effects.turnSkip[pi])return 'no skip pending';
+  delete g.effects.turnSkip[pi];
   glog(g,`🧊 ${g.players[pi].name} was Iced Out — turn skipped`);
   g.turn=nextActive(g,pi);g.turnCount++;g.pickedUpThisTurn=false;g.v++;
   return null;
@@ -2085,10 +2087,13 @@ function awardMatchEndBadges(g,winnerIdx){
    way: is g.round currently inside [from,until]. */
 const inRange=(r,round)=>!!r&&round>=r.from&&round<=r.until;
 const isShowBlocked=(g,pi)=>g.effects&&inRange(g.effects.showBlock[pi],g.round);
-const isSnapShowGloballyBlocked=g=>g.effects&&inRange(g.effects.noSnapShow,g.round);
+/* Blackout blocks everyone EXCEPT whoever bought it (exemptIdx) — see
+   applyPowerUpEffect's own comment for why that's the intended design,
+   not an oversight. */
+const isSnapShowGloballyBlocked=(g,pi)=>g.effects&&inRange(g.effects.noSnapShow,g.round)&&g.effects.noSnapShow.exemptIdx!==pi;
 function canSnapShow(g,pi){
   return g.openShow==null&&g.turnCount===0&&g.turn===g.starter&&g.phase==='discard'
-    &&g.attack<=0&&pi>=0&&pi<g.players.length&&!g.players[pi].elim&&!isSnapShowGloballyBlocked(g);
+    &&g.attack<=0&&pi>=0&&pi<g.players.length&&!g.players[pi].elim&&!isSnapShowGloballyBlocked(g,pi);
 }
 function mvShow(g,pi){
   if(g.phase!=='discard')return 'not your turn';
@@ -2097,7 +2102,7 @@ function mvShow(g,pi){
   /* having to pick up this turn costs you the option to Show it —
      you must actually play out a normal discard+draw first */
   if(g.turn===pi&&g.pickedUpThisTurn)return 'picked up this turn — discard first';
-  if(isShowBlocked(g,pi))return 'Gag Order is active on you this round';
+  if(isShowBlocked(g,pi))return 'Jailed — you can’t call a Show this round';
   resolveShow(g,pi,false);
   return null;
 }
@@ -2981,6 +2986,17 @@ function render(){
     if(me&&me.elim){profileRecordMatch(me.forfeited?'forfeited':'lost',me.wins,me.roundPts.length,histMeta);mp.statsRecorded=true;}
     else if(G.phase==='matchEnd'&&me&&!me.elim){profileRecordMatch('won',me.wins,me.roundPts.length,histMeta);mp.statsRecorded=true;}
   }
+  /* Match-placement diamonds — deliberately its own guard/timing,
+     separate from mp.statsRecorded above (see
+     awardMatchPlacementDiamonds()'s own comment for why). Covers CL too
+     (no !G.clKey restriction) — a CL 1v1 runs through this identical
+     engine/G.phase machinery, and the rank formula generalizes fine to
+     n=2 (1st: 25+5*2, 2nd: 15+3*2). Guard lives on `mp` for the same
+     resync-survival reason mp.statsRecorded does. */
+  if(G.mode==='mp'&&G.phase==='matchEnd'&&!mp.placementRecorded){
+    mp.placementRecorded=true;
+    awardMatchPlacementDiamonds(G,myIdx);
+  }
   /* Bot-mode local match history (2026-08-16) — see recordBotMatchHistory's
      own comment for why this is local-only, not the synced profile
      history above. G.botHistoryRecorded lives directly on G itself
@@ -3811,9 +3827,10 @@ function showHelpModal(){
 function diamondEarnRateCardHtml(){
   const badgeRows=Object.values(BADGES).map(b=>
     `<div>${b.icon} ${esc(b.label)} <span style="color:var(--gold)">💎 ${b.diamonds}</span> <span style="color:var(--dim)">— ${esc(b.desc)}</span></div>`).join('');
-  return `<div><b>Win a round</b> <span style="color:var(--gold)">💎 2</span> — every round you personally win, whether or not you win the match.</div>
-    <div><b>Win the match</b> <span style="color:var(--gold)">💎 10 + 1 per round played</span> — a full win in a 6-round match pays 16, on top of the 💎2/round above.</div>
-    <div><b>Lose, forfeit, or draw</b> <span style="color:var(--gold)">💎 1</span> — a small flat reward so a match is never worth nothing, on top of any rounds you still won along the way.</div>
+  return `<div><b>Win a round</b> <span style="color:var(--gold)">💎 5</span> — every round you personally win, whether or not you win the match.</div>
+    <div><b>Finish 1st</b> <span style="color:var(--gold)">💎 25 + 5 per player</span> — an 8-player match pays 65, on top of 💎5/round above. Decided only once the whole match truly ends, not the moment you're eliminated.</div>
+    <div><b>Finish 2nd</b> <span style="color:var(--gold)">💎 15 + 3 per player</span> — an 8-player match pays 39.</div>
+    <div><b>Finish 3rd</b> <span style="color:var(--gold)">💎 5 + 2 per player</span> — an 8-player match pays 21. 4th place and below earns round-win diamonds only, no placement bonus.</div>
     <div style="margin-top:6px"><b>Badges</b> — each one earned pays out once per match, on top of everything above:</div>
     ${badgeRows}
     <div style="margin-top:6px;color:var(--dim)">Real online multiplayer and Champions League matches only — same as the lifetime leaderboard, bot-mode games don't pay out (you start with a free balance instead, just to try things out solo).</div>`;
@@ -3921,7 +3938,7 @@ function checkTurnAlert(){
    yet) needs the same re-validate-against-latest-state protection. */
 function checkTurnSkip(){
   if(!G||isEnd()||G.phase!=='discard'||!G.effects)return;
-  if(G.effects.turnSkipRound[G.turn]!==G.round)return;
+  if(!G.effects.turnSkip[G.turn])return;
   if(G.mode==='mp'){
     if(G.turn!==myIdx||!mp.stateRef)return;
     mp.stateRef.transaction(raw=>{
@@ -3985,13 +4002,13 @@ function toggleTurnAlertsUi(){
    one of the same call sites announcedRound already resets at — same
    "a genuinely new match started, forget what came before" boundary. */
 const BADGES={
-  sniper:{icon:'🎯',label:'Show Sniper',desc:'3 correct Shows in a row',diamonds:10},
-  chain:{icon:'⚡',label:'Chain Reaction',desc:'Landed a +8 attack chain',diamonds:10},
-  comeback:{icon:'🔄',label:'Comeback Kid',desc:'Won after nearing elimination',diamonds:10},
-  underdog:{icon:'🐢',label:'Underdog',desc:'Won the match from last place',diamonds:15},
-  redemption:{icon:'💀',label:'Redemption',desc:'Won after a wrong Show',diamonds:15},
-  speedrunner:{icon:'🏎️',label:'Speedrunner',desc:'Won in 3 rounds or fewer',diamonds:5},
-  ironwall:{icon:'🧱',label:'Iron Wall',desc:'Won without ever picking up',diamonds:5}
+  sniper:{icon:'🎯',label:'Show Sniper',desc:'3 correct Shows in a row',diamonds:15},
+  chain:{icon:'⚡',label:'Chain Reaction',desc:'Started a chain that reached +8',diamonds:15},
+  comeback:{icon:'🔄',label:'Comeback Kid',desc:'Won after nearing elimination',diamonds:20},
+  underdog:{icon:'🐢',label:'Underdog',desc:'Won the match from last place',diamonds:20},
+  redemption:{icon:'💀',label:'Redemption',desc:'Won after a wrong Show',diamonds:20},
+  speedrunner:{icon:'🏎️',label:'Speedrunner',desc:'Won in 3 rounds or fewer',diamonds:20},
+  ironwall:{icon:'🧱',label:'Iron Wall',desc:'Won without ever picking up',diamonds:20}
 };
 let knownBadges={};
 function checkBadgeNotifications(){
@@ -4062,26 +4079,26 @@ function pumpBadgeBanner(){
    matches' worth of saving, matching Saif's own "should be the most
    expensive one" framing for Peek specifically. */
 const POWERUPS={
-  gagorder:{icon:'🤐',label:'Gag Order',desc:'Target can’t call Show next round',cost:20,target:'player',timing:'next',
-    longDesc:'Pick an opponent. For the whole of the next round, they cannot call a normal Show or an Open Show — best used on someone sitting dangerously close to the lowest hand.'},
-  icedout:{icon:'🧊',label:'Iced Out',desc:'Target skips their next turn',cost:20,target:'player',timing:'next',
-    longDesc:'Pick an opponent. The next time it becomes their turn (in the next round), it’s skipped automatically — no discard, no draw, straight to the following player.'},
-  lockdown:{icon:'🔒',label:'Lockdown',desc:'No Open Show for 2 rounds — everyone',cost:25,target:'all',timing:'next',
-    longDesc:'Table-wide, starting next round: nobody — including you — can call an Open Show for 2 full rounds. Good for shutting down a table full of players sitting near the elimination limit.'},
-  blackout:{icon:'🌑',label:'Blackout',desc:'No snap-Show for 2 rounds — everyone',cost:25,target:'all',timing:'next',
-    longDesc:'Table-wide, starting next round: nobody — including you — can snap-Show straight off a fresh deal for 2 full rounds. Forces every round to actually be played out instead of ending instantly.'},
-  thetell:{icon:'👁️',label:'The Tell',desc:'See everyone’s single highest card',cost:60,target:'all',timing:'now',
-    longDesc:'Instantly reveals just the single highest-value card in every opponent’s hand right now — not their whole hand, not their total. The most expensive power-up, for a reason: it’s pure information with no downside.'},
-  loanshark:{icon:'🦈',label:'Loan Shark',desc:'Target draws 1 extra card this round',cost:12,target:'player',timing:'now',
+  gagorder:{icon:'🤐',label:'Jailed',desc:'Target can’t call Show next round',cost:20,target:'player',timing:'next',
+    longDesc:'Pick an opponent. For the whole of the next round, they cannot call a normal Show or an Open Show — they’ll have to actually discard and pick up like everyone else. Best used on someone sitting dangerously close to the lowest hand.'},
+  icedout:{icon:'🧊',label:'Iced Out',desc:'Target’s next turn is skipped',cost:20,target:'player',timing:'now',
+    longDesc:'Pick an opponent. The very next time it becomes their turn — later this same round, or next round, whichever comes first — it’s skipped automatically — no discard, no draw, straight to the following player.'},
+  lockdown:{icon:'🔒',label:'Lockdown',desc:'No Open Show for 2 rounds — except you',cost:25,target:'all',timing:'next',
+    longDesc:'Starting next round: nobody else can call an Open Show for 2 full rounds — except you, the buyer, who can still call one freely. Good for shutting down a table full of players sitting near the elimination limit while keeping your own options open.'},
+  blackout:{icon:'🌑',label:'Blackout',desc:'No snap-Show for 2 rounds — except you',cost:25,target:'all',timing:'next',
+    longDesc:'Starting next round: nobody else can snap-Show straight off a fresh deal for 2 full rounds — except you, the buyer, who still can. Forces everyone else to actually play the round out while you keep your own snap-Show window.'},
+  thetell:{icon:'👁️',label:'Peek A Boo',desc:'See everyone’s single highest card',cost:60,target:'all',timing:'now',
+    longDesc:'Instantly reveals just the single highest-value card in every opponent’s hand right now — not their whole hand, not their total. Usable any time mid-round, but it’s most useful right before you’re about to Show — the value fades fast once the round moves on. The most expensive power-up, for a reason: it’s pure information with no downside.'},
+  loanshark:{icon:'🦈',label:'Draw 1 Extra',desc:'Target draws 1 extra card this round',cost:12,target:'player',timing:'now',
     longDesc:'Pick an opponent. The next time they draw a card this round, they draw one extra on top of it — a bigger hand to manage, and a bigger penalty if someone shows against them. The cheapest power-up.'},
-  bodyguard:{icon:'🛡️',label:'Bodyguard',desc:'Immune to every power-up, rest of match',cost:55,target:'self',timing:'permanent',
-    longDesc:'Protects you for the rest of the match — nobody can target you with Gag Order, Iced Out, Loan Shark, or Cut Off ever again this game. Whether you own one, and how many, is never shown to anyone else — an opponent only finds out the hard way, when their purchase against you fails.'},
+  bodyguard:{icon:'🛡️',label:'Shield',desc:'Blocks one power-up used against you',cost:30,target:'self',timing:'now',
+    longDesc:'Buys one Shield charge, good for the rest of the match. The instant anyone targets you with a power-up, you get a prompt right then to decide whether to burn a charge and block it — nobody else ever sees how many Shields you’re holding, or whether you have one at all, until you actually use it.'},
   insurance:{icon:'📋',label:'Insurance Policy',desc:'Halves your points from this round',cost:15,target:'self',timing:'now',
-    longDesc:'Protects yourself. Whatever points you’re about to take this round — from losing the Show, or from a big hand you got stuck holding — are halved. Best bought right after you’ve been hit with a chain of 2s/Jokers and are dreading the round’s outcome.'},
+    longDesc:'Protects yourself. Whatever points you’re about to take this round — from losing the Show, or from a big hand you got stuck holding — are halved. Usable any time mid-round — buy it the instant you get hit with a chain of 2s/Jokers and are dreading the round’s outcome.'},
   allin:{icon:'🎰',label:'All In',desc:'Win this round as shower → everyone’s points double (still capped 60)',cost:30,target:'self',timing:'now',
-    longDesc:'A gamble on yourself. If you call Show this round and actually win it, everyone else’s points from that round are doubled (the usual 60-point cap still applies) instead of the normal amount. If you don’t end up winning the round, it’s simply spent with no effect.'},
+    longDesc:'A gamble on yourself, usable any time mid-round. If you call Show this round and actually win it, everyone else’s points from that round are doubled (the usual 60-point cap still applies) instead of the normal amount. If you don’t end up winning the round, it’s simply spent with no effect.'},
   cutoff:{icon:'✂️',label:'Cut Off',desc:'Target can’t play 2s/Jokers next round',cost:20,target:'player',timing:'next',
-    longDesc:'Pick an opponent. For the whole of the next round, they can’t play a 2 or a Joker at all — if they’re facing an active attack chain with nothing else to answer it, they’ll simply have to pick up.'}
+    longDesc:'Pick an opponent, any time mid-round — great for cutting them off the instant you see a +2 chain starting to build. For the whole of the next round, they can’t play a 2 or a Joker at all — if they’re facing an active attack chain with nothing else to answer it, they’ll simply have to pick up.'}
 };
 const POWERUP_MATCH_CAP=3;   // per player, per match — the guardrail against one wealthy player dominating a whole game
 /* Diamond economy — separate from the lifetime `points` stat that drives
@@ -4095,12 +4112,13 @@ const POWERUP_MATCH_CAP=3;   // per player, per match — the guardrail against 
    of grinding first — see Saif's own "in single player mode also to
    test them out" ask. A brand-new signed-in profile gets the identical
    starting balance too (see profileNameSetupSubmit()'s doc creation) —
-   100 (2026-08-16, Saif's explicit "give all players 100 diamonds by
-   default") comfortably covers well over 3 matches' worth of power-up
-   use even at the priciest end (The Tell, 60, still leaves change; the
-   cheapest, Loan Shark at 12, buys 8 full uses on day one), without
-   needing to grind a real win first. */
-const STARTING_DIAMONDS=100;
+   raised to 200 (2026-08-16, revised same day from an initial 100) —
+   note this only sets the default for brand-new/never-had-a-balance
+   profiles going forward (see profileEnsureDoc()'s backfill); Saif's
+   separate ask to reset *every existing* player's balance to 200, and
+   his own to 500, are live production Firebase writes with no code-side
+   equivalent — flagged back to him directly rather than guessed at. */
+const STARTING_DIAMONDS=200;
 const GUEST_STARTING_DIAMONDS=STARTING_DIAMONDS;
 function getDiamonds(){
   if(profile.id)return profile.diamonds||0;
@@ -4147,24 +4165,76 @@ function applyPowerUpEffect(g,buyerIdx,key,targetIdx){
   if((buyer.powerUpUses||0)>=POWERUP_MATCH_CAP)return`only ${POWERUP_MATCH_CAP} power-ups per player per match`;
   if(def.target==='player'){
     if(targetIdx==null||targetIdx===buyerIdx||!g.players[targetIdx]||g.players[targetIdx].elim)return'pick a valid target';
-    if(g.effects.shield[targetIdx])return'target is protected';
+    /* No more auto-block-at-purchase-time for a shielded target (2026-08-16
+       redesign, Saif's explicit ask) — Shield is now reactive, not a
+       passive wall. The purchase always goes through and the effect
+       applies immediately; if the target has an unused charge, their own
+       client offers them a prompt (see checkPowerUpNotifications()) to
+       burn it and reverse this specific effect after the fact, via
+       mvUseShield() below. */
   }
   buyer.powerUpUses=(buyer.powerUpUses||0)+1;
   const nextRound=g.round+1;
   switch(key){
     case'gagorder':g.effects.showBlock[targetIdx]={from:nextRound,until:nextRound};break;
-    case'icedout':g.effects.turnSkipRound[targetIdx]=nextRound;break;
-    case'lockdown':g.effects.noOpenShow={from:nextRound,until:nextRound+1};break;
-    case'blackout':g.effects.noSnapShow={from:nextRound,until:nextRound+1};break;
+    /* Iced Out (2026-08-16) — no longer round-scoped: a plain boolean,
+       consumed the very next time it's genuinely this player's turn,
+       whether that's later in the round already in progress or the next
+       one — see checkTurnSkip()/mvSkipTurn(), neither of which check a
+       round number anymore either. */
+    case'icedout':g.effects.turnSkip[targetIdx]=true;break;
+    /* Lockdown/Blackout (2026-08-16) — the buyer is now explicitly
+       exempt from their own table-wide rule change (Saif's correction);
+       exemptIdx records who that is so canSnapShow()/uiCallOpenShow()
+       can let just that one player through. */
+    case'lockdown':g.effects.noOpenShow={from:nextRound,until:nextRound+1,exemptIdx:buyerIdx};break;
+    case'blackout':g.effects.noSnapShow={from:nextRound,until:nextRound+1,exemptIdx:buyerIdx};break;
     case'cutoff':g.effects.noTwos[targetIdx]={from:nextRound,until:nextRound};break;
     case'loanshark':g.effects.extraDraw[targetIdx]=true;break;
-    case'bodyguard':g.effects.shield[buyerIdx]=true;break;
+    /* Shield (2026-08-16) — a stockpiled charge count, not a permanent
+       flag; each purchase adds one more. Consumed reactively by
+       mvUseShield(), never automatically. */
+    case'bodyguard':g.effects.shieldCharges[buyerIdx]=(g.effects.shieldCharges[buyerIdx]||0)+1;break;
     case'insurance':g.effects.scoreInsurance[buyerIdx]=true;break;
     case'allin':g.effects.doubleDown[buyerIdx]=true;break;
     case'thetell':break;   // instant, read-only — no state to store, see uiUsePeek()
   }
-  g.powerUpLog.push({ts:Date.now(),buyer:buyerIdx,key,target:targetIdx!=null?targetIdx:null});
+  /* logIndex is this event's identity for the rest of its life — the
+     Shield-block prompt/response (mvUseShield) references it directly so
+     it can only ever cancel *this specific* use, never accidentally a
+     different one from the same buyer/target pair. */
+  const logIndex=g.powerUpLog.length;
+  g.powerUpLog.push({ts:Date.now(),buyer:buyerIdx,key,target:targetIdx!=null?targetIdx:null,blocked:false});
   glog(g,`${buyer.name} used ${def.icon} ${def.label}${targetIdx!=null?' on '+g.players[targetIdx].name:''}`);
+  g.v++;
+  return null;
+}
+/* Shield block — the target's own reactive response to a specific
+   power-up use, identified by its powerUpLog index. Reverses exactly
+   the one effect that use applied, refunds nothing (the buyer's diamonds
+   were a real spend, same as any power-up that gets countered), and
+   marks the log entry blocked so the notification layer can show "X's
+   Shield blocked Y" instead of the normal usage banner, and so the same
+   charge can't be spent twice against a use that's already been undone
+   or has already naturally expired/been consumed on its own. */
+function mvUseShield(g,targetIdx,logIndex){
+  const entry=g.powerUpLog[logIndex];
+  if(!entry)return'nothing to block';
+  if(entry.target!==targetIdx)return'not your call to make';
+  if(entry.blocked)return'already handled';
+  if((g.effects.shieldCharges[targetIdx]||0)<=0)return'no Shield charges left';
+  const def=POWERUPS[entry.key];
+  let reversed=false;
+  switch(entry.key){
+    case'gagorder':if(g.effects.showBlock[targetIdx]){delete g.effects.showBlock[targetIdx];reversed=true;}break;
+    case'icedout':if(g.effects.turnSkip[targetIdx]){delete g.effects.turnSkip[targetIdx];reversed=true;}break;
+    case'cutoff':if(g.effects.noTwos[targetIdx]){delete g.effects.noTwos[targetIdx];reversed=true;}break;
+    case'loanshark':if(g.effects.extraDraw[targetIdx]){delete g.effects.extraDraw[targetIdx];reversed=true;}break;
+  }
+  if(!reversed)return'too late — that already happened';
+  g.effects.shieldCharges[targetIdx]--;
+  entry.blocked=true;
+  glog(g,`🛡️ ${g.players[targetIdx].name}'s Shield blocked ${def?def.label:entry.key}`);
   g.v++;
   return null;
 }
@@ -4182,7 +4252,6 @@ function uiUsePowerUp(key,targetIdx,cb){
   const buyer=G.players[myIdx];
   if(!buyer||buyer.elim)return cb&&cb('not an active player');
   if((buyer.powerUpUses||0)>=POWERUP_MATCH_CAP)return cb&&cb(`only ${POWERUP_MATCH_CAP} power-ups per player per match`);
-  if(def.target==='player'&&G.effects.shield[targetIdx])return cb&&cb('target is protected');
   if(!spendDiamonds(def.cost))return cb&&cb('not enough diamonds');
   if(G.mode==='mp'&&mp.stateRef){
     mp.stateRef.transaction(raw=>{
@@ -4204,44 +4273,115 @@ function uiUsePowerUp(key,targetIdx,cb){
 }
 /* Notification layer — same diffing shape as checkBadgeNotifications():
    g.powerUpLog is regular synced G state, so every client (buyer,
-   target, bystanders, in MP or CL alike) sees the same log the instant
-   their own state sync lands, no separate Firebase channel needed. Only
-   difference from badges: this is a *log of events*, not a per-player
-   set of earned flags, so "already shown" is tracked by array length
-   rather than by diffing set membership. */
-let knownPowerUpLogLen=0;
+   target, bystanders, in MP, bot, or CL alike) sees the same log the
+   instant their own state sync lands, no separate Firebase channel
+   needed. "Already shown" is tracked two ways: knownPowerUpLogLen for
+   brand-new entries (a log of events, not a per-player earned-flag set
+   like badges, so length is the natural cursor), and knownPowerUpBlocked
+   for *existing* entries whose `blocked` flag flips true later — that's
+   not a new entry, just a mutation of one already seen, so it needs its
+   own separate watch (see the second loop below) or a target using
+   their Shield would never get its own confirmation banner.
+   2026-08-16 redesign, Saif's explicit ask: the banner itself moved from
+   a small corner badge to the same big centered `.announce-banner`
+   treatment "Saif calls for a Show!!!" already uses — same
+   openModal('...')+closeModalIf(...) auto-dismiss pattern, same visual
+   weight, so a power-up landing reads as just as big a table moment as
+   any other announcement. A target who's targeted by a Shield-
+   reversible power-up (Jailed/Iced Out/Cut Off/Draw 1 Extra) and still
+   has an unused charge gets an interactive prompt instead of the plain
+   banner — see showShieldPromptModal(). */
+let knownPowerUpLogLen=0,knownPowerUpBlocked={};
+const SHIELD_REVERSIBLE=['gagorder','icedout','cutoff','loanshark'];
 function checkPowerUpNotifications(){
-  if(!G){knownPowerUpLogLen=0;return;}
+  if(!G){knownPowerUpLogLen=0;knownPowerUpBlocked={};return;}
   const log=G.powerUpLog||[];
-  if(log.length<knownPowerUpLogLen)knownPowerUpLogLen=0;   // fresh match, shorter log than we remember
+  if(log.length<knownPowerUpLogLen){knownPowerUpLogLen=0;knownPowerUpBlocked={};}   // fresh match, shorter log than we remember
+  for(let i=0;i<knownPowerUpLogLen;i++){
+    const ev=log[i];
+    if(ev&&ev.blocked&&!knownPowerUpBlocked[i]){
+      knownPowerUpBlocked[i]=true;
+      const targetName=ev.target!=null&&G.players[ev.target]?G.players[ev.target].name:'?';
+      showShieldBlockedBanner(targetName,ev.key);
+    }
+  }
   for(let i=knownPowerUpLogLen;i<log.length;i++){
     const ev=log[i],def=POWERUPS[ev.key];if(!def)continue;
+    knownPowerUpBlocked[i]=!!ev.blocked;
     const buyerName=G.players[ev.buyer]?G.players[ev.buyer].name:'?';
     const targetName=ev.target!=null&&G.players[ev.target]?G.players[ev.target].name:null;
-    showPowerUpBanner(buyerName,targetName,ev.key);
+    const myCharges=(G.effects.shieldCharges&&G.effects.shieldCharges[myIdx])||0;
+    if(ev.target===myIdx&&!ev.blocked&&myCharges>0&&SHIELD_REVERSIBLE.includes(ev.key)){
+      showShieldPromptModal(i,buyerName,ev.key);
+    }else{
+      showPowerUpBanner(buyerName,targetName,ev.key);
+    }
   }
   knownPowerUpLogLen=log.length;
 }
-let powerUpBannerQueue=[],powerUpBannerBusy=false,powerUpBannerTimer=null;
+let powerUpBannerQueue=[],powerUpBannerBusy=false;
 function showPowerUpBanner(buyerName,targetName,key){
   powerUpBannerQueue.push({buyerName,targetName,key});
   pumpPowerUpBanner();
 }
+function showShieldBlockedBanner(targetName,key){
+  powerUpBannerQueue.push({shieldBlockedTargetName:targetName,key});
+  pumpPowerUpBanner();
+}
 function pumpPowerUpBanner(){
   if(powerUpBannerBusy||!powerUpBannerQueue.length)return;
-  const{buyerName,targetName,key}=powerUpBannerQueue.shift();
-  const def=POWERUPS[key];if(!def)return pumpPowerUpBanner();
+  const item=powerUpBannerQueue.shift();
+  const def=POWERUPS[item.key];
+  if(!def)return pumpPowerUpBanner();
   powerUpBannerBusy=true;
   sndPowerUp();
-  const el=$('#powerup-banner');
-  el.innerHTML=powerCardHtml(key,{compact:true})+
-    `<span class="pu-banner-text"><b>${esc(buyerName)}</b> used ${esc(def.label)}${targetName?' on <b>'+esc(targetName)+'</b>':''}</span>`;
-  requestAnimationFrame(()=>el.classList.add('show'));
-  clearTimeout(powerUpBannerTimer);
-  powerUpBannerTimer=setTimeout(()=>{
-    el.classList.remove('show');
-    setTimeout(()=>{powerUpBannerBusy=false;pumpPowerUpBanner();},260);
-  },3400);
+  const html=item.shieldBlockedTargetName
+    ?`<div class="announce-banner">🛡️ ${esc(item.shieldBlockedTargetName)}’s Shield blocked ${def.icon} ${esc(def.label)}!</div>`
+    :`<div class="announce-banner">${def.icon} ${esc(item.buyerName)} used ${esc(def.label)}${item.targetName?' on '+esc(item.targetName):''}!</div>`;
+  openModal('powerup-announce',html);
+  setTimeout(()=>{
+    closeModalIf('powerup-announce');
+    powerUpBannerBusy=false;
+    pumpPowerUpBanner();
+  },1800);
+}
+/* The Shield decision prompt — deliberately does NOT auto-dismiss (this
+   one needs a real answer, not a flash-and-fade) and deliberately does
+   NOT go through the shared banner queue (it's not a passive
+   announcement, it's the one modal in this whole flow that pauses for
+   real input) — opened directly, same as any other player-facing
+   choice modal in this app (e.g. the Show confirm). If the player
+   ignores it and it gets superseded by something else opening on top,
+   the power-up simply stands unblocked — same one-shot-notification
+   shape as everything else here, no persistent nagging. */
+function showShieldPromptModal(logIndex,buyerName,key){
+  const def=POWERUPS[key];if(!def)return;
+  sndPowerUp();
+  openModal('shield-prompt',`<h2>🛡️ Use your Shield?</h2>
+    <p class="tag" style="text-align:center">${esc(buyerName)} used ${def.icon} <b>${esc(def.label)}</b> on you — ${esc(def.desc)}</p>
+    <div class="mbtns" style="flex-direction:column;align-items:stretch">
+      <button class="btn primary" onclick="uiUseShield(${logIndex})">🛡️ Use Shield — block it</button>
+      <button class="btn ghost" onclick="closeModal()">Let it happen</button>
+    </div>`);
+}
+function uiUseShield(logIndex){
+  closeModal();
+  if(!G)return;
+  if(G.mode==='mp'&&mp.stateRef){
+    mp.stateRef.transaction(raw=>{
+      if(!raw)return raw;
+      let g;try{g=JSON.parse(raw);}catch(e){return raw;}
+      const err=mvUseShield(g,myIdx,logIndex);
+      if(err)return;
+      return JSON.stringify(g);
+    },(error,committed)=>{
+      if(error||!committed)toast('Could not use Shield — try again');
+    });
+    return;
+  }
+  const err=mvUseShield(G,myIdx,logIndex);
+  if(err)return toast(err);
+  afterChange();
 }
 /* The reusable "power card" visual (Saif's own ask — "design a card
    which represents the power") — one small tarot-card-shaped component,
@@ -4265,10 +4405,11 @@ function showPowerUpShopModal(){
   if(!G||!G.powerUpsEnabled)return;
   const me=G.players[myIdx];
   const usesLeft=Math.max(0,POWERUP_MATCH_CAP-((me&&me.powerUpUses)||0));
+  const myShields=(G.effects.shieldCharges&&G.effects.shieldCharges[myIdx])||0;
   const grid=Object.keys(POWERUPS).map(key=>
     `<button class="power-card-btn" data-key="${esc(key)}" ${usesLeft<=0?'disabled':''}>${powerCardHtml(key)}</button>`).join('');
   openModal('powerups',`<h2>⚡ Power-ups</h2>
-    <p class="tag" style="text-align:center">💎 ${getDiamonds()} diamonds · ${usesLeft} use${usesLeft===1?'':'s'} left this match</p>
+    <p class="tag" style="text-align:center">💎 ${getDiamonds()} diamonds · ${usesLeft} use${usesLeft===1?'':'s'} left this match${myShields?` · 🛡️ ${myShields} Shield${myShields===1?'':'s'} ready`:''}</p>
     <div class="powerup-grid">${grid}</div>
     <div class="mbtns"><button class="btn ghost" onclick="showPowerUpGuideModal()">❓ How these work</button>
     <button class="btn ghost" onclick="closeModal()">Close</button></div>`);
@@ -4286,14 +4427,14 @@ function powerUpShopPick(key){
   confirmUsePowerUp(key,null);
 }
 /* Target picker for the 4 opponent-aimed power-ups — deliberately does
-   NOT show anyone's shield status in this list (or anywhere else): a
-   shielded target still appears exactly like any other selectable
-   player. Trying to use a power-up on them fails naturally through the
-   normal error path (uiUsePowerUp's shield check) with a plain "target
-   is protected" toast — which reveals *that* they're shielded only to
-   the buyer who just tried and failed, never as a passive list of who
-   has one, matching Saif's "other players should not see how has how
-   many shields" ask exactly. */
+   NOT show anyone's Shield charge count in this list (or anywhere
+   else): a purchase against a shielded target now always goes through
+   at the moment it's bought (Shield is reactive, not a purchase
+   blocker — see applyPowerUpEffect's own comment) and the target
+   decides for themselves, via their own private prompt, whether to
+   burn a charge and undo it. Nothing here or anywhere else in the UI
+   ever reveals how many Shields anyone else is holding, matching
+   Saif's "other players should not see how many shields" ask. */
 function showTargetPickerModal(key){
   const def=POWERUPS[key];if(!def||!G)return;
   const targets=G.players.map((p,i)=>({p,i})).filter(({p,i})=>i!==myIdx&&!p.elim);
@@ -4442,8 +4583,8 @@ function uiCallOpenShow(){
      bought mid-way through the round that's ending wouldn't be seen as
      active yet for the round it's actually meant to block. */
   const nextRound=G.round+1;
-  if(G.effects&&inRange(G.effects.noOpenShow,nextRound))return toast('🔒 Lockdown — no Open Show this round');
-  if(G.effects&&inRange(G.effects.showBlock[myIdx],nextRound))return toast('🤐 Gag Order is active on you this round');
+  if(G.effects&&inRange(G.effects.noOpenShow,nextRound)&&G.effects.noOpenShow.exemptIdx!==myIdx)return toast('🔒 Lockdown — no Open Show this round');
+  if(G.effects&&inRange(G.effects.showBlock[myIdx],nextRound))return toast('🤐 Jailed — you can’t call a Show this round');
   G.openShowCalledBy=myIdx;
   G.v++;
   afterChange();
@@ -4814,15 +4955,42 @@ function profileRecordMatch(outcome,roundsWon,roundsPlayed,meta){
     s.points=(s.points||0)+rw+bonus;
     return s;
   });
-  /* Diamond economy (2026-08-16) — same "real multiplayer/CL only" boundary
-     as the lifetime stats above (this function is never called from bot
-     mode), deliberately kept to a simple formula rather than a special
-     case per mode/outcome: 2 diamonds per round actually won, plus a flat
-     10+roundsPlayed for winning the whole match outright, or a small
-     flat 1-diamond participation reward otherwise (draw/loss/forfeit alike)
-     so nobody's diamond balance can ever go nowhere just from playing. */
-  addDiamonds(rw*2+(outcome==='won'?10+rp:1));
+  /* Diamond economy (2026-08-16, revised same day per Saif's updated rate
+     card) — same "real multiplayer/CL only" boundary as the lifetime
+     stats above (this function is never called from bot mode). Only the
+     round-win diamonds live here now: 5 per round actually won, known
+     and correct the instant this fires (roundsWon never changes again
+     for this player after their own elimination/win). The match-
+     placement bonus (25+5/player for 1st, 15+3/player for 2nd, 5+2/player
+     for 3rd) is deliberately NOT computed here — see
+     awardMatchPlacementDiamonds() below for why it has to wait for the
+     whole match to actually finish. */
+  addDiamonds(rw*5);
   recordMatchHistory(outcome,rw,rp,meta);
+}
+/* Match-placement diamonds — split out from profileRecordMatch()
+   entirely (2026-08-16) because placement genuinely can't be known at
+   the moment profileRecordMatch() itself fires for a non-winner: that
+   fires the instant *this player* is eliminated, but their real final
+   rank (2nd? 3rd? 5th?) isn't settled until every *later* elimination
+   has also happened — elimOrder-based ranking (see rankFinalRows(),
+   built earlier this session for the standings display) means whoever's
+   eliminated *after* you always outranks you, so your rank can still
+   drop for as long as the match keeps going after you're out. The only
+   moment every player's rank is simultaneously final is G.phase===
+   'matchEnd' itself — so every client (winner's and eliminated players'
+   alike, since an eliminated player's own client keeps syncing G right
+   through to the real end) independently waits for that, then computes
+   and records only its own rank/bonus. Never awards anything past 3rd —
+   matches Saif's rate card exactly, which stops at 3rd place. */
+function awardMatchPlacementDiamonds(g,myIdx){
+  if(!profile.id)return;
+  const n=g.players.length;
+  const ranked=rankFinalRows(g.players.map((p,i)=>({i,total:p.score,elim:p.elim,elimOrder:p.elimOrder})));
+  const mine=ranked.find(r=>r.i===myIdx);
+  if(!mine)return;
+  const bonus=mine.rank===1?25+5*n:mine.rank===2?15+3*n:mine.rank===3?5+2*n:0;
+  if(bonus)addDiamonds(bonus);
 }
 /* Match history (2026-08-15) — a per-match log, separate from the
    aggregate stats/ above, since aggregate totals can't answer "who did I
@@ -5482,7 +5650,7 @@ function attachRoom(code){
     if(typeof g.v==='number'&&g.v<mp.lastV)return;   // stale echo
     mp.lastV=g.v||0;
     if(!mp.isSpectator&&mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().cancel();mp.odArmed=false;}
-    if(G===null){announcedRound=-1;knownBadges={};mp.statsRecorded=false;mp.wrongShowRound=null;}   // fresh entry from the lobby — this match's round 1 hasn't been announced yet, nothing recorded yet either
+    if(G===null){announcedRound=-1;knownBadges={};mp.statsRecorded=false;mp.placementRecorded=false;mp.wrongShowRound=null;}   // fresh entry from the lobby — this match's round 1 hasn't been announced yet, nothing recorded yet either
     G=g;G.mode='mp';
     /* G.players itself (not mp.isSpectator) is the source of truth for
        "am I actually seated" — findIndex naturally returns -1 for a real
@@ -8460,7 +8628,7 @@ function clMpMatchStateHandler(s){
   let g;try{g=JSON.parse(raw);}catch(e){return;}
   if(typeof g.v==='number'&&g.v<mp.lastV)return;   // stale echo
   mp.lastV=g.v||0;
-  if(G===null){announcedRound=-1;knownBadges={};mp.wrongShowRound=null;}   // CL match win/loss/forfeit is tracked separately (clStatsRecorded), only wrong-show needs resetting here
+  if(G===null){announcedRound=-1;knownBadges={};mp.placementRecorded=false;mp.wrongShowRound=null;}   // CL match win/loss/forfeit is tracked separately (clStatsRecorded), but placement diamonds share the mp-level guard above, so it needs the same reset here
   G=g;G.mode='mp';G.clKey=clMyMatchKey;
   myIdx=G.players.findIndex(p=>p.id===myUid);
   const me=G.players[myIdx];
