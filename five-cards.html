@@ -2255,6 +2255,20 @@ let sel=new Set(),modalKind=null,toastTimer=null;
 
 /* ---- sound (WebAudio synth — no external assets/network needed) ---- */
 let soundOn=localStorage.fcSound!=='off',actx=null,lastSeenSeq=-1,pendingDealAnim=false,showAnnouncePending=false,announcedRound=-1,announcePendingUntil=0;
+/* Diamonds earned *this match*, shown at match end (2026-08-16, Saif's
+   ask). Deliberately a dedicated running total, not a before/after
+   balance diff — a balance diff would also swallow any power-up
+   purchases made mid-match, understating what was actually earned.
+   Incremented at the exact 3 real earning points (round-win diamonds in
+   profileRecordMatch, placement bonus in awardMatchPlacementDiamonds,
+   badge payouts in checkBadgeNotifications) — never at a power-up
+   spend/refund, which also calls addDiamonds() but isn't an "earning".
+   Reset to 0 at every point G transitions from null to populated,
+   fresh-match or reconnect alike — a genuine reconnect mid-match will
+   only show diamonds earned *from that point forward*, not the whole
+   match's total; reconstructing pre-reconnect earnings isn't worth the
+   complexity for a display-only figure. */
+let matchDiamondsEarned=0;
 /* three independently adjustable channels — game effects (tone()/noise()/
    sndFahh()) and every reaction sound route through their own shared
    GainNode instead of straight to actx.destination, so a slider here
@@ -3681,7 +3695,14 @@ function showMatchModal(){
       <button class="btn ghost" onclick="uiLeave()">Leave</button>`
     :`<button class="btn primary" onclick="uiPlayAgain()">Play Again</button>
       <button class="btn ghost" onclick="uiHome()">Home</button>`;
-  openModal('match',`<h2>🏆 ${esc(G.winner)} wins!</h2>${leaderboardMatrix()}
+  /* Diamonds earned this match (2026-08-16, Saif's ask) — only ever
+     meaningful for a real signed-in player in a real match; a guest or
+     a bot-mode game (which never touches the diamond economy at all)
+     just sees nothing extra here, no placeholder needed since
+     matchDiamondsEarned naturally stays 0 in both cases. */
+  const earnedLine=(profile.id&&G.mode==='mp'&&matchDiamondsEarned>0)
+    ?`<p class="tag" style="text-align:center;font-weight:700;color:var(--gold)">💎 +${matchDiamondsEarned} diamonds earned this match</p>`:'';
+  openModal('match',`<h2>🏆 ${esc(G.winner)} wins!</h2>${earnedLine}${leaderboardMatrix()}
     <div class="mbtns">${btns}</div>`);
 }
 function showScoreModal(){
@@ -4057,7 +4078,7 @@ function checkBadgeNotifications(){
          for a real MP/CL match — bot mode never touches the diamond
          economy, same "real games only" boundary as lifetime stats. */
       if(i===myIdx&&G.mode==='mp'&&profile.id){
-        const def=BADGES[key];if(def&&def.diamonds)addDiamonds(def.diamonds);
+        const def=BADGES[key];if(def&&def.diamonds){addDiamonds(def.diamonds);matchDiamondsEarned+=def.diamonds;}
       }
     });
   });
@@ -4350,6 +4371,7 @@ function seedNotificationTrackers(g){
   (g.powerUpLog||[]).forEach((ev,i)=>{knownPowerUpBlocked[i]=!!ev.blocked;});
   knownBadges={};
   (g.players||[]).forEach((p,i)=>{knownBadges[i]=new Set(p.badges||[]);});
+  matchDiamondsEarned=0;
 }
 function checkPowerUpNotifications(){
   if(!G){knownPowerUpLogLen=0;knownPowerUpBlocked={};return;}
@@ -4619,7 +4641,7 @@ function startBotGame(){
   const defs=[{name:myName,isBot:false}];
   for(let i=0;i<setup.nbots;i++)defs.push({name:names[i],isBot:true,diff:setup.diff});
   G=newMatch(defs,setup.limit,'bot',setup.numDecks,setup.powerUpsEnabled);
-  announcedRound=-1;knownBadges={};
+  announcedRound=-1;knownBadges={};matchDiamondsEarned=0;
   myIdx=0;sel.clear();deal(G);
   goScr('scr-game');closeModal();pump();
 }
@@ -4690,7 +4712,7 @@ function uiPlayAgain(){
   const defs=G.players.map(p=>({name:p.name,isBot:p.isBot,diff:p.diff}));
   const numDecks=G.numDecks;
   G=newMatch(defs,G.limit,'bot',numDecks);
-  announcedRound=-1;knownBadges={};
+  announcedRound=-1;knownBadges={};matchDiamondsEarned=0;
   myIdx=0;sel.clear();deal(G);closeModal();pump();
 }
 function uiHome(){
@@ -5034,6 +5056,7 @@ function profileRecordMatch(outcome,roundsWon,roundsPlayed,meta){
      awardMatchPlacementDiamonds() below for why it has to wait for the
      whole match to actually finish. */
   addDiamonds(rw*5);
+  matchDiamondsEarned+=rw*5;
   recordMatchHistory(outcome,rw,rp,meta);
 }
 /* Match-placement diamonds — split out from profileRecordMatch()
@@ -5058,7 +5081,7 @@ function awardMatchPlacementDiamonds(g,myIdx){
   const mine=ranked.find(r=>r.i===myIdx);
   if(!mine)return;
   const bonus=mine.rank===1?25+5*n:mine.rank===2?15+3*n:mine.rank===3?5+2*n:0;
-  if(bonus)addDiamonds(bonus);
+  if(bonus){addDiamonds(bonus);matchDiamondsEarned+=bonus;}
 }
 /* Match history (2026-08-15) — a per-match log, separate from the
    aggregate stats/ above, since aggregate totals can't answer "who did I
@@ -5220,7 +5243,7 @@ async function renderLeaderboardTable(){
     const rows=Object.entries(all).map(([id,p])=>{
       const s=p.stats||{gamesPlayed:0,roundsPlayed:0,gamesWon:0,roundsWon:0,wrongShows:0,points:0};
       return{id,name:p.name||'?',gamesPlayed:s.gamesPlayed||0,roundsPlayed:s.roundsPlayed||0,
-        gamesWon:s.gamesWon||0,roundsWon:s.roundsWon||0,wrongShows:s.wrongShows||0,points:s.points||0};
+        gamesWon:s.gamesWon||0,roundsWon:s.roundsWon||0,wrongShows:s.wrongShows||0,points:s.points||0,diamonds:p.diamonds||0};
     }).filter(r=>r.gamesPlayed>0);   // a profile that's never played a tracked game yet has nothing to show
     if(!rows.length){
       wrap.innerHTML=`<p class="tag" style="text-align:center;padding:20px 0">No games recorded yet — be the first! Sign in, then play an online multiplayer or Champions League match.</p>`;
@@ -5233,10 +5256,20 @@ async function renderLeaderboardTable(){
         <td class="rk">${i+1}</td>
         <td class="name">${esc(r.name)}${r.id===profile.id?' <span style="color:var(--gold);font-size:10px">(you)</span>':''}</td>
         <td>${r.gamesPlayed}</td><td>${r.roundsPlayed}</td><td>${r.gamesWon}</td><td>${r.roundsWon}</td><td>${r.wrongShows}</td>
-        <td class="pts">${r.points}</td></tr>`;
+        <td class="pts">${r.points}</td><td class="pts">💎 ${r.diamonds}</td></tr>`;
     }).join('');
+    /* Diamonds column added (2026-08-16, Saif's ask) — pulled from the
+       same profiles/ fetch already happening above, no new read. Kept
+       the existing "fetch on open, manual ↻ Refresh for the latest"
+       pattern rather than switching to a live listener — that's the
+       standing design choice this leaderboard already made deliberately
+       (see the file-level comment on this function), and it's what
+       "check real-time" resolves to everywhere else on this screen too:
+       tap Refresh, get the current numbers, same as every other column
+       here. Sort order is unchanged — points still decide rank, this is
+       purely an extra informational column, not a second leaderboard. */
     wrap.innerHTML=`<div class="cl-table-wrap"><table class="cl-table lb-rank">
-      <thead><tr><th>#</th><th style="text-align:left">Player</th><th>Games</th><th>Rounds</th><th>Games Won</th><th>Rounds Won</th><th>Wrong Show</th><th>Pts</th></tr></thead>
+      <thead><tr><th>#</th><th style="text-align:left">Player</th><th>Games</th><th>Rounds</th><th>Games Won</th><th>Rounds Won</th><th>Wrong Show</th><th>Pts</th><th>💎</th></tr></thead>
       <tbody>${body}</tbody></table></div>
       <button class="btn ghost small" style="align-self:center" onclick="renderLeaderboardTable()">↻ Refresh</button>`;
   }catch(e){
@@ -5914,7 +5947,7 @@ function mpStart(){
   if(myEmojiCount!==5)return toast('Pick exactly 5 reaction emojis first');
   ps.sort((a,b)=>a.order-b.order);
   G=newMatch(ps,r.limit||240,'mp',r.numDecks||1,r.powerUpsEnabled);
-  announcedRound=-1;knownBadges={};
+  announcedRound=-1;knownBadges={};matchDiamondsEarned=0;
   deal(G);
   mp.ref.update({status:'playing',state:JSON.stringify(G)});
 }
@@ -7760,7 +7793,7 @@ function clEnterFixture(m){
   G=newMatch([{id:CL.myId,name:me.name,isBot:false,diff:null},
               {id:oppId,name:opp.name,isBot:true,diff:opp.diff||CL.diff}],CL.limit,'bot',CL.numDecks);
   G.clKey=m.key;
-  myIdx=0;sel.clear();announcedRound=-1;knownBadges={};deal(G);
+  myIdx=0;sel.clear();announcedRound=-1;knownBadges={};matchDiamondsEarned=0;deal(G);
   goScr('scr-game');closeModal();clUpdateLiveStrip();pump();
 }
 /* wrap the match-end modal: a CL match records its result and returns to
@@ -8674,7 +8707,7 @@ function clMpEnterMatch(m){
      — a transaction makes that first deal race-safe (second writer sees a
      non-null value and aborts, so there's never a double-deal). */
   mp.lastV=-1;mp.isHost=(myUid===aId);mp.isSpectator=false;mp.room=null;
-  G=null;myIdx=-1;announcedRound=-1;knownBadges={};sel.clear();clMyMatchKey=m.key;
+  G=null;myIdx=-1;announcedRound=-1;knownBadges={};matchDiamondsEarned=0;sel.clear();clMyMatchKey=m.key;
   const oppId=aId===myUid?bId:aId;
   goScr('scr-game');
   const strip=$('#cl-live-strip');if(strip)strip.classList.add('hidden');
