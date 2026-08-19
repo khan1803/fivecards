@@ -1734,8 +1734,16 @@ function newMatch(defs,limit,mode,numDecks,powerUpsEnabled){
          client turns a change here into a visible notification without
          needing any dedicated Firebase channel of its own). */
       pickupCount:0,showStreak:0,hadWrongShow:false,wasLastAtRoundStart:false,everNearLimit:false,badges:[],
-      powerUpUses:0})),
+      powerUpUses:0,swapUsed:false})),
     deck:[],open:[],heap:[],pending:[],turn:0,attack:0,phase:'discard',attackChainStarterIdx:null,
+    /* Seat swap (2026-08-16) — swapRequest is the single pending
+       request (regular MP only, one at a time, see uiRequestSwap's own
+       comment for why); lastSwap is a one-shot "this just happened"
+       marker every client diffs against to fire the table-wide
+       announcement once (see checkSwapAnnouncement()), same "new value
+       vs. last seen" shape checkSwapRequestPrompt/badges/power-ups all
+       already use. */
+    swapRequest:null,lastSwap:null,
     turnCount:0,result:null,winner:null,log:[],logSeq:0,lastDrawn:null,openShow:null,pickedUpThisTurn:false,elimSeq:0,
     /* Power-ups (2026-08-16) — opt-in per match (see lobby/bot-setup
        toggle), off by default. `effects` is the single source of truth
@@ -2986,7 +2994,7 @@ window.addEventListener('resize',()=>{
 
 function render(){
   syncLogAudio();
-  if(!G){updateTurnTimer();checkTurnAlert();checkBadgeNotifications();checkPowerUpNotifications();return;}
+  if(!G){updateTurnTimer();checkTurnAlert();checkBadgeNotifications();checkPowerUpNotifications();checkSwapRequestPrompt();checkSwapAnnouncement();return;}
   const me=G.players[myIdx];
   const myTurn=me&&!me.elim&&G.turn===myIdx&&!isEnd();
   /* Lifetime leaderboard hooks — only ever for a real multiplayer match
@@ -3073,6 +3081,8 @@ function render(){
   checkBadgeNotifications();
   checkPowerUpNotifications();
   checkTurnSkip();
+  checkSwapRequestPrompt();
+  checkSwapAnnouncement();
   updateDiamondDisplay();
   /* whose OPEN CARD it is lives right on their seat chip (see below),
      and stays there for the whole round — not just during their own
@@ -4291,6 +4301,65 @@ function mvUseShield(g,targetIdx,logIndex){
   g.v++;
   return null;
 }
+/* ================= SEAT SWAP (2026-08-16) =================
+   Turn order in this engine is array *position*, not identity — g.turn,
+   g.starter, and every power-up effect above are all keyed by index, not
+   by uid. So "swap two players' seats" can't just be a cosmetic label
+   change: it has to move each player's full state (hand, score, wins,
+   badges — everything that makes them *them*) to the other's array
+   slot, and remap every other place on g that points at a seat by
+   number so none of it silently starts applying to the wrong person.
+   remapIdxKeyedObject(obj,i,j) is the one primitive every remap below
+   reuses — a plain swap of whatever's stored at keys i and j (numbers
+   auto-coerce to the same string keys JSON round-trips them as), correct
+   whether either, both, or neither key was actually present. */
+function remapIdxKeyedObject(obj,i,j){
+  if(!obj)return;
+  const hasI=i in obj,hasJ=j in obj,vi=obj[i],vj=obj[j];
+  if(hasJ)obj[i]=vj;else delete obj[i];
+  if(hasI)obj[j]=vi;else delete obj[j];
+}
+function performSeatSwap(g,i,j){
+  if(i===j||!g.players[i]||!g.players[j])return'invalid seats';
+  if(g.players[i].elim||g.players[j].elim)return'can’t swap with an eliminated player';
+  if(g.openShow!=null&&!g.openShowRevealDone)return'wait for the Open Show reveal to finish first';
+  const nameI=g.players[i].name,nameJ=g.players[j].name;
+  [g.players[i],g.players[j]]=[g.players[j],g.players[i]];
+  g.players[i].swapUsed=true;
+  g.players[j].swapUsed=true;
+  const swap=idx=>idx===i?j:idx===j?i:idx;
+  g.turn=swap(g.turn);
+  g.starter=swap(g.starter);
+  if(g.openShow!=null)g.openShow=swap(g.openShow);
+  if(g.openShowCalledBy!=null)g.openShowCalledBy=swap(g.openShowCalledBy);
+  if(Array.isArray(g.openShowParticipants))g.openShowParticipants=g.openShowParticipants.map(swap);
+  if(g.openShowRevealed){
+    const remapped={};
+    Object.keys(g.openShowRevealed).forEach(k=>{remapped[swap(+k)]=g.openShowRevealed[k];});
+    g.openShowRevealed=remapped;
+  }
+  if(g.attackChainStarterIdx!=null)g.attackChainStarterIdx=swap(g.attackChainStarterIdx);
+  if(g.effects){
+    ['showBlock','turnSkip','noTwos','extraDraw','shieldCharges','scoreInsurance','doubleDown'].forEach(k=>{
+      remapIdxKeyedObject(g.effects[k],i,j);
+    });
+    if(g.effects.noOpenShow&&g.effects.noOpenShow.exemptIdx!=null)g.effects.noOpenShow.exemptIdx=swap(g.effects.noOpenShow.exemptIdx);
+    if(g.effects.noSnapShow&&g.effects.noSnapShow.exemptIdx!=null)g.effects.noSnapShow.exemptIdx=swap(g.effects.noSnapShow.exemptIdx);
+  }
+  /* Deliberately NOT remapped: powerUpLog's buyer/target indices, and
+     matchHistory/badge-notification records already shown — those are a
+     historical record of "seat X did Y at the time", and rewriting them
+     to match seats' *new* occupants would misattribute the past, not
+     just relabel it. The one real consequence: a Shield decision still
+     pending at the exact instant a swap lands will find its target index
+     no longer matches anyone's current seat and correctly refuse itself
+     (mvUseShield's own target check) rather than silently applying to
+     the wrong player — a safe failure, not a silent one, for a
+     deliberately rare double-edge-case not worth more machinery. */
+  glog(g,`🔄 ${nameI} and ${nameJ} swapped seats!`);
+  g.lastSwap={fromName:nameI,toName:nameJ,ts:Date.now()};
+  return null;
+}
 /* The real entry point every "Buy" button calls — handles the diamond
    spend/refund dance described above, and picks the transaction path
    (MP) vs. direct-apply path (bot mode, single client, no race
@@ -4372,6 +4441,15 @@ function seedNotificationTrackers(g){
   knownBadges={};
   (g.players||[]).forEach((p,i)=>{knownBadges[i]=new Set(p.badges||[]);});
   matchDiamondsEarned=0;
+  /* seenLastSwapTs catches up to whatever's already in g (same "don't
+     replay history" shape as everything above) — a swap that already
+     happened and was already announced before this client reconnected
+     shouldn't announce itself again. seenSwapRequestTs is deliberately
+     the opposite: always reset to 0 regardless, so a request that's
+     still genuinely *pending* for this player re-prompts them on
+     reconnect — that one's not history, it's an unanswered question. */
+  seenLastSwapTs=g.lastSwap?g.lastSwap.ts:0;
+  seenSwapRequestTs=0;
 }
 function checkPowerUpNotifications(){
   if(!G){knownPowerUpLogLen=0;knownPowerUpBlocked={};return;}
@@ -4472,6 +4550,90 @@ function uiUseShield(logIndex){
   const err=mvUseShield(G,myIdx,logIndex);
   if(err)return toast(err);
   afterChange();
+}
+/* ---- seat swap UI ----
+   Regular MP only, real players only (bots/CL never reach the tap-menu
+   this is triggered from — see showPlayerMenu's own gating), one
+   request live in the whole room at a time on purpose — juggling
+   several simultaneous swap negotiations wasn't worth the complexity
+   for what's meant to be an occasional "let's trade seats" nudge, not a
+   parallel-auction mechanic. A request older than 60s is treated as
+   stale and silently overwritable by a fresh one, in case the original
+   target never responds — no separate expiry timer needed for that,
+   just a lazy check the next time anyone tries to send a new request. */
+function uiRequestSwap(targetUid,targetName){
+  if(!G||G.mode!=='mp'||G.clKey||!mp.stateRef)return;
+  const me=G.players[myIdx];
+  if(!me||me.elim)return toast('You can’t request a swap while eliminated');
+  if(me.swapUsed)return toast('You’ve already used your seat swap this match');
+  const targetIdx=G.players.findIndex(p=>p.id===targetUid);
+  if(targetIdx<0)return toast('Player not found');
+  const target=G.players[targetIdx];
+  if(target.elim)return toast('Can’t swap with an eliminated player');
+  if(target.swapUsed)return toast(`${targetName} has already used their seat swap`);
+  closeModal();
+  mp.stateRef.transaction(raw=>{
+    if(!raw)return raw;
+    let g;try{g=JSON.parse(raw);}catch(e){return raw;}
+    if(g.swapRequest&&Date.now()-g.swapRequest.ts<60000)return;   // abort — someone else's request is still live
+    const freshMe=g.players[myIdx],freshTarget=g.players[targetIdx];
+    if(!freshMe||freshMe.elim||freshMe.swapUsed||!freshTarget||freshTarget.elim||freshTarget.swapUsed)return;
+    g.swapRequest={fromIdx:myIdx,toIdx:targetIdx,fromName:freshMe.name,toName:freshTarget.name,ts:Date.now()};
+    g.v++;
+    return JSON.stringify(g);
+  },(error,committed)=>{
+    if(error)return toast('Could not send swap request — try again');
+    toast(committed?`Swap request sent to ${targetName}`:'A swap request is already pending — try again shortly');
+  });
+}
+function uiRespondSwap(accept){
+  closeModal();
+  if(!G||!mp.stateRef)return;
+  mp.stateRef.transaction(raw=>{
+    if(!raw)return raw;
+    let g;try{g=JSON.parse(raw);}catch(e){return raw;}
+    const req=g.swapRequest;
+    if(!req||req.toIdx!==myIdx)return;   // stale/already handled by the time this actually commits
+    if(accept){
+      const err=performSeatSwap(g,req.fromIdx,req.toIdx);
+      if(err){toast(err);}   // couldn't complete (e.g. someone got eliminated in the meantime) — just clear the request below
+    }else{
+      glog(g,`${req.toName} declined ${req.fromName}’s seat swap request`);
+    }
+    g.swapRequest=null;
+    g.v++;
+    return JSON.stringify(g);
+  },(error,committed)=>{
+    if(error||!committed)toast('Could not respond — try again');
+  });
+}
+let seenSwapRequestTs=0,seenLastSwapTs=0;
+function checkSwapRequestPrompt(){
+  if(!G||!G.swapRequest){seenSwapRequestTs=0;return;}
+  const req=G.swapRequest;
+  if(req.toIdx!==myIdx||req.ts===seenSwapRequestTs)return;
+  seenSwapRequestTs=req.ts;
+  sndPowerUp();
+  openModal('swap-request',`<h2>🔄 Seat swap request</h2>
+    <p class="tag" style="text-align:center"><b>${esc(req.fromName)}</b> wants to swap seats with you.</p>
+    <div class="mbtns" style="flex-direction:column;align-items:stretch">
+      <button class="btn primary" onclick="uiRespondSwap(true)">✓ Accept swap</button>
+      <button class="btn ghost" onclick="uiRespondSwap(false)">✕ Decline</button>
+    </div>`);
+}
+/* Table-wide "it happened" announcement — every player, not just the two
+   who swapped, per Saif's explicit "all other players to be notified"
+   ask. Same big centered .announce-banner treatment as a reshuffle or a
+   direction change, reusing that exact CSS class/timing rather than
+   inventing new visual language for one more table event. */
+function checkSwapAnnouncement(){
+  if(!G||!G.lastSwap){seenLastSwapTs=0;return;}
+  if(G.lastSwap.ts===seenLastSwapTs)return;
+  seenLastSwapTs=G.lastSwap.ts;
+  sndPowerUp();
+  openModal('announce',`<div class="announce-banner">🔄 ${esc(G.lastSwap.fromName)} &amp; ${esc(G.lastSwap.toName)}<br>
+    <span style="font-size:16px">swapped seats!</span></div>`);
+  setTimeout(()=>closeModalIf('announce'),1700);
 }
 /* The reusable "power card" visual (Saif's own ask — "design a card
    which represents the power") — one small tarot-card-shaped component,
@@ -4641,7 +4803,7 @@ function startBotGame(){
   const defs=[{name:myName,isBot:false}];
   for(let i=0;i<setup.nbots;i++)defs.push({name:names[i],isBot:true,diff:setup.diff});
   G=newMatch(defs,setup.limit,'bot',setup.numDecks,setup.powerUpsEnabled);
-  announcedRound=-1;knownBadges={};matchDiamondsEarned=0;
+  announcedRound=-1;knownBadges={};matchDiamondsEarned=0;seenSwapRequestTs=0;seenLastSwapTs=0;
   myIdx=0;sel.clear();deal(G);
   goScr('scr-game');closeModal();pump();
 }
@@ -4712,7 +4874,7 @@ function uiPlayAgain(){
   const defs=G.players.map(p=>({name:p.name,isBot:p.isBot,diff:p.diff}));
   const numDecks=G.numDecks;
   G=newMatch(defs,G.limit,'bot',numDecks);
-  announcedRound=-1;knownBadges={};matchDiamondsEarned=0;
+  announcedRound=-1;knownBadges={};matchDiamondsEarned=0;seenSwapRequestTs=0;seenLastSwapTs=0;
   myIdx=0;sel.clear();deal(G);closeModal();pump();
 }
 function uiHome(){
@@ -5947,7 +6109,7 @@ function mpStart(){
   if(myEmojiCount!==5)return toast('Pick exactly 5 reaction emojis first');
   ps.sort((a,b)=>a.order-b.order);
   G=newMatch(ps,r.limit||240,'mp',r.numDecks||1,r.powerUpsEnabled);
-  announcedRound=-1;knownBadges={};matchDiamondsEarned=0;
+  announcedRound=-1;knownBadges={};matchDiamondsEarned=0;seenSwapRequestTs=0;seenLastSwapTs=0;
   deal(G);
   mp.ref.update({status:'playing',state:JSON.stringify(G)});
 }
@@ -6057,6 +6219,20 @@ function sendChat(text){
    in this app. */
 function showPlayerMenu(uid,name){
   const rows=[`<button class="btn primary" onclick="closeModal();showWhisperComposer('${esc(uid)}','${esc(name)}');">💬 Message ${esc(name)}</button>`];
+  /* Seat swap (2026-08-16) — same gating as the tap-menu itself already
+     has (regular MP, real players only), plus the two match-state
+     checks that actually matter here: I haven't used my one swap yet,
+     and there isn't already a live request sitting unanswered. Both are
+     re-checked authoritatively inside uiRequestSwap's own transaction
+     too — this is just keeping an obviously-doomed button off the menu,
+     not the real enforcement. */
+  if(G&&G.mode==='mp'&&!G.clKey){
+    const me=G.players[myIdx];
+    const pendingLive=G.swapRequest&&Date.now()-G.swapRequest.ts<60000;
+    if(me&&!me.elim&&!me.swapUsed&&!pendingLive){
+      rows.push(`<button class="btn ghost" onclick="uiRequestSwap('${esc(uid)}','${esc(name)}')">🔄 Request seat swap</button>`);
+    }
+  }
   if(mp.isHost){
     const p=mp.room&&mp.room.players&&mp.room.players[uid];
     const muted=!!(p&&p.emojiMuted);
@@ -7793,7 +7969,7 @@ function clEnterFixture(m){
   G=newMatch([{id:CL.myId,name:me.name,isBot:false,diff:null},
               {id:oppId,name:opp.name,isBot:true,diff:opp.diff||CL.diff}],CL.limit,'bot',CL.numDecks);
   G.clKey=m.key;
-  myIdx=0;sel.clear();announcedRound=-1;knownBadges={};matchDiamondsEarned=0;deal(G);
+  myIdx=0;sel.clear();announcedRound=-1;knownBadges={};matchDiamondsEarned=0;seenSwapRequestTs=0;seenLastSwapTs=0;deal(G);
   goScr('scr-game');closeModal();clUpdateLiveStrip();pump();
 }
 /* wrap the match-end modal: a CL match records its result and returns to
@@ -8707,7 +8883,7 @@ function clMpEnterMatch(m){
      — a transaction makes that first deal race-safe (second writer sees a
      non-null value and aborts, so there's never a double-deal). */
   mp.lastV=-1;mp.isHost=(myUid===aId);mp.isSpectator=false;mp.room=null;
-  G=null;myIdx=-1;announcedRound=-1;knownBadges={};matchDiamondsEarned=0;sel.clear();clMyMatchKey=m.key;
+  G=null;myIdx=-1;announcedRound=-1;knownBadges={};matchDiamondsEarned=0;seenSwapRequestTs=0;seenLastSwapTs=0;sel.clear();clMyMatchKey=m.key;
   const oppId=aId===myUid?bId:aId;
   goScr('scr-game');
   const strip=$('#cl-live-strip');if(strip)strip.classList.add('hidden');
