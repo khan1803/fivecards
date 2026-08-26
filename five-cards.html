@@ -3328,6 +3328,7 @@ function render(){
       cardEl2.onclick=e=>{e.stopPropagation();showPlayerMenu(p.id,p.name);};
       d.querySelector('.opp-name-text').classList.add('whisperable');
     }
+    attachReactionPop(d,p.id);
     opp.appendChild(d);
   }
   /* my own seat chip closes the circle at the bottom of the rim (skipped
@@ -3377,6 +3378,7 @@ function render(){
         b.onclick=e=>{e.stopPropagation();triggerReaction(b.dataset.reaction);};
       });
     }
+    attachReactionPop(d,me.id);
     opp.appendChild(d);
   }
   layoutOpponentSeats();
@@ -6137,27 +6139,48 @@ function renderEmojiPicker(myEmojiCount){
   $('#emoji-picks-preview').innerHTML=mine.length
     ?mine.map(k=>REACTIONS[k]?`<img src="${REACTIONS[k].img}" alt="${esc(k)}">`:'').join('')
     :'<span class="emoji-picks-hint">Tap to choose</span>';
-  if(modalKind==='emojipicker')renderEmojiPickerModalGrid();
+  /* real bug, Saif reported (2026-08-24): this used to call
+     renderEmojiPickerModalGrid()→openModal() here unconditionally,
+     which tears down and rebuilds the *entire* modal DOM. renderLobby()
+     (which calls this) fires on every room sync — not just this
+     player's own picks changing, but anyone else joining, readying up,
+     voice presence flipping, etc. — so the picker modal was getting
+     destroyed and recreated multiple times a second while open. A tap
+     landing between "old button removed" and "new button inserted" was
+     silently swallowed (felt like "closes without picking anything"),
+     and even a successful tap's own round-trip echo triggered another
+     full rebuild right after (felt like "closes and reopens every
+     pick"). Fixed: only build the modal once, on open; every later sync
+     just patches the existing buttons' .sel class and the count text
+     in place — see syncEmojiPickerModal(). */
+  if(modalKind==='emojipicker')syncEmojiPickerModal();
 }
 /* the always-open grid used to render directly inline in the lobby; now
    it only exists inside this on-demand modal (opened via the compact
    .emoji-picks-box summary above) so the lobby screen stays short no
    matter how large REACTIONS grows. */
 function openEmojiPickerModal(){
-  renderEmojiPickerModalGrid();
-}
-function renderEmojiPickerModalGrid(){
   const r=mp.room;const me=r&&r.players&&r.players[myUid];
   const mine=new Set((me&&me.emojis)||[]);
   const grid=Object.entries(REACTIONS).map(([key,rx])=>
     `<button class="emoji-pick-btn${mine.has(key)?' sel':''}" data-key="${esc(key)}" title="${esc(rx.label)}"><img src="${rx.img}" alt="${esc(key)}"></button>`).join('');
   openModal('emojipicker',`<h2>Pick 7 reaction emojis</h2>
-    <p class="tag" style="text-align:center">(${mine.size}/7)</p>
+    <p class="tag" style="text-align:center" id="emoji-pick-modal-count">(${mine.size}/7)</p>
     <div id="emoji-pick-grid" class="emoji-pick-grid-modal">${grid}</div>
     <div class="mbtns"><button class="btn primary" onclick="closeModal()">Done</button></div>`);
   $('#emoji-pick-grid').querySelectorAll('.emoji-pick-btn').forEach(b=>{
     b.onclick=()=>toggleEmojiPick(b.dataset.key);
   });
+}
+/* patches the already-open modal in place — no innerHTML rebuild, so an
+   in-flight tap never gets its target element yanked out from under it,
+   and there's no visual flash on every one of the player's own picks. */
+function syncEmojiPickerModal(){
+  const grid=$('#emoji-pick-grid');if(!grid)return;
+  const r=mp.room;const me=r&&r.players&&r.players[myUid];
+  const mine=new Set((me&&me.emojis)||[]);
+  grid.querySelectorAll('.emoji-pick-btn').forEach(b=>b.classList.toggle('sel',mine.has(b.dataset.key)));
+  const countEl=$('#emoji-pick-modal-count');if(countEl)countEl.textContent=`(${mine.size}/7)`;
 }
 function toggleEmojiPick(key){
   if(!mp.ref)return;
@@ -6168,6 +6191,18 @@ function toggleEmojiPick(key){
     if(picks.length>=7){toast('Only 7 allowed — tap one to remove it first');return;}
     picks.push(key);
   }
+  /* optimistic local update, applied before the Firebase round-trip —
+     picking all 7 shouldn't require waiting on a server echo between
+     every single tap. me.emojis is mutated in place on the same object
+     renderEmojiPicker()/syncEmojiPickerModal() already read from
+     (mp.room.players[myUid]), so the very next tap sees the picks that
+     were "just" made, not last-known-server-state. */
+  me.emojis=picks;
+  syncEmojiPickerModal();
+  $('#emoji-picks-preview').innerHTML=picks.length
+    ?picks.map(k=>REACTIONS[k]?`<img src="${REACTIONS[k].img}" alt="${esc(k)}">`:'').join('')
+    :'<span class="emoji-picks-hint">Tap to choose</span>';
+  $('#emoji-pick-count').textContent=`(${picks.length}/7)`;
   mp.ref.child('players/'+myUid+'/emojis').set(picks);
 }
 function toggleReadyMp(){
@@ -6590,11 +6625,12 @@ function toggleReactionPicker(e){
 }
 function triggerReaction(type){
   reactionPickerOpen=false;
-  /* close the picker (rebuilds the seat DOM fresh) *before* playing the
-     effect, not after — playReactionEffect appends a transient .cough-pop
-     element and a .coughing class directly onto the live DOM, and a
-     render() firing right after would immediately wipe both back out as
-     part of its normal from-scratch seat rebuild. */
+  /* close the picker (rebuilds the seat DOM fresh) before playing the
+     effect, so the picker itself doesn't linger open over top of the
+     pop. Doesn't need to be the *last* render before the pop appears
+     any more — see activeReactionPops below, which now makes the pop
+     survive any number of renders after this one too, not just this
+     particular one. */
   render();
   const me=G&&myIdx>=0?G.players[myIdx]:null;
   if(!me||me.elim)return;
@@ -6609,26 +6645,87 @@ function triggerReaction(type){
   playReactionEffect(me.id,type);   // immediate local feedback, no round-trip wait
   if(mp.ref)mp.ref.child('cough').push({uid:myUid,type,ts:firebase.database.ServerValue.TIMESTAMP});
 }
-function playReactionEffect(uid,type){
-  const r=REACTIONS[type]||REACTIONS.cough;
-  r.snd();
-  const seat=[...document.querySelectorAll('#opponents .opp')].find(o=>o.dataset.uid===uid);
-  if(!seat)return;
-  /* shake + glow the specific avatar, not just a floating emoji, so the
-     source seat is unambiguous even on a crowded 8-seat table */
-  seat.classList.add('coughing');
-  setTimeout(()=>seat.classList.remove('coughing'),700);
-  /* emits from the name box (seat-card), not the avatar — same spot,
-     same size, same 3s lifetime as the original cough-only version,
-     whichever reaction was actually picked (a reaction whose own sound
-     runs long can override via popMs, see REACTIONS) */
-  const card=seat.querySelector('.seat-card');
+/* Real bug, Saif reported (2026-08-24): "a lot of time when we play
+   emoji the image does not come, only music plays." Root cause: the pop
+   image used to live purely in the DOM — appended once here, removed by
+   its own setTimeout. But render() rebuilds the *entire* #opponents
+   subtree from scratch (`opp.innerHTML=''`) on every single call, and it
+   gets called constantly during a live match — any chat message, any
+   other player's move, a turn timer, even the very same Firebase write
+   that delivered *this* reaction (the room's root `.on('value',...)`
+   listener reacts to literally any write under the room, including the
+   'cough' push this fires). Any of those firing during the pop's 3-8s
+   display window silently deleted it out from under the player — the
+   sound (Web Audio, decoded once into a buffer, nothing to do with the
+   DOM) played to completion regardless, which is exactly the "music
+   plays but no image" symptom.
+   Fix: track active pops in this uid→{key,startedAt} map instead of
+   relying on the DOM node surviving, and have render() re-attach any
+   still-live pop to the freshly built seat card every time it rebuilds
+   (see attachReactionPop(), called from both seat-building blocks in
+   render()) — so a pop now survives however many renders happen during
+   its own lifetime, not just zero.
+   Because render() rebuilds seat cards from a fresh innerHTML string,
+   there's no way to keep reusing the *same* pop DOM node across
+   rebuilds — a new one gets created every time attachReactionPop runs.
+   A plain `animation:coughPop 3s` on that fresh node would restart the
+   fade-in/hold/out from 0% on every single rebuild, so during a stretch
+   of frequent renders (chat, other players' moves) the pop could keep
+   snapping back to its "just appeared" frame instead of holding steady
+   — a flicker, better than the old "vanishes entirely" bug but still
+   wrong. Fixed by giving every freshly-created node a *negative*
+   animation-delay equal to how long the reaction has actually been
+   showing (via startedAt) — the browser fast-forwards straight to the
+   correct point in the animation on creation, so however many times the
+   node gets torn down and recreated, it always looks like one
+   continuous animation rather than restarting. */
+let activeReactionPops={};
+function attachReactionPop(seatEl,uid){
+  const p=activeReactionPops[uid];
+  if(!p)return;
+  const r=REACTIONS[p.key]||REACTIONS.cough;
+  const dur=r.popMs||3000;
+  const elapsed=Date.now()-p.startedAt;
+  if(elapsed>=dur){delete activeReactionPops[uid];return;}
+  const card=seatEl.querySelector('.seat-card');
   if(!card)return;
   const pop=document.createElement('div');
   pop.className='cough-pop';
   pop.innerHTML=`<img src="${r.img}" alt="${esc(r.label)}">`;
+  /* second real bug found while verifying the fix above: .cough-pop's
+     CSS animation was hardcoded to a fixed 3s fade in/hold/out,
+     completely independent of popMs — so a reaction with a longer
+     popMs (punit 8s, bhidu 5s, both to match their own longer sound
+     clips) still visually faded to opacity:0 at the 3s mark, then sat
+     there invisible-but-present for the rest of its actual sound —
+     "the image doesn't show" for exactly those two, even though the
+     element itself was correctly still in the DOM the whole time.
+     Stretching the animation's own duration to match popMs (instead of
+     leaving the 3s baked into the keyframe's timing) makes the fade
+     actually span the pop's real lifetime, whatever that is. */
+  pop.style.animationDuration=dur+'ms';
+  pop.style.animationDelay=(-elapsed)+'ms';
   card.appendChild(pop);
-  setTimeout(()=>pop.remove(),r.popMs||3000);
+  /* shake + glow the specific avatar, not just a floating emoji, so the
+     source seat is unambiguous even on a crowded 8-seat table */
+  seatEl.classList.add('coughing');
+  setTimeout(()=>seatEl.classList.remove('coughing'),700);
+}
+function playReactionEffect(uid,type){
+  const r=REACTIONS[type]||REACTIONS.cough;
+  r.snd();
+  activeReactionPops[uid]={key:type,startedAt:Date.now()};
+  const seat=[...document.querySelectorAll('#opponents .opp')].find(o=>o.dataset.uid===uid);
+  if(seat)attachReactionPop(seat,uid);
+  setTimeout(()=>{
+    if(activeReactionPops[uid]&&activeReactionPops[uid].key===type)delete activeReactionPops[uid];
+    /* belt-and-braces: also strip any pop currently in the DOM for this
+       seat, in case a render() re-attached it after this timer was set
+       (re-querying since the exact node from above may no longer be the
+       live one after any number of rebuilds in between). */
+    const s2=[...document.querySelectorAll('#opponents .opp')].find(o=>o.dataset.uid===uid);
+    if(s2)s2.querySelectorAll('.cough-pop').forEach(el=>el.remove());
+  },r.popMs||3000);
 }
 
 /* ================= VOICE CHAT (WebRTC mesh, signaled via Firebase) =================
@@ -8959,24 +9056,31 @@ function renderClEmojiPicker(myEmojiCount){
   $('#cl-emoji-picks-preview').innerHTML=mine.length
     ?mine.map(k=>REACTIONS[k]?`<img src="${REACTIONS[k].img}" alt="${esc(k)}">`:'').join('')
     :'<span class="emoji-picks-hint">Tap to choose</span>';
-  if(modalKind==='cl-emojipicker')renderClEmojiPickerModalGrid();
+  /* see the matching comment on renderEmojiPicker() above — same fix,
+     same bug: sync in place instead of rebuilding the whole modal on
+     every lobby render tick. */
+  if(modalKind==='cl-emojipicker')syncClEmojiPickerModal();
 }
 /* CL's own copy of the on-demand emoji-picker modal above */
 function openClEmojiPickerModal(){
-  renderClEmojiPickerModalGrid();
-}
-function renderClEmojiPickerModalGrid(){
   const r=clmp.room;const me=r&&r.players&&r.players[myUid];
   const mine=new Set((me&&me.emojis)||[]);
   const grid=Object.entries(REACTIONS).map(([key,rx])=>
     `<button class="emoji-pick-btn${mine.has(key)?' sel':''}" data-key="${esc(key)}" title="${esc(rx.label)}"><img src="${rx.img}" alt="${esc(key)}"></button>`).join('');
   openModal('cl-emojipicker',`<h2>Pick 7 reaction emojis</h2>
-    <p class="tag" style="text-align:center">(${mine.size}/7)</p>
+    <p class="tag" style="text-align:center" id="cl-emoji-pick-modal-count">(${mine.size}/7)</p>
     <div id="cl-emoji-pick-grid" class="emoji-pick-grid-modal">${grid}</div>
     <div class="mbtns"><button class="btn primary" onclick="closeModal()">Done</button></div>`);
   $('#cl-emoji-pick-grid').querySelectorAll('.emoji-pick-btn').forEach(b=>{
     b.onclick=()=>toggleClEmojiPick(b.dataset.key);
   });
+}
+function syncClEmojiPickerModal(){
+  const grid=$('#cl-emoji-pick-grid');if(!grid)return;
+  const r=clmp.room;const me=r&&r.players&&r.players[myUid];
+  const mine=new Set((me&&me.emojis)||[]);
+  grid.querySelectorAll('.emoji-pick-btn').forEach(b=>b.classList.toggle('sel',mine.has(b.dataset.key)));
+  const countEl=$('#cl-emoji-pick-modal-count');if(countEl)countEl.textContent=`(${mine.size}/7)`;
 }
 function toggleClEmojiPick(key){
   if(!clmp.ref)return;
@@ -8987,6 +9091,12 @@ function toggleClEmojiPick(key){
     if(picks.length>=7){toast('Only 7 allowed — tap one to remove it first');return;}
     picks.push(key);
   }
+  me.emojis=picks;
+  syncClEmojiPickerModal();
+  $('#cl-emoji-picks-preview').innerHTML=picks.length
+    ?picks.map(k=>REACTIONS[k]?`<img src="${REACTIONS[k].img}" alt="${esc(k)}">`:'').join('')
+    :'<span class="emoji-picks-hint">Tap to choose</span>';
+  $('#cl-emoji-pick-count').textContent=`(${picks.length}/7)`;
   clmp.ref.child('players/'+myUid+'/emojis').set(picks);
 }
 function clMpStart(){
