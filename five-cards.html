@@ -6022,8 +6022,26 @@ function attachRoom(code){
     updateJoinRequestBadge();
     if(r.status==='lobby'){
       if(!mp.isSpectator&&!mp.odArmed){mp.ref.child('players/'+myUid).onDisconnect().remove();mp.odArmed=true;}
-      G=null;renderLobby();goScr('scr-lobby');closeModal();
+      G=null;renderLobby();goScr('scr-lobby');
+      /* Real bug, Saif reported (2026-08-26): "have to select one emoji,
+         open the dialogue box again" — every single tap in the emoji
+         picker modal writes to players/{uid}/emojis, and this handler is
+         the *root* listener (fires on literally any write anywhere under
+         the room, per the comment above). closeModal() used to run here
+         unconditionally on every one of those, closing the picker modal
+         after every single pick — this is a different bug from the
+         "modal rebuilds itself" one already fixed elsewhere in
+         renderEmojiPicker()/syncEmojiPickerModal(); this one is a
+         separate, unconditional close call that those fixes never
+         touched. It's only actually needed once, on the real transition
+         *into* 'lobby' (e.g. a match just ended and a leftover match-end
+         modal should close) — not on every subsequent write while the
+         room simply *stays* in 'lobby' status through an entire picking
+         session. Gated on the transition, tracked via mp.lastRoomStatus,
+         so a player can now pick all 7 without the dialog closing once. */
+      if(mp.lastRoomStatus!=='lobby')closeModal();
     }
+    mp.lastRoomStatus=r.status;
   });
   /* game state — scoped to just this one child, so it only fires on an
      actual move (see the big comment above for why sharing the root
