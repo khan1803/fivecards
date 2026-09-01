@@ -721,6 +721,54 @@ body.dealing .card-count{visibility:hidden}
 #powerup-banner.show{opacity:1;transform:translateX(-50%) translateY(0)}
 #powerup-banner .pu-banner-text{font-size:12px;line-height:1.4;text-align:left}
 #powerup-banner .pu-banner-text b{color:var(--gold)}
+/* ---------- full-screen power-up moment (2026-09-01) ----------
+   Saif's own custom-designed animation set, one per power-up — every
+   client sees this the instant *anyone's* power-up use lands in
+   G.powerUpLog (see checkPowerUpNotifications()/pumpPowerUpFx()), full
+   viewport, not just a passive corner note. The small #powerup-banner
+   above is kept only for the one case with no matching bespoke
+   animation (a Shield block) — see showShieldBlockedBanner(). */
+#powerup-fx{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;overflow:hidden;
+  background:radial-gradient(circle at 50% 45%,rgba(42,23,72,.96),rgba(11,7,20,.98));
+  animation:puFade .3s ease both;cursor:pointer}
+#powerup-fx.shake{animation:puFade .3s ease both,screenShake .4s ease-out .05s both}
+#powerup-fx-close{position:absolute;top:18px;right:22px;width:36px;height:36px;border-radius:50%;
+  background:rgba(42,23,72,.8);border:1px solid rgba(255,184,77,.3);color:#FDF6E8;font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;z-index:10}
+#powerup-fx-caption{position:absolute;bottom:6%;left:50%;transform:translateX(-50%);text-align:center;z-index:5;
+  animation:puFade .4s ease .2s both;padding:0 20px}
+#powerup-fx-caption .pu-fx-label{font-family:'DM Mono',monospace;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:rgba(253,246,232,.6);margin-bottom:4px}
+#powerup-fx-caption .pu-fx-line{font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;font-weight:700;color:#FDF6E8}
+#powerup-fx-caption .pu-fx-line b{color:var(--gold)}
+@keyframes puFade{from{opacity:0}to{opacity:1}}
+@keyframes screenShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-6px,3px)}40%{transform:translate(6px,-3px)}60%{transform:translate(-4px,2px)}80%{transform:translate(4px,-2px)}}
+@keyframes puPop{0%{transform:scale(.4) rotate(-8deg);opacity:0}60%{transform:scale(1.12) rotate(3deg);opacity:1}100%{transform:scale(1) rotate(0deg);opacity:1}}
+@keyframes barDrop{0%{transform:translateY(-140%)}70%{transform:translateY(6%)}85%{transform:translateY(-2%)}100%{transform:translateY(0)}}
+@keyframes stampDown{0%{transform:scale(3) rotate(-18deg);opacity:0}55%{transform:scale(.9) rotate(-8deg);opacity:1}75%{transform:scale(1.08) rotate(-10deg)}100%{transform:scale(1) rotate(-10deg);opacity:1}}
+@keyframes jailedShake{0%,100%{transform:translateX(0)}10%,30%,50%,70%,90%{transform:translateX(-4px)}20%,40%,60%,80%{transform:translateX(4px)}}
+@keyframes frostGrow{0%{opacity:0;transform:scale(.7)}100%{opacity:1;transform:scale(1)}}
+@keyframes snowFall{0%{transform:translateY(-20px) rotate(0deg);opacity:0}15%{opacity:1}100%{transform:translateY(360px) rotate(220deg);opacity:0}}
+@keyframes shiver{0%,100%{transform:translate(0,0) rotate(0deg)}20%{transform:translate(-4px,0) rotate(-3deg)}40%{transform:translate(4px,0) rotate(3deg)}60%{transform:translate(-3px,0) rotate(-2deg)}80%{transform:translate(3px,0) rotate(2deg)}}
+@keyframes padlockDrop{0%{transform:translateY(-160%) rotate(-6deg)}65%{transform:translateY(4%) rotate(2deg)}100%{transform:translateY(0) rotate(0deg)}}
+@keyframes chainTighten{0%{opacity:0;transform:scale(1.3)}100%{opacity:1;transform:scale(1)}}
+@keyframes alarmPulse{0%,100%{opacity:.2}50%{opacity:.6}}
+@keyframes vignetteGrow{0%{transform:scale(.2);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes moonGlow{0%{opacity:0;transform:scale(.5)}100%{opacity:1;transform:scale(1)}}
+@keyframes starTwinkle{0%,100%{opacity:.15}50%{opacity:1}}
+@keyframes eyeOpen{0%{transform:scaleY(0)}60%{transform:scaleY(1.15)}100%{transform:scaleY(1)}}
+@keyframes scanSweep{0%{left:-30%}100%{left:130%}}
+@keyframes flashPulse{0%,100%{opacity:0}50%{opacity:.85}}
+@keyframes finSwim{0%{transform:translateX(-130%) translateY(0) rotate(-4deg)}50%{transform:translateX(0%) translateY(-8px) rotate(2deg)}100%{transform:translateX(130%) translateY(0) rotate(-4deg)}}
+@keyframes cardFly{0%{transform:translate(-30vw,8vh) scale(.7);opacity:0}30%{opacity:1}100%{transform:translate(0,0) scale(1);opacity:1}}
+@keyframes shieldRing{0%{transform:scale(.5);opacity:.9}100%{transform:scale(2.4);opacity:0}}
+@keyframes shieldPop{0%{transform:scale(.3);opacity:0}60%{transform:scale(1.15);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes umbrellaOpen{0%{transform:scaleY(.1) translateY(20px);opacity:0}70%{transform:scaleY(1.1) translateY(0);opacity:1}100%{transform:scaleY(1) translateY(0);opacity:1}}
+@keyframes reelSpin{0%{transform:translateY(0)}70%{transform:translateY(-220px)}85%{transform:translateY(8px)}100%{transform:translateY(0)}}
+@keyframes coinFall{0%{transform:translateY(-40px) rotate(0deg);opacity:0}15%{opacity:1}100%{transform:translateY(320px) rotate(360deg);opacity:0}}
+@keyframes scissorSwipe{0%{transform:translate(-52vw,-32vh) rotate(-40deg);opacity:0}15%{opacity:1}50%{transform:translate(0,0) rotate(-10deg);opacity:1}100%{transform:translate(52vw,32vh) rotate(20deg);opacity:0}}
+@keyframes sliceLeft{0%{transform:translate(0,0) rotate(0deg)}100%{transform:translate(-56px,36px) rotate(-25deg)}}
+@keyframes sliceRight{0%{transform:translate(0,0) rotate(0deg)}100%{transform:translate(56px,36px) rotate(25deg)}}
+@keyframes sparkPop{0%{transform:scale(.2);opacity:0}40%{transform:scale(1.3);opacity:1}100%{transform:scale(.4);opacity:0}}
 /* ---------- power-up "cards" — a small tarot/spell-card look, gold-on-
    navy per the standing Monte Carlo Noir palette, reused identically in
    the shop grid (full size) and the usage banner (compact) so a player
@@ -1656,6 +1704,7 @@ tr.cl-withdrawn td.rk,tr.cl-withdrawn td:last-child{text-decoration:none}
 <div id="toast" class="hidden"></div>
 <div id="badge-banner"></div>
 <div id="powerup-banner"></div>
+<div id="powerup-fx" class="hidden"></div>
 
 <div id="chat-back" class="hidden">
   <div id="chat-panel">
@@ -4784,25 +4833,22 @@ function checkPowerUpNotifications(){
     if(ev.target===myIdx&&!ev.blocked&&myCharges>0&&SHIELD_REVERSIBLE.includes(ev.key)){
       showShieldPromptModal(i,buyerName,ev.key);
     }else{
-      showPowerUpBanner(buyerName,targetName,ev.key);
+      showPowerUpFx(ev.buyer,ev.target,ev.key);
     }
   }
   knownPowerUpLogLen=log.length;
 }
-/* Back to the original small corner-badge treatment (2026-08-16) — the
-   big centered .announce-banner version was tried per Saif's own
-   earlier ask, but he preferred the original compact style once he'd
-   actually seen both live, so reverted. Non-blocking, doesn't cover the
-   table, uses the same #powerup-banner element/queue this app had
-   before that detour. The Shield decision prompt is a separate concern
-   (see showShieldPromptModal below) and stays a real modal either way —
-   it has to pause for an actual answer, which a passive corner badge
-   can't do. */
+/* The small corner-badge treatment below is kept only for the one power-
+   up notification with no bespoke full-screen animation — a Shield block
+   (showShieldBlockedBanner). Every actual power-up *use* now goes through
+   the full-screen showPowerUpFx() instead (2026-09-01, Saif's own custom
+   animation set — see its own big comment further down); this queue used
+   to also carry the plain-use case via showPowerUpBanner() before that,
+   history preserved in this file's git-less memory rather than here. The
+   Shield decision prompt is a separate concern (see showShieldPromptModal
+   below) and stays a real modal either way — it has to pause for an
+   actual answer, which a passive corner badge can't do. */
 let powerUpBannerQueue=[],powerUpBannerBusy=false,powerUpBannerTimer=null;
-function showPowerUpBanner(buyerName,targetName,key){
-  powerUpBannerQueue.push({buyerName,targetName,key});
-  pumpPowerUpBanner();
-}
 function showShieldBlockedBanner(targetName,key){
   powerUpBannerQueue.push({shieldBlockedTargetName:targetName,key});
   pumpPowerUpBanner();
@@ -4815,15 +4861,201 @@ function pumpPowerUpBanner(){
   powerUpBannerBusy=true;
   sndPowerUp();
   const el=$('#powerup-banner');
-  el.innerHTML=item.shieldBlockedTargetName
-    ?`<span class="pu-banner-text">🛡️ <b>${esc(item.shieldBlockedTargetName)}’s</b> Shield blocked ${def.icon} ${esc(def.label)}</span>`
-    :powerCardHtml(item.key,{compact:true})+`<span class="pu-banner-text"><b>${esc(item.buyerName)}</b> used ${esc(def.label)}${item.targetName?' on <b>'+esc(item.targetName)+'</b>':''}</span>`;
+  /* the only thing left on this queue is a Shield block — see the big
+     comment above this queue's declaration for why the plain-use case
+     moved to showPowerUpFx() instead. */
+  el.innerHTML=`<span class="pu-banner-text">🛡️ <b>${esc(item.shieldBlockedTargetName)}’s</b> Shield blocked ${def.icon} ${esc(def.label)}</span>`;
   requestAnimationFrame(()=>el.classList.add('show'));
   clearTimeout(powerUpBannerTimer);
   powerUpBannerTimer=setTimeout(()=>{
     el.classList.remove('show');
     setTimeout(()=>{powerUpBannerBusy=false;pumpPowerUpBanner();},260);
   },3400);
+}
+/* ================= FULL-SCREEN POWER-UP ANIMATIONS (2026-09-01) =================
+   Saif's own custom-designed animation set, one per power-up, built to
+   fill the whole screen rather than a passive corner note — his explicit
+   ask: "when anyone plays any powerup then use the animation on the
+   entire screen", plus a caption showing exactly who used it on whom
+   (see #powerup-fx-caption below), his second explicit ask in the same
+   message. Fires for every client, buyer and everyone else alike, off
+   the same G.powerUpLog diff checkPowerUpNotifications() already drives
+   every other power-up notification from — so it's naturally exactly
+   "when anyone plays any power-up," synced, not just a local echo for
+   whoever bought it.
+   Queued one-at-a-time (powerUpFxQueue/powerUpFxBusy) the same shape as
+   the badge banner and the old power-up corner banner — if two power-ups
+   land in the same render tick (two different players buying in quick
+   succession), each gets its own full moment in sequence rather than
+   overlapping or clobbering each other. */
+let powerUpFxQueue=[],powerUpFxBusy=false,powerUpFxTimer=null;
+function showPowerUpFx(buyerIdx,targetIdx,key){
+  powerUpFxQueue.push({buyerIdx,targetIdx,key});
+  pumpPowerUpFx();
+}
+function pumpPowerUpFx(){
+  if(powerUpFxBusy||!powerUpFxQueue.length)return;
+  const{buyerIdx,targetIdx,key}=powerUpFxQueue.shift();
+  const def=POWERUPS[key];
+  if(!def||!G){return pumpPowerUpFx();}
+  const buyer=G.players[buyerIdx],target=targetIdx!=null?G.players[targetIdx]:null;
+  if(!buyer){return pumpPowerUpFx();}
+  powerUpFxBusy=true;
+  sndPowerUp();
+  const targetPhrase=def.target==='player'&&target?` on <b>${esc(target.name)}</b>`:def.target==='all'?' on the table':'';
+  const el=$('#powerup-fx');
+  el.className='shake';   // also clears 'hidden'; screen-shake is part of the moment, not optional cosmetic flair on this one
+  el.innerHTML=powerUpFxInnerHtml(key,target?avatarFor(target):avatarFor(buyer))+
+    `<button id="powerup-fx-close" onclick="event.stopPropagation();dismissPowerUpFx()">✕</button>
+     <div id="powerup-fx-caption">
+       <div class="pu-fx-label">Power-up used</div>
+       <div class="pu-fx-line"><b>${esc(buyer.name)}</b> used ${def.icon} ${esc(def.label)}${targetPhrase}</div>
+     </div>`;
+  el.onclick=dismissPowerUpFx;
+  clearTimeout(powerUpFxTimer);
+  powerUpFxTimer=setTimeout(dismissPowerUpFx,2800);
+}
+function dismissPowerUpFx(){
+  clearTimeout(powerUpFxTimer);
+  const el=$('#powerup-fx');
+  el.classList.add('hidden');
+  el.onclick=null;
+  powerUpFxBusy=false;
+  pumpPowerUpFx();
+}
+/* One markup block per power-up, adapted 1:1 from Saif's own design
+   canvas (each @keyframes name above matches that source exactly, so a
+   future update to the design can be diffed/re-pasted here directly).
+   Only gagorder/icedout/loanshark actually use targetEmoji — the rest
+   are table-wide (lockdown/blackout/thetell), self-only
+   (bodyguard/insurance/allin), or don't feature a character at all
+   (cutoff shows the cards being cut, not a player). */
+function powerUpFxInnerHtml(key,targetEmoji){
+  if(key==='gagorder')return`
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px">
+      <div style="position:relative;width:180px;height:180px;display:flex;align-items:center;justify-content:center">
+        <div style="position:absolute;width:180px;height:180px;border-radius:26px;background:radial-gradient(circle,oklch(0.65 0.19 20/.3),transparent 70%)"></div>
+        <div style="font-size:88px;animation:jailedShake .5s ease-in-out 1.1s 2">${targetEmoji}</div>
+        <div style="position:absolute;width:220px;height:220px;display:flex;justify-content:space-between">
+          <div style="width:14px;height:100%;background:linear-gradient(180deg,#4a4a52,#111);border-radius:3px;box-shadow:0 0 12px rgba(0,0,0,.6);animation:barDrop .55s cubic-bezier(.34,1.2,.5,1) both;animation-delay:.05s"></div>
+          <div style="width:14px;height:100%;background:linear-gradient(180deg,#4a4a52,#111);border-radius:3px;box-shadow:0 0 12px rgba(0,0,0,.6);animation:barDrop .55s cubic-bezier(.34,1.2,.5,1) both;animation-delay:.1s"></div>
+          <div style="width:14px;height:100%;background:linear-gradient(180deg,#4a4a52,#111);border-radius:3px;box-shadow:0 0 12px rgba(0,0,0,.6);animation:barDrop .55s cubic-bezier(.34,1.2,.5,1) both;animation-delay:.15s"></div>
+          <div style="width:14px;height:100%;background:linear-gradient(180deg,#4a4a52,#111);border-radius:3px;box-shadow:0 0 12px rgba(0,0,0,.6);animation:barDrop .55s cubic-bezier(.34,1.2,.5,1) both;animation-delay:.2s"></div>
+          <div style="width:14px;height:100%;background:linear-gradient(180deg,#4a4a52,#111);border-radius:3px;box-shadow:0 0 12px rgba(0,0,0,.6);animation:barDrop .55s cubic-bezier(.34,1.2,.5,1) both;animation-delay:.25s"></div>
+          <div style="width:14px;height:100%;background:linear-gradient(180deg,#4a4a52,#111);border-radius:3px;box-shadow:0 0 12px rgba(0,0,0,.6);animation:barDrop .55s cubic-bezier(.34,1.2,.5,1) both;animation-delay:.3s"></div>
+        </div>
+      </div>
+      <div style="font-family:'Unbounded',sans-serif;font-weight:900;font-size:44px;color:oklch(0.65 0.19 20);letter-spacing:4px;transform:rotate(-8deg);text-shadow:0 6px 20px rgba(0,0,0,.6);animation:stampDown .5s cubic-bezier(.2,.9,.3,1.2) .5s both">JAILED</div>
+    </div>`;
+  if(key==='icedout')return`
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px">
+      <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,transparent 20%,oklch(0.75 0.12 220/.4) 75%);animation:frostGrow .6s ease both"></div>
+      <div style="position:absolute;top:-4%;left:6%;font-size:20px;animation:snowFall 2.4s linear infinite">❄️</div>
+      <div style="position:absolute;top:-4%;left:20%;font-size:26px;animation:snowFall 2.2s linear .3s infinite">❄️</div>
+      <div style="position:absolute;top:-4%;left:34%;font-size:16px;animation:snowFall 2.6s linear .6s infinite">❄️</div>
+      <div style="position:absolute;top:-4%;left:48%;font-size:22px;animation:snowFall 2.3s linear .9s infinite">❄️</div>
+      <div style="position:absolute;top:-4%;left:62%;font-size:18px;animation:snowFall 2.5s linear .15s infinite">❄️</div>
+      <div style="position:absolute;top:-4%;left:76%;font-size:24px;animation:snowFall 2.1s linear .45s infinite">❄️</div>
+      <div style="position:absolute;top:-4%;left:88%;font-size:16px;animation:snowFall 2.7s linear .75s infinite">❄️</div>
+      <div style="position:absolute;top:-4%;left:95%;font-size:20px;animation:snowFall 2.4s linear 1.05s infinite">❄️</div>
+      <div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:14px;z-index:2">
+        <div style="font-size:96px;filter:drop-shadow(0 0 24px oklch(0.78 0.15 210/.8));animation:shiver .35s ease-in-out .3s 3">${targetEmoji}</div>
+        <div style="font-family:'Unbounded',sans-serif;font-weight:800;font-size:30px;color:oklch(0.85 0.12 220);text-shadow:0 0 20px oklch(0.78 0.15 210/.8)">FROZEN SOLID</div>
+      </div>
+    </div>`;
+  if(key==='lockdown')return`
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,oklch(0.65 0.19 20/.1) 0 12px,transparent 12px 24px);animation:alarmPulse 1s ease-in-out infinite"></div>
+      <div style="position:relative;z-index:2;font-size:120px;animation:padlockDrop .6s cubic-bezier(.3,1.4,.5,1) both;filter:drop-shadow(0 10px 24px rgba(0,0,0,.6))">🔒</div>
+      <div style="position:relative;z-index:2;display:flex;gap:10px;animation:chainTighten .5s ease .3s both">
+        <span style="font-size:34px">⛓️</span><span style="font-size:34px">⛓️</span><span style="font-size:34px">⛓️</span>
+      </div>
+      <div style="position:relative;z-index:2;font-family:'Unbounded',sans-serif;font-weight:900;font-size:34px;color:#FDF6E8;letter-spacing:3px">LOCKDOWN</div>
+    </div>`;
+  if(key==='blackout')return`
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px">
+      <div style="position:absolute;inset:0;background:radial-gradient(circle,transparent 5%,#04030a 68%);animation:vignetteGrow .7s ease both"></div>
+      <div style="position:absolute;top:16%;left:12%;width:3px;height:3px;background:#fff;border-radius:50%;animation:starTwinkle 1.6s ease-in-out infinite"></div>
+      <div style="position:absolute;top:24%;left:78%;width:3px;height:3px;background:#fff;border-radius:50%;animation:starTwinkle 1.4s ease-in-out .3s infinite"></div>
+      <div style="position:absolute;top:70%;left:20%;width:2px;height:2px;background:#fff;border-radius:50%;animation:starTwinkle 1.8s ease-in-out .6s infinite"></div>
+      <div style="position:absolute;top:66%;left:84%;width:3px;height:3px;background:#fff;border-radius:50%;animation:starTwinkle 1.5s ease-in-out .9s infinite"></div>
+      <div style="position:absolute;top:12%;left:50%;width:2px;height:2px;background:#fff;border-radius:50%;animation:starTwinkle 1.7s ease-in-out .2s infinite"></div>
+      <div style="position:absolute;top:82%;left:52%;width:3px;height:3px;background:#fff;border-radius:50%;animation:starTwinkle 1.3s ease-in-out .5s infinite"></div>
+      <div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:14px;z-index:2">
+        <div style="font-size:100px;animation:moonGlow .7s ease .2s both;filter:drop-shadow(0 0 40px rgba(255,255,255,.35))">🌑</div>
+        <div style="font-family:'Unbounded',sans-serif;font-weight:900;font-size:34px;color:#FDF6E8;letter-spacing:3px">BLACKOUT</div>
+      </div>
+    </div>`;
+  if(key==='thetell')return`
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px">
+      <div style="position:relative;width:260px;height:150px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+        <div style="width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,#FDF6E8 0 30%,oklch(0.6 0.2 300) 30% 46%,#0b0714 46% 50%);animation:eyeOpen .55s cubic-bezier(.34,1.3,.4,1) both"></div>
+        <div style="position:absolute;top:0;bottom:0;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);animation:scanSweep 1s ease-in-out .5s 2"></div>
+      </div>
+      <div style="position:absolute;inset:0;background:#fff;animation:flashPulse .35s ease 1.3s"></div>
+      <div style="position:relative;z-index:2;font-family:'Unbounded',sans-serif;font-weight:900;font-size:30px;color:#FDF6E8">PEEK-A-BOO!</div>
+    </div>`;
+  if(key==='loanshark')return`
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+      <div style="position:absolute;inset:0;display:flex;align-items:center;overflow:hidden">
+        <div style="font-size:90px;animation:finSwim 1.8s ease-in-out both;filter:drop-shadow(0 8px 20px rgba(0,0,0,.5))">🦈</div>
+      </div>
+      <div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:12px;z-index:2">
+        <div style="font-size:80px">${targetEmoji}</div>
+        <div style="display:flex;align-items:center;gap:8px;font-family:'Unbounded',sans-serif;font-weight:800;font-size:24px;color:oklch(0.78 0.15 210);animation:cardFly .5s cubic-bezier(.2,.8,.3,1.1) 1.4s both">🂠 +1 CARD</div>
+      </div>
+    </div>`;
+  if(key==='bodyguard')return`
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px">
+      <div style="position:relative;width:140px;height:140px;display:flex;align-items:center;justify-content:center">
+        <div style="position:absolute;width:140px;height:140px;border-radius:50%;border:3px solid oklch(0.78 0.15 210/.8);animation:shieldRing 1.1s ease-out infinite"></div>
+        <div style="position:absolute;width:140px;height:140px;border-radius:50%;border:3px solid oklch(0.78 0.15 210/.8);animation:shieldRing 1.1s ease-out .4s infinite"></div>
+        <div style="font-size:100px;position:relative;z-index:2;animation:shieldPop .5s cubic-bezier(.3,1.4,.4,1) both">🛡️</div>
+      </div>
+      <div style="font-family:'Unbounded',sans-serif;font-weight:900;font-size:30px;color:oklch(0.78 0.15 210)">SHIELDED</div>
+    </div>`;
+  if(key==='insurance')return`
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px">
+      <div style="font-size:100px;animation:umbrellaOpen .55s cubic-bezier(.3,1.3,.4,1) both;transform-origin:bottom center">☂️</div>
+      <div style="font-family:'Unbounded',sans-serif;font-weight:900;font-size:30px;color:oklch(0.85 0.16 95);border:3px solid oklch(0.85 0.16 95);padding:6px 22px;border-radius:8px;transform:rotate(-6deg);animation:stampDown .5s cubic-bezier(.2,.9,.3,1.2) .5s both">INSURED</div>
+    </div>`;
+  if(key==='allin')return`
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+      <div style="position:absolute;top:0;left:12%;font-size:24px;animation:coinFall 1.6s ease-in .9s both">🪙</div>
+      <div style="position:absolute;top:0;left:26%;font-size:20px;animation:coinFall 1.5s ease-in 1s both">🪙</div>
+      <div style="position:absolute;top:0;left:40%;font-size:26px;animation:coinFall 1.7s ease-in 1.1s both">🪙</div>
+      <div style="position:absolute;top:0;left:56%;font-size:22px;animation:coinFall 1.4s ease-in 1.05s both">🪙</div>
+      <div style="position:absolute;top:0;left:70%;font-size:24px;animation:coinFall 1.6s ease-in .95s both">🪙</div>
+      <div style="position:absolute;top:0;left:84%;font-size:20px;animation:coinFall 1.5s ease-in 1.15s both">🪙</div>
+      <div style="position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:16px">
+        <div style="display:flex;gap:10px;background:#1a1028;padding:14px 18px;border-radius:16px;border:3px solid oklch(0.85 0.16 95);box-shadow:0 0 30px oklch(0.85 0.16 95/.5)">
+          <div style="width:56px;height:56px;overflow:hidden;background:#0b0714;border-radius:8px;display:flex;align-items:center;justify-content:center">
+            <div style="font-size:38px;animation:reelSpin .9s ease-out both">🎰</div>
+          </div>
+          <div style="width:56px;height:56px;overflow:hidden;background:#0b0714;border-radius:8px;display:flex;align-items:center;justify-content:center">
+            <div style="font-size:38px;animation:reelSpin .9s ease-out .15s both">💎</div>
+          </div>
+          <div style="width:56px;height:56px;overflow:hidden;background:#0b0714;border-radius:8px;display:flex;align-items:center;justify-content:center">
+            <div style="font-size:38px;animation:reelSpin .9s ease-out .3s both">7️⃣</div>
+          </div>
+        </div>
+        <div style="font-family:'Unbounded',sans-serif;font-weight:900;font-size:32px;color:oklch(0.85 0.16 95);letter-spacing:2px;animation:puPop .4s ease 1s both">ALL IN!</div>
+      </div>
+    </div>`;
+  if(key==='cutoff')return`
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px">
+      <div style="position:relative;width:180px;height:100px;display:flex;align-items:center;justify-content:center">
+        <div style="position:absolute;font-size:70px;animation:scissorSwipe 1s cubic-bezier(.3,.6,.3,1) both;z-index:3">✂️</div>
+        <div style="display:flex;gap:4px">
+          <div style="width:60px;height:84px;background:linear-gradient(155deg,#2a2440,#15101f);border:2px solid oklch(0.65 0.19 20);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:800;font-size:26px;color:oklch(0.65 0.19 20);animation:sliceLeft .5s ease .7s both">2</div>
+          <div style="width:60px;height:84px;background:linear-gradient(155deg,#2a2440,#15101f);border:2px solid oklch(0.85 0.16 95);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:30px;animation:sliceRight .5s ease .7s both">🃏</div>
+        </div>
+        <div style="position:absolute;top:10%;left:30%;font-size:20px;animation:sparkPop .4s ease .7s both">✨</div>
+        <div style="position:absolute;top:20%;left:65%;font-size:20px;animation:sparkPop .4s ease .8s both">✨</div>
+      </div>
+      <div style="font-family:'Unbounded',sans-serif;font-weight:900;font-size:30px;color:#FDF6E8">CUT OFF</div>
+    </div>`;
+  return'';
 }
 /* The Shield decision prompt — deliberately does NOT auto-dismiss (this
    one needs a real answer, not a flash-and-fade) and deliberately does
